@@ -26,7 +26,8 @@ test: lint build
 	npm test --prefix tests
 
 visual: build
-	node tests/tools/visual.mjs
+	node tests/tools/visual.mjs --backend=cpu
+	node tests/tools/visual.mjs --backend=gpu
 
 goldens:
 	node tests/tools/generate-goldens.mjs

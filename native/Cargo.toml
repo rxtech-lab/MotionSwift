@@ -8,4 +8,4 @@ license = "MIT"
 crate-type = ["staticlib"]
 
 [dependencies]
-skia-safe = { version = "=0.99.0", features = ["textlayout"] }
+skia-safe = { version = "=0.99.0", features = ["metal", "textlayout"] }

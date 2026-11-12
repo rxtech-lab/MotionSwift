@@ -15,6 +15,7 @@ let package = Package(
         .target(name: "SkiaKit", dependencies: ["CSkia", "MotionCore"], linkerSettings: [
             .linkedLibrary("c++"), .linkedFramework("CoreText"), .linkedFramework("CoreGraphics"),
             .linkedFramework("ImageIO"), .linkedFramework("CoreServices"),
+            .linkedFramework("Metal"), .linkedFramework("QuartzCore"), .linkedFramework("Foundation"),
         ]),
         .target(name: "MotionLayout", dependencies: ["MotionCore", .product(name: "yoga", package: "yoga")]),
         .target(name: "MotionCompiler", dependencies: ["MotionCore"]),

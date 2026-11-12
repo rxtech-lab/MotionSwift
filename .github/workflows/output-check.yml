@@ -28,6 +28,6 @@ jobs:
       - name: Publish visual summary
         if: always()
         run: |
-          if [ -f tests/reports/visual/results.json ]; then
+          if ls tests/reports/visual/*/results.json >/dev/null 2>&1; then
             node tests/tools/visual-summary.mjs >> "$GITHUB_STEP_SUMMARY"
           fi
