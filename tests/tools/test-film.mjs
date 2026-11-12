@@ -41,7 +41,7 @@ function stage() {
   const text = fs.readFileSync(path.join(source, 'src/Composition.tsx'), 'utf8');
   const cues = JSON.parse(text.match(/const cues=(\[.*?\]);/s)[1]);
   const duration = Number(text.match(/COMPOSITION_DURATION_IN_FRAMES\s*=\s*(\d+)/)[1]);
-  const frames = [...new Set([0, ...cues.flatMap(cue => [Math.round(cue.at * 30) + 18, Math.round(cue.at * 30) + 60]), duration - 1])].filter(f => f < duration).sort((a,b)=>a-b);
+  const frames = [...new Set([0, ...cues.flatMap(cue => [Math.round(cue.at * 30) + 18, Math.round(cue.at * 30) + 60])])].filter(f => f < duration).sort((a,b)=>a-b);
   writeJSON(manifestPath, {source, stagedAt:new Date().toISOString(), files, duration, fps:30, width:1920, height:1080, cues, frames});
   console.log(`Staged unchanged source; ${duration} frames, ${frames.length} visual samples`);
 }
