@@ -1,0 +1,102 @@
+name: Benchmark
+on:
+  push:
+permissions:
+  contents: read
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  benchmark:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make bootstrap build
+      - name: Download last successful main baseline
+        if: github.ref != 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          run_id=$(gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -n "$run_id" ] && [ "$run_id" != null ]; then
+            gh run download "$run_id" --name bench-results --dir "$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID"
+          fi
+      - name: Measure both engines and check video parity
+        run: |
+          args=()
+          baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/results.json"
+          if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
+          node tests/perf/bench.mjs --work-dir "$RUNNER_TEMP" "${args[@]}"
+      - name: Report setup or build failures
+        if: always()
+        run: |
+          if [ ! -f tests/reports/bench/summary.md ]; then
+            mkdir -p tests/reports/bench
+            printf '%s\n' '<!-- motionswift-bench -->' '## MotionSwift benchmark failed' '' 'Setup or build failed before measurements. See the workflow logs.' > tests/reports/bench/summary.md
+          fi
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f tests/reports/bench/summary.md ]; then cat tests/reports/bench/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: bench-results
+          path: tests/reports/bench/
+          if-no-files-found: error
+          retention-days: 30
+  comment:
+    needs: benchmark
+    if: always() && !cancelled() && github.ref != 'refs/heads/main'
+    runs-on: [self-hosted, macOS, ARM64]
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: bench-results
+          path: benchmark-comment
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('benchmark-comment/summary.md', 'utf8');
+            const marker = '<!-- motionswift-bench -->';
+            // GitHub limits comment bodies; preserve the comparison table and artifact link.
+            const raw = summary.indexOf('<details>');
+            const body = summary.length > 60000
+              ? summary.slice(0, raw >= 0 ? raw : 58000) + '\nFull raw runs: bench-results artifact.\n'
+              : summary;
+            if (!body.startsWith(marker)) throw new Error('Unexpected benchmark report');
+            const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+              ...context.repo, commit_sha: context.sha, per_page: 100
+            });
+            const pull = pulls.find(pr => pr.state === 'open'
+              && pr.head.sha === context.sha
+              && pr.head.ref === context.ref.replace('refs/heads/', '')
+              && pr.head.repo?.full_name === process.env.GITHUB_REPOSITORY);
+            if (!pull) {
+              core.info('No open pull request for this pushed commit; summary is available in the run.');
+              return;
+            }
+            const issue_number = pull.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number, per_page: 100
+            });
+            const previous = comments.find(c => c.user.type === 'Bot' && c.body?.startsWith(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
+            } else {
+              await github.rest.issues.createComment({...context.repo, issue_number, body});
+            }

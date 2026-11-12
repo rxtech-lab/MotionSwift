@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+    "jsx": "react-jsx", "jsxImportSource": "@motionswift/remotion", "strict": true,
+    "isolatedModules": true, "noEmit": true, "esModuleInterop": true
+  }
+}

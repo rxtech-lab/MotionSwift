@@ -1,0 +1,10 @@
+{
+  "project": "../compositions",
+  "entryPoint": "src/index.ts",
+  "codec": "h264",
+  "runs": 3,
+  "warmup": 1,
+  "minSsim": 0.98,
+  "concurrency": 1,
+  "fixtures": "../fixtures.json"
+}

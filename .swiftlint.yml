@@ -1,0 +1,29 @@
+included:
+  - Package.swift
+  - Sources
+  - tests/Swift
+excluded:
+  - .build
+  - native/target
+  - node_modules
+file_length:
+  warning: 700
+  error: 799
+  ignore_comment_only_lines: false
+line_length:
+  warning: 140
+  error: 200
+identifier_name:
+  min_length: 2
+  excluded: [x, y]
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+function_body_length:
+  warning: 110
+  error: 150
+function_parameter_count:
+  warning: 8
+  error: 10
+disabled_rules:
+  - trailing_comma

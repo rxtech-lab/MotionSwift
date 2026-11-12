@@ -1,0 +1,5 @@
+module CSkia {
+    header "skia.h"
+    link "motionswift_native"
+    export *
+}

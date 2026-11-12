@@ -1,0 +1,22 @@
+name: Regenerate goldens
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  goldens:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: npm ci --prefix tests
+      - run: make goldens
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remotion-goldens-for-review
+          path: tests/golden/
+          retention-days: 30

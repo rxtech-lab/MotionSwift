@@ -1,0 +1,33 @@
+name: Output check
+on:
+  push:
+permissions:
+  contents: read
+concurrency:
+  group: output-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make bootstrap
+      - run: make ci
+      - name: Upload visual comparisons
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-results
+          path: tests/reports/
+          retention-days: 30
+      - name: Publish visual summary
+        if: always()
+        run: |
+          if [ -f tests/reports/visual/results.json ]; then
+            node tests/tools/visual-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+          fi

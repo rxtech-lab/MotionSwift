@@ -1,0 +1,11 @@
+[package]
+name = "motionswift-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+skia-safe = { version = "=0.99.0", features = ["textlayout"] }

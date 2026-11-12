@@ -1,0 +1,2 @@
+tests/golden/** filter=lfs diff=lfs merge=lfs -text
+tests/perf/baseline/** filter=lfs diff=lfs merge=lfs -text
