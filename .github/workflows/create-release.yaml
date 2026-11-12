@@ -1,0 +1,28 @@
+name: Create a new release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-release
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create version tag and GitHub Release
+        uses: cycjimmy/semantic-release-action@v8
+        with:
+          skip_npm_plugin: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
