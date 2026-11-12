@@ -3,7 +3,7 @@ description: Install the Node LTS and native build tools on macOS runners.
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v7.1.0
+    - uses: actions/setup-node@v7
       with:
         node-version: 'lts/*'
         cache: npm
@@ -35,7 +35,7 @@ runs:
         pkg-config --version
         ffmpeg -version
         ffprobe -version
-    - uses: actions/cache@v6.1.0
+    - uses: actions/cache@v6
       with:
         path: .cache/chrome-for-testing
         key: chrome-for-testing-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/browser.lock.json') }}

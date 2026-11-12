@@ -8,14 +8,14 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           lfs: true
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: npm ci --prefix tests
       - run: make goldens
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@v7
         with:
           name: remotion-goldens-for-review
           path: tests/golden/
