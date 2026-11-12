@@ -69,27 +69,6 @@ struct Arguments {
   }
 }
 
-func repository() throws -> URL {
-  if let home = ProcessInfo.processInfo.environment["MOTIONSWIFT_HOME"] {
-    return URL(fileURLWithPath: home)
-  }
-  let starts = [
-    URL(fileURLWithPath: FileManager.default.currentDirectoryPath),
-    URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.deletingLastPathComponent(),
-  ]
-  for start in starts {
-    var candidate = start
-    while candidate.path != "/" {
-      if FileManager.default.fileExists(
-        atPath: candidate.appendingPathComponent("js/compiler/compile.cjs").path) {
-        return candidate
-      }
-      candidate.deleteLastPathComponent()
-    }
-  }
-  throw MotionError("Set MOTIONSWIFT_HOME to the repository containing js/compiler/compile.cjs")
-}
-
 func writeJSON<T: Encodable>(_ value: T, to path: String) throws {
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -123,14 +102,14 @@ func run() throws {
   let project = URL(fileURLWithPath: arguments.options["project"] ?? ".").standardizedFileURL
   let startup = Date()
   if command == "check" {
-    let diagnostics = try Compiler(repository: repository()).checkTypes(
+    let diagnostics = try Compiler().checkTypes(
       project: project, entry: arguments.options["entry"] ?? "src/index.ts")
     if !diagnostics.isEmpty {
       print(String(bytes: try JSONEncoder().encode(diagnostics), encoding: .utf8) ?? "[]")
       throw MotionError("Type checking failed")
     }
   }
-  let bundle = try Compiler(repository: repository()).compile(
+  let bundle = try Compiler().compile(
     project: project, entry: arguments.options["entry"] ?? "src/index.ts")
   let runtime = try Runtime(bundle: bundle)
   let catalog = try runtime.compositions()

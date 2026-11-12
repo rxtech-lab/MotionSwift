@@ -1,6 +1,6 @@
 # TypeScript compatibility, compilation, and packages
 
-> Current executable behavior and remaining work: [runnable implementation](current-implementation.md). This document describes the target architecture and roadmap.
+> Current executable behavior and remaining work: [runnable implementation](current-implementation.md). The macOS package currently bundles native TypeScript 7 (tsgo) for compilation and type checking, with esbuild linking emitted JavaScript, with no runtime Node dependency. The cross-platform module cache, editor transforms, and distribution sections below remain roadmap items.
 
 This doc covers how a Remotion TSX project becomes JavaScript that JavaScriptCore can run, how TypeScript users get type-level compatibility checks, and which npm packages MotionSwift publishes.
 
@@ -14,45 +14,27 @@ This doc covers how a Remotion TSX project becomes JavaScript that JavaScriptCor
 ## Pipeline
 
 ```text
-project/
-  src/**/*.ts(x), *.json, assets
-        │
-        ▼
- MotionCompiler (per module, cached by content hash)
-   1. parse TS/TSX (swc)
-   2. strip types (isolatedModules semantics)
-   3. JSX → react/jsx-runtime (automatic runtime)
-   4. [editor builds] stamp data-ms-src="file:line:col"
-   5. rewrite imports through the resolver (aliases, allowlist)
-   6. ESM → module-registry form  (__ms_define(id, deps, factory))
-   7. downlevel to the JSC target (see below), emit source map
-        │
-        ▼
- Module graph (Swift)  ──►  JSC module loader (MotionRuntime)
-   - resolved ids, hashes, source maps          - evaluates factories lazily
-   - hot reload = re-transform changed modules  - maps stack traces back via source maps
+project TS/TSX/JS + JSON
+  → native TypeScript 7 (tsgo): emit ES2022 JavaScript and transform JSX
+  → original-source subset inspection in JavaScriptCore
+  → esbuild: link emitted JavaScript with bundled React and the Remotion shim
+  → JavaScriptCore (MotionRuntime)
 ```
 
-**Type checking is not part of rendering.** Rendering only strips types, which is fast and never fails on type errors (the same as Remotion's own bundler). Type checking (`tsc --noEmit` against our types) runs in the lint step, in CI, and in the agent's generation loop.
+The bundled native compiler is TypeScript 7.0.2, the released tsgo compiler, whose executable is now named `tsc`. It handles both compilation and type checking. No Node process or npm installation is needed at runtime.
 
-### Why not a single esbuild bundle?
+**Type checking is separate from rendering.** Compilation uses `noCheck` to emit without semantic type checking. `checkTypes` uses the same subset declarations and compiler settings with `noEmit`, and returns structured diagnostics. Both operations use a generated configuration rather than the project's tsconfig. JavaScript and JSON imports are included in the emitted project tree, and JSX is transformed by tsgo before bundling. Syntax inspection operates on original sources so unsupported JSX and dynamic imports/requires are still rejected.
 
-esbuild is a Go CLI. It's fine on macOS and Linux, but it can't run inside an iOS app, and a whole-project bundle makes editor hot reload coarse. Instead:
+### Platform integration
 
-| Option | macOS | iOS | Linux | Verdict |
-|---|---|---|---|---|
-| esbuild CLI | ✅ | ❌ no subprocesses | ✅ | **Phase 0 spike only** |
-| `typescript` / Sucrase running inside JSC | ✅ | ✅ (slow without JIT) | ✅ | Fallback |
-| **swc (Rust) as a static library with a C ABI** | ✅ | ✅ | ✅ | **Chosen**: fast, one implementation everywhere, the source-stamp transform is written once in Rust |
-
-`MotionCompiler` is a Rust crate built on `swc_core`, exposed through a small C ABI (`msc_transform(src, path, options) → {code, map, imports, diagnostics}`), and shipped as a prebuilt XCFramework and `.so`, the same way as `CSkia`. Module linking (resolution, graph, loader) is done in Swift. We don't use swc's bundler.
+The current macOS implementation launches bundled native TypeScript and esbuild executables for Apple Silicon and Intel. esbuild only links JavaScript; it does not compile project TypeScript. iOS cannot launch these subprocesses, so iOS needs precompiled bundles or a future in-process integration. Module caching, hot reload, source maps, and editor source stamping remain planned.
 
 ## TypeScript feature support
 
 | Feature | Supported | Notes |
 |---|---|---|
 | All type-only syntax (types, interfaces, generics, `satisfies`, `as const`, type-only imports and exports) | ✅ | Stripped. |
-| `enum`, `namespace` (non-ambient) | ✅ | Transformed by swc. |
+| `enum`, `namespace` (non-ambient) | ✅ | Transformed by native TypeScript. |
 | `const enum` across files | ⛔ | Requires `isolatedModules: true`, the same rule esbuild and Vite apply. Enforced by the tsconfig preset. |
 | Decorators (TC39 stage 3) | ✅ | Rare in Remotion code. |
 | Legacy `experimentalDecorators` / `emitDecoratorMetadata` | ⛔ | |
@@ -129,8 +111,8 @@ Versioning: all packages are released together with the engine and share one ver
 ## Compatibility checks in a project
 
 ```text
-npx motionswift check     # = tsc --noEmit (our types) + eslint ms/* + resolve graph + allowlist
-npx motionswift still ... # compile (swc) + render one frame
+npx motionswift check     # = native TypeScript --noEmit (our types) + eslint ms/* + resolve graph + allowlist
+npx motionswift still ... # compile (tsgo) + render one frame
 npx motionswift render ...
 ```
 

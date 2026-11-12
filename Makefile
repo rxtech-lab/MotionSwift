@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 export PKG_CONFIG_PATH := $(CURDIR)/native/pkgconfig:$(PKG_CONFIG_PATH)
-.PHONY: lint lint-fix bootstrap native build test visual goldens benchmark ci
+.PHONY: lint lint-fix bootstrap compiler native build test visual goldens benchmark showcase ci
 .NOTPARALLEL:
 
 lint:
@@ -10,15 +10,20 @@ lint:
 lint-fix:
 	swiftlint lint --fix --no-cache --config .swiftlint.yml
 
-bootstrap:
+tests/node_modules/.package-lock.json: tests/package.json tests/package-lock.json
 	npm ci --prefix tests
+	@touch $@
+
+compiler: tests/node_modules/.package-lock.json
+	node tests/tools/package-compiler.mjs
+
+bootstrap: compiler native
 	node tests/tools/prepare-browser.mjs
-	$(MAKE) native
 
 native:
 	./tests/tools/build-native.sh
 
-build: native
+build: compiler native
 	swift build -c release
 
 test: lint build
@@ -34,5 +39,8 @@ goldens:
 
 benchmark: build
 	node tests/perf/bench.mjs
+
+showcase: compiler native
+	swift run -c release motionswift-showcase
 
 ci: test visual

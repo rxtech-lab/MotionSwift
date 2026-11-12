@@ -8,17 +8,18 @@
     "benchmark": "node perf/bench.mjs"
   },
   "dependencies": {
-    "@swc/core": "1.16.22",
     "@remotion/bundler": "4.0.542",
     "@remotion/renderer": "4.0.542",
-    "remotion": "4.0.542",
+    "pngjs": "7.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-reconciler": "0.29.2",
-    "pngjs": "7.0.0"
+    "remotion": "4.0.542"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "@types/react": "18.3.27"
+    "@babel/parser": "7.24.1",
+    "@types/react": "18.3.27",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3"
   }
 }

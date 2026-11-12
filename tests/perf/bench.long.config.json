@@ -1,6 +1,6 @@
 {
-  "project": "../compositions",
-  "entryPoint": "../perf/long.tsx",
+  "project": "..",
+  "entryPoint": "perf/long.tsx",
   "codec": "h264",
   "runs": 3,
   "warmup": 1,

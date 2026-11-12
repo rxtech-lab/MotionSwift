@@ -21,7 +21,7 @@
 
 ```text
  TSX project
-     │  MotionCompiler (swc): strip types, JSX, stamp file:line:col (editor builds)
+     │  MotionCompiler (tsgo): strip types and transform JSX; source stamps planned
      │  resolver: alias `remotion` → @motionswift/remotion, allowlist, node_modules
      ▼
  module graph ──────────────────────────────────────────────────────────────┐
@@ -54,7 +54,7 @@
 
 | Module | Language | Responsibility |
 |---|---|---|
-| `MotionCompiler` | Rust (swc) + Swift | Per-module TS/TSX → JS transform with source maps, run on every platform (including iOS). The resolver and module graph live in Swift. See [typescript-and-packages.md](typescript-and-packages.md). |
+| `MotionCompiler` | Native TypeScript 7 (tsgo) + Swift | TS/TSX → JS emission and type checking; esbuild links emitted JavaScript. Current subprocess integration is macOS-only. Portable packaging and source maps remain planned. See [typescript-and-packages.md](typescript-and-packages.md). |
 | `CSkia` | C / C++ | A narrow C ABI (`msk_*` functions) over the Skia features we use: canvas, paint, path, shaders, image filters, SkParagraph, SkSVG, Graphite context/recorder. Shipped as a prebuilt XCFramework (Apple) and `.so` (Linux). |
 | `SkiaKit` | Swift | Safe Swift wrappers (`~Copyable` handles, `deinit` release) over `CSkia`. No engine logic. |
 | `MotionLayout` | Swift + Yoga (C) | CSS style parsing for the supported subset, cascade-free style resolution (inline styles only), Yoga node sync, and computing absolute boxes and transforms. |
@@ -67,7 +67,7 @@
 | `motionswift-cli` | Swift | `render`, `still`, `check`, `trace`, `compare` commands. The CI suite and the PR benchmark drive this ([benchmark.md](benchmark.md#native-cli-contract)). |
 | `js/remotion-shim` | TS | Drop-in replacement for the `remotion` package ([compatibility.md](compatibility.md)). |
 | `js/reconciler` | TS | `react-reconciler` host config that serializes mutations into the op buffer. |
-| `compiler/` source stamp | Rust | Adds `data-ms-src="file:line:col"` to every host JSX element (an swc transform, so it also works on iOS). |
+| Source stamp (planned) | TBD | Adds `data-ms-src="file:line:col"` to host JSX elements. iOS integration remains unimplemented. |
 | `js/lint` | TS | ESLint plugin and TS type check that reject unsupported APIs and CSS. |
 
 ## The JS ↔ native bridge

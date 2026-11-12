@@ -19,6 +19,26 @@
       "target": "motionswift",
       "configuration": "release",
       "preLaunchTask": "swift: Build Release motionswift"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:MotionSwift}",
+      "name": "Debug motionswift-showcase",
+      "target": "motionswift-showcase",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug motionswift-showcase"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:MotionSwift}",
+      "name": "Release motionswift-showcase",
+      "target": "motionswift-showcase",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release motionswift-showcase"
     }
   ]
 }

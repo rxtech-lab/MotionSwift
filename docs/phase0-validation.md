@@ -99,7 +99,7 @@ Reasons:
 3. **Per-call overhead does not matter at this boundary.** The architecture batches work per frame (op buffers, one surface per worker), so crossing a C boundary costs little next to rasterization. This was not separately micro-benchmarked. It follows from the call granularity.
 4. **Already validated.** The existing shim carries the precision-sensitive GPU work: fractional-coverage SkSL quads, color-matrix layer opacity, F16 targets, and IOSurface handoff. These pass the exact-RGBA golden gate on both backends.
 
-Costs accepted: every new Skia feature (SkParagraph, SkSVG, shaders, image filters) needs C entry points and Swift wrappers, and a Rust toolchain stays in the build. The Rust toolchain is already required for the planned swc compiler crate.
+Costs accepted: every new Skia feature (SkParagraph, SkSVG, shaders, image filters) needs C entry points and Swift wrappers, and a Rust toolchain stays in the build. TypeScript compilation and type checking use native TypeScript 7 (tsgo); Rust remains required for the Skia wrapper.
 
 ## Remaining blockers
 

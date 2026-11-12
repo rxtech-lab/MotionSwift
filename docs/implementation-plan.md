@@ -6,7 +6,7 @@ Durations assume 1–2 engineers. Each phase ends with **exit criteria checked b
 
 ```text
 Phase 0  Validation spike + test harness         wk 1–2    ── go / no-go gate
-Phase 1  Skia + swc compiler packaging, SkiaKit   wk 3–4
+Phase 1  Skia + native TypeScript compiler packaging, SkiaKit   wk 3–4
 Phase 2  Runtime, reconciler, layout, core boxes wk 5–8
 Phase 3  Paint coverage (effects, text, SVG)     wk 9–13
 Phase 4  Media: images, video, audio, fonts      wk 14–17
@@ -46,7 +46,7 @@ If text parity fails badly, make SkParagraph tuning the next phase before anythi
 
 ## Phase 1: Skia and compiler packaging, SkiaKit (weeks 3–4)
 
-- `compiler/` Rust crate on `swc_core`: TS strip, JSX automatic runtime, ESM → module-registry form, source maps, and the source-stamp transform. Expose it through a C ABI and prebuild it with `CSkia` in the same workflow.
+- Bundle native TypeScript 7 (tsgo) for TS/TSX emission and type checking, with esbuild linking emitted JavaScript. Source maps, editor source stamps, and in-process iOS compiler integration remain follow-ups.
 - `MotionCompiler` Swift side: the resolver (Node algorithm, `exports` conditions, tsconfig `paths`, aliases, allowlist), the module graph, and the content-hash transform cache.
 
 - Choose and pin the Skia milestone, matching the Chrome Headless Shell version Remotion pins where possible.
@@ -145,7 +145,7 @@ See [editor.md](editor.md).
 | Skia build complexity | Medium: slows everyone down | Prebuilt artifacts. One person owns `CSkia`. Pin the version. |
 | Agent output uses CSS outside the subset | Medium: renders fail | Lint inside the generation loop, Remotion fallback in Film Studio, and track the rejection rate to prioritize new features. |
 | Third-party npm packages assume a DOM or Node built-ins | Medium | Resolve-time allowlist, `ms/unsupported-package` lint, and a vendor bundle of known-good packages. |
-| swc version drift or Rust toolchain burden | Low | Pin `swc_core`, prebuild artifacts, and use snapshot tests for compiler output. |
+| Native TypeScript version drift | Low | Pin the native compiler archives and verify emitted output with runtime tests. |
 | JSC on Linux (packaging and version drift) | Medium | Pin a version and vendor the build in the worker image. Motion parity tests run on Linux in CI. |
 | `Math.*` ulp differences between JSC and V8 | Low | Tolerance-based motion parity test. Differences are sub-pixel. |
 | Remotion behavior changes in new versions | Medium | Pin the Remotion version in the golden generator. Upgrading Remotion means a PR that regenerates goldens and reviews the diffs. |

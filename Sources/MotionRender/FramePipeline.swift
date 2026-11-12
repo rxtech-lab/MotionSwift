@@ -1,6 +1,7 @@
 import Foundation
 import MotionCore
 import MotionRuntime
+import OSLog
 import SkiaKit
 
 public typealias RenderBackend = Backend
@@ -41,6 +42,15 @@ public struct PipelineOptions: Sendable {
 /// nothing mutable is shared between workers. Frames are evaluated in fresh JS VMs, so
 /// output is independent of which worker renders a frame or in which order.
 public enum FramePipeline {
+  private static let logger = Logger(subsystem: "app.rxlab.MotionSwift", category: "FramePipeline")
+  private static var debugLogging: Bool {
+    #if DEBUG
+    true
+    #else
+    ProcessInfo.processInfo.environment["MOTIONSWIFT_RENDER_DEBUG"] == "1"
+    #endif
+  }
+
   public static func run(
     bundle: String, composition: Composition, frames: [Int], props: String,
     options: PipelineOptions, consume: (RenderedFrame) throws -> Void
@@ -51,6 +61,10 @@ public enum FramePipeline {
     }
     let state = PipelineState(count: frames.count, window: options.window)
     let workers = min(options.workers, frames.count)
+    if debugLogging {
+      let configuration = "frames=\(frames.count) workers=\(workers) window=\(options.window) sharedVideo=\(options.sharedVideoFrames)"
+      logger.notice("Pipeline start \(configuration, privacy: .public)")
+    }
     let group = DispatchGroup()
     for _ in 0..<workers {
       group.enter()
@@ -68,12 +82,21 @@ public enum FramePipeline {
     defer {
       state.cancel()
       group.wait()
+      if debugLogging { logger.notice("Pipeline stopped; all workers joined") }
     }
     for index in frames.indices {
-      let frame = try state.take(index)
-      do { try consume(frame) } catch {
-        state.fail(error)
-        throw error
+      // The consumer may call AVFoundation/CoreVideo on a long-lived export thread.
+      // Drain its temporary objects per frame, including when consumption throws.
+      try autoreleasepool {
+        let frame = try state.take(index)
+        do { try consume(frame) } catch {
+          state.fail(error)
+          throw error
+        }
+        if debugLogging, (index + 1).isMultiple(of: 100) || index == frames.count - 1 {
+          let snapshot = state.debugSnapshot()
+          logger.notice("Consumed=\(index + 1) renderMs=\(frame.renderMs) \(snapshot, privacy: .public)")
+        }
       }
     }
   }
@@ -88,16 +111,20 @@ public enum FramePipeline {
         width: composition.width, height: composition.height, scale: options.scale,
         backend: options.backend)
       while let index = state.claim() {
-        let begin = DispatchTime.now().uptimeNanoseconds
-        let tree = try runtime.frame(composition: composition, number: frames[index], props: props)
-        let layout = try renderer.draw(tree, composition: composition)
-        let videoFrame = options.sharedVideoFrames ? try renderer.videoFrame() : nil
-        let pixels = options.sharedVideoFrames ? Data() : try renderer.pixels()
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
-        state.complete(
-          RenderedFrame(
-            index: index, frame: frames[index], pixels: pixels, videoFrame: videoFrame,
-            layout: layout, renderMs: elapsed))
+        // Every frame creates a fresh JSContext and Metal/CoreVideo temporaries.
+        // The hand-off retains the output while this pool releases those temporaries.
+        try autoreleasepool {
+          let begin = DispatchTime.now().uptimeNanoseconds
+          let tree = try runtime.frame(composition: composition, number: frames[index], props: props)
+          let layout = try renderer.draw(tree, composition: composition)
+          let videoFrame = options.sharedVideoFrames ? try renderer.videoFrame() : nil
+          let pixels = options.sharedVideoFrames ? Data() : try renderer.pixels()
+          let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
+          state.complete(
+            RenderedFrame(
+              index: index, frame: frames[index], pixels: pixels, videoFrame: videoFrame,
+              layout: layout, renderMs: elapsed))
+        }
       }
     } catch {
       state.fail(error)
@@ -119,6 +146,12 @@ private final class PipelineState: @unchecked Sendable {
   init(count: Int, window: Int) {
     self.count = count
     self.window = window
+  }
+
+  func debugSnapshot() -> String {
+    condition.lock()
+    defer { condition.unlock() }
+    return "claimed=\(next) consumed=\(consumed) ready=\(finished.count) outstanding=\(next - consumed) window=\(window)"
   }
 
   /// Next frame index to render, waiting while the reorder window is full. Nil when done.
