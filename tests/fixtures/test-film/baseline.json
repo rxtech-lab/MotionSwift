@@ -473,5 +473,6 @@
   ],
   "chromiumOptions": {
     "gl": "swangle"
-  }
+  },
+  "osRelease": "27.2.0"
 }

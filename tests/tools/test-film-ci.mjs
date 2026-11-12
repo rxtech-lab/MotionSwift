@@ -13,12 +13,15 @@ import {compareFiles} from './compare.mjs';
 import {sha256, pixelHash, validateBaseline, assessFrame, testFilmChromiumOptions, maxChannelDelta} from './test-film-gate.mjs';
 
 const fixture = path.join(testRoot,'fixtures/test-film');
-const baselineFile = path.join(fixture,'baseline.json');
-const goldens = path.join(fixture,'golden');
+const rasterProfile = `${process.platform}-${os.release()}-${process.arch}`;
+const profileDirectory = path.join(fixture,'profiles',rasterProfile);
+const baselineFile = fs.existsSync(path.join(profileDirectory,'baseline.json'))
+  ? path.join(profileDirectory,'baseline.json') : path.join(fixture,'baseline.json');
+const goldens = path.join(path.dirname(baselineFile),'golden');
 const output = path.join(testRoot,'reports/test-film');
 const pins = {
   remotionVersion:readJSON(path.join(testRoot,'package-lock.json')).packages['node_modules/remotion'].version,
-  browser:browserLock, chromiumOptions:testFilmChromiumOptions, platform:process.platform, arch:process.arch,
+  browser:browserLock, chromiumOptions:testFilmChromiumOptions, platform:process.platform, arch:process.arch, osRelease:os.release(),
 };
 const escape = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 
@@ -103,7 +106,7 @@ function nativeStill(bin, project, frame, file, log) {
 async function check() {
   fs.rmSync(output,{recursive:true,force:true});
   fs.mkdirSync(output,{recursive:true});
-  const report = {pass:false, strictPixelThreshold:0.003, results:[]};
+  const report = {pass:false, rasterProfile, strictPixelThreshold:0.003, results:[]};
   let temporary;
   try {
     const expected = readJSON(baselineFile);
@@ -157,10 +160,10 @@ async function check() {
     if (temporary) fs.rmSync(temporary,{recursive:true,force:true});
     writeJSON(path.join(output,'results.json'),report);
     const strictPassed = report.results.filter(row=>row.crossEngine.pass).length;
-    const summary = `### Test Film visual regression: ${report.pass?'PASS':'FAIL'}\n\n${report.results.length} frame pairs checked: native exact pixel hashes and repeatability; Remotion lossless goldens with at most 0.3% changed pixels and a maximum one-unit channel delta.\n\nExact cross-engine parity: ${strictPassed}/${report.results.length} at the unchanged 0.3% threshold (informational; known font/raster differences).\n\n${report.error ? `Error: ${report.error}\n\n` : ''}Side-by-side frames and differences are in the **visual-results** artifact under test-film/.\n`;
+    const summary = `### Test Film visual regression: ${report.pass?'PASS':'FAIL'}\n\nRaster profile: ${rasterProfile}.\n\n${report.results.length} frame pairs checked: native exact pixel hashes and repeatability; Remotion lossless goldens with at most 0.3% changed pixels and a maximum one-unit channel delta.\n\nExact cross-engine parity: ${strictPassed}/${report.results.length} at the unchanged 0.3% threshold (informational; known font/raster differences).\n\n${report.error ? `Error: ${report.error}\n\n` : ''}Side-by-side frames and differences are in the **visual-results** artifact under test-film/.\n`;
     fs.writeFileSync(path.join(output,'summary.md'),summary);
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary);
-    fs.writeFileSync(path.join(output,'index.html'),`<!doctype html><meta charset="utf-8"><title>Test Film CI visual review</title><style>body{font:16px system-ui;background:#171717;color:#eee;margin:32px}section{margin:32px 0}img{width:32%}pre{white-space:pre-wrap}</style><h1>Test Film visual regression: ${report.pass?'PASS':'FAIL'}</h1><p>Remotion / native / difference. Regression compares each engine with its reviewed output; native is exact, Chrome allows only bounded one-unit rounding. Cross-engine pixel parity is separate.</p>${report.error?`<pre>${escape(report.error)}</pre>`:''}${report.results.map(row=>`<section><h2>Frame ${row.frame}: ${row.pass?'PASS':'FAIL'}</h2><p>Native snapshot: ${row.nativeMatch}; Remotion snapshot: ${row.referenceMatch} (changed pixels: ${(row.referenceComparison.diffRatio*100).toFixed(6)}%, max channel delta: ${row.referenceComparison.maxChannelDelta}; <a href="${row.frame}/reference-comparison/diff.png">reference diff</a>); repeatable: ${row.deterministic}; cross-engine changed pixels: ${(row.crossEngine.diffRatio*100).toFixed(4)}%</p>${['expected','actual','diff'].map(name=>`<a href="${row.frame}/comparison/${name}.png"><img src="${row.frame}/comparison/${name}.png" alt="${name} frame ${row.frame}"></a>`).join('')}</section>`).join('')}`);
+    fs.writeFileSync(path.join(output,'index.html'),`<!doctype html><meta charset="utf-8"><title>Test Film CI visual review</title><style>body{font:16px system-ui;background:#171717;color:#eee;margin:32px}section{margin:32px 0}img{width:32%}pre{white-space:pre-wrap}</style><h1>Test Film visual regression: ${report.pass?'PASS':'FAIL'}</h1><p>Raster profile: ${rasterProfile}. Remotion / native / difference. Regression compares each engine with its reviewed output; native is exact, Chrome allows only bounded one-unit rounding. Cross-engine pixel parity is separate.</p>${report.error?`<pre>${escape(report.error)}</pre>`:''}${report.results.map(row=>`<section><h2>Frame ${row.frame}: ${row.pass?'PASS':'FAIL'}</h2><p>Native snapshot: ${row.nativeMatch}; Remotion snapshot: ${row.referenceMatch} (changed pixels: ${(row.referenceComparison.diffRatio*100).toFixed(6)}%, max channel delta: ${row.referenceComparison.maxChannelDelta}; <a href="${row.frame}/reference-comparison/diff.png">reference diff</a>); repeatable: ${row.deterministic}; cross-engine changed pixels: ${(row.crossEngine.diffRatio*100).toFixed(4)}%</p>${['expected','actual','diff'].map(name=>`<a href="${row.frame}/comparison/${name}.png"><img src="${row.frame}/comparison/${name}.png" alt="${name} frame ${row.frame}"></a>`).join('')}</section>`).join('')}`);
     process.exitCode = report.pass ? 0 : 1;
   }
 }

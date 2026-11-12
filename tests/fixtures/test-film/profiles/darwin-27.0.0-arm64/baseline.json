@@ -1,0 +1,486 @@
+{
+  "schema": 1,
+  "remotionVersion": "4.0.542",
+  "browser": {
+    "version": "157.0.8103.39",
+    "mode": "chrome-for-testing",
+    "platform": "mac-arm64"
+  },
+  "platform": "darwin",
+  "arch": "arm64",
+  "backend": "cpu",
+  "note": "Reviewed macOS 27.0 CI font/raster baseline. Native snapshots remain exact and repeatable; Chrome retains the existing 0.3% pixel and one-unit channel bounds.",
+  "composition": {
+    "id": "Main",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationInFrames": 12925
+  },
+  "files": [
+    {
+      "name": "Composition.tsx",
+      "sha256": "1e1ba81658bdb7594f791b04d0e3283336608dfb66fe6db10703afe9fa3d20b3"
+    },
+    {
+      "name": "Root.tsx",
+      "sha256": "48deb9c1c98ac6b185a328d0024bde86b4e43003cec25d358ce7cf24fd7e2115"
+    },
+    {
+      "name": "index.ts",
+      "sha256": "957e481dd33a29b4a55ae0e95dbf763b7e48c37c427ca4bd1275faf34bc07a74"
+    }
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "nativeRGBA": "195651bcd14f345fef1845d422be6a6b1b524f315758b724d816cb98e4cf068c",
+      "remotionRGBA": "6f07a886ed68af8904c48ff5e6cb9f7ef000db2c010e7fe301f014f9f55fd809",
+      "remotionWebP": "96302e9f1896810661735292e4387a86efadcd3eaec817efd14a3a3ad20c416b"
+    },
+    {
+      "frame": 18,
+      "nativeRGBA": "f6cf8a87eec9c57216bf5aaea293df425501e40fee86373653115bde77f3c913",
+      "remotionRGBA": "03ddec2df6b5fad55cdcfb6885bb48967b77fa77ca3337ac066eeb185bbf060a",
+      "remotionWebP": "b305d350c94b3353e77d55ea1036b0ecd01885634bb05f2ac76512c20a779645"
+    },
+    {
+      "frame": 60,
+      "nativeRGBA": "3ac36bf6deb8cd682864b89e721cbe45858e1bd1c6a80745caf11a130b112c4d",
+      "remotionRGBA": "be7b815761f7099ff076df32dfe32053e04d4c2a0931b67e0b6b77565ff9b9db",
+      "remotionWebP": "7fd97d3adad85d705ab49c1d7cda0312cc605f0e54da79d0abf3d02a491751c2"
+    },
+    {
+      "frame": 318,
+      "nativeRGBA": "496670044046c12b356f25de6995bae5ce2b37a3f4cc687b239f8f6cb50a861a",
+      "remotionRGBA": "e0faa8405092b92d7cef46adf93a2bb9af9436b7e2d24eebc30b0c69d8f88000",
+      "remotionWebP": "1693960bfd987125d15c587b08bb51c41fa49dfee6fed3fa0a5f1c24146056af"
+    },
+    {
+      "frame": 360,
+      "nativeRGBA": "b8296ae1f085d34ecf71bd4d4993dd50b328ab0ff973d997681eb46a629bb056",
+      "remotionRGBA": "1ec5625477906ca2f479cab4683d5d6107fcee628ff4b3d87609cd96ee6fdb8a",
+      "remotionWebP": "1d65c252275f2c3a73f3e44a19343ddd1cabd88327a6c8533c9994914338d408"
+    },
+    {
+      "frame": 678,
+      "nativeRGBA": "65d6c5c05b8131e5cec45ecb1194828f9066d06692fd42d07c2cf5b3988795b7",
+      "remotionRGBA": "4aa7712d3d57653801005f2d2a283e43abd4a037f55ed269aaf0d78466c54cf7",
+      "remotionWebP": "c76acf0e379249c01539b0159c097f482f06a7ce11ff33ae73172a429be2bd52"
+    },
+    {
+      "frame": 720,
+      "nativeRGBA": "38be3b37f8890276e3e11f84bd9868f17daf10bd7cc079fba913485e4b8aa318",
+      "remotionRGBA": "0f4165365b964c275e6924f5abcdc451e58fdcd7b222dde93e046b150b513507",
+      "remotionWebP": "6ab8d9a7b8228b14141a0c3917fedc05e3477b56df1047f7b0be741e7449129d"
+    },
+    {
+      "frame": 1068,
+      "nativeRGBA": "33194e69835f012857d09c39c19f74ca3e2407db681f5ef23268ff41c6d61552",
+      "remotionRGBA": "616e7e5d896f1f65e10fd585ae766f89907b6636f7d47de4cd5dfb76f454bdaf",
+      "remotionWebP": "b41e584b14a16babe6a473f24a87582e39fe8a7033f1bd305f9d8f2cff1449a2"
+    },
+    {
+      "frame": 1110,
+      "nativeRGBA": "dd98e7c577b90b353d382a05ec88752e4daaf96c738882ef0f49db6146d4997f",
+      "remotionRGBA": "f78e5ea547560844240f45dca6aa21c02332644b851ce91e719f90fac8095d14",
+      "remotionWebP": "88f4654d8de8ec72c85ddc146b762cf6b34385c407744b1db7ac5d8f032d125e"
+    },
+    {
+      "frame": 1442,
+      "nativeRGBA": "102a32d7891f874bf827a345a79a6746bc2fa48508c626bd9ca09a05a616f15e",
+      "remotionRGBA": "644eb74259433cd34940c936eb5b8cb67e46f8f5245d8faf46f4c66b40c47934",
+      "remotionWebP": "c02ea3ee61db8b093bf4423981dca543a4e780820d57587a64574079967132a5"
+    },
+    {
+      "frame": 1484,
+      "nativeRGBA": "81c29efa725051c5e170d6d55af33ba56b233f53f03d52b7e8bb72adf4526fd3",
+      "remotionRGBA": "734b84dde125f7eb01eb44bf4600ba0b5a5d9bf2072f02b5e58f86770dbd99a8",
+      "remotionWebP": "f233ba8b7a2c09883c80088f10f7e5694a1040c8f0b89ff818350c9bd7d76c9b"
+    },
+    {
+      "frame": 1800,
+      "nativeRGBA": "77e073d452521120537e983cf5ea1f78070da1aa88b8eac4e79313385ee8feb0",
+      "remotionRGBA": "91ce5fd08794f7db916dc30f23f6952591a60f4c9cc330500a0282bb24724f27",
+      "remotionWebP": "70280f92ea87f2206b916f5fb0dc97c0acda99757516fa991091637a069dcf67"
+    },
+    {
+      "frame": 2100,
+      "nativeRGBA": "8ea01e2a7c752b83d96b83507945d227e0751cc1311ab05b7d05863223ba6484",
+      "remotionRGBA": "52a19d60a8cce3f67fd2b42c003dff70c7013ca283a8fd60967bd54a979e58a7",
+      "remotionWebP": "06e3aa377422fa54a018774d694aa6438918d2c1503b2d86683f93f086567eb3"
+    },
+    {
+      "frame": 2400,
+      "nativeRGBA": "28591f1316312949f5268e9effbde8128f50b64e51fedf03111d0f28a78870e7",
+      "remotionRGBA": "adc7a35d8cfa870b2ea4b56dc507763613324c8beeb400c32cbce9703624aee1",
+      "remotionWebP": "9126b8405576694a70b7e92aa9534f7dc8a2866a0a3897c56cffdd70ce2f3690"
+    },
+    {
+      "frame": 2592,
+      "nativeRGBA": "16f6d276b414bd7b43de095ffe46677fc9d0d60715cdd51e48b84605e5742f99",
+      "remotionRGBA": "ff4c6d4668836920c08edcb697920c67a763db712bf474fb4181f296df9757c1",
+      "remotionWebP": "c7924369b5b357bae76e0ca4ffe48fb6dc831e584b490441d1dbbe0e474134fe"
+    },
+    {
+      "frame": 2634,
+      "nativeRGBA": "0848a8223ced5d86b82d9a8bc325112c1854df59f01a752374afede533b93257",
+      "remotionRGBA": "47929a6bc6aecf4776b2b3ede0cacab49f0826623cb43aa6fdd7cb17c8601469",
+      "remotionWebP": "d6397ce138a95aff8a9d6fd5f6435d6f01724411ff00efe6cbabaf63e6b80ec0"
+    },
+    {
+      "frame": 2949,
+      "nativeRGBA": "153f7f00bab603d3bc5ae2df98a87b145c28b3c8b5d7f0305582b1e1a5786052",
+      "remotionRGBA": "e5eaad47b40be56717c15ab3f991479cdde49f10adf4a753ac76b577db5c0da1",
+      "remotionWebP": "4dc94f7725555445d59cd716638871f49ac1007536073c4db0dc30673d884547"
+    },
+    {
+      "frame": 2991,
+      "nativeRGBA": "32ecc00e2234d513a6f4c8fd823c8b1307f40cfd3acd5ce17b453b8247d4cb4d",
+      "remotionRGBA": "4cd23ac69646edc7021fb24611e68c242226c5f91b7d0de3c9a299e7565b1b53",
+      "remotionWebP": "953f303b11ed41c3e036137ad3e3f55c1b2d6cf7ec2ced793eb655504af2b18b"
+    },
+    {
+      "frame": 3262,
+      "nativeRGBA": "52a77c10fdbd73bf4424efd06b2f26421b0d1df04e1fee32e5f8fff4f2509ceb",
+      "remotionRGBA": "216764b5ef5ea9b1f60c5c40dfc0069e00329c5bd60632f3fdb89d3a506a9721",
+      "remotionWebP": "ad80f1a873f0792af36f11a1d0e66d4b7757711254931a056556ee927fc3383d"
+    },
+    {
+      "frame": 3304,
+      "nativeRGBA": "800b75056e6bae1f1108ede49ac007c407498e3d3e3a48e6d0f88b8627579bdc",
+      "remotionRGBA": "14960d10632327624331a06f51e784598214580422d1eb479dca61b6a3d6fb5d",
+      "remotionWebP": "363842e5744e50206535b5453a7ecb3e14f8ec287c4265d54796d0d6d1122d8c"
+    },
+    {
+      "frame": 3382,
+      "nativeRGBA": "007db155fd330e313a0972d21acac467d30323006004f5fb9199748867c19c9a",
+      "remotionRGBA": "df81a570a3dd4bbbff22d1aa91ac48b24d58d84c179f2964a33948d9323a5fb2",
+      "remotionWebP": "55c7539cd7a1ff06e0ff91c72447087095012c181e508349df7410e2bce7002a"
+    },
+    {
+      "frame": 3424,
+      "nativeRGBA": "f5bc32146fa00caa1d6a3406f12f0e0d615d22c9ff6f3d06035b706b6017f5d5",
+      "remotionRGBA": "8e8fec91bec50d44d731e7f9fb856674833ff417578f02c04e9ce30e029f048c",
+      "remotionWebP": "991a64174f53dc83f8122ee74c5538cfdc1636c44aa3472ae325d555a0a3b2bc"
+    },
+    {
+      "frame": 3679,
+      "nativeRGBA": "e3c61189051a94abc6ab444ef2de2ac8283e6dd7b59cc6f29ac6eefe5108becc",
+      "remotionRGBA": "c334b6969e0ba1e3b8ec39724997deec0d3d370bb4b52507e0237102e501d6c6",
+      "remotionWebP": "15f69c401d8cf1690968bad3e526086174573ed03f32acca760031e1beb1d210"
+    },
+    {
+      "frame": 3721,
+      "nativeRGBA": "c1728b87a4e43544b695494f634f8e3f46caed4ea1ede44e0f0519e236a4cc7c",
+      "remotionRGBA": "6b2e0c9b421b3bda29ab26f9042115a2f50bf767ad6cd725543363cf414d999f",
+      "remotionWebP": "7246d9957f11191de6cab6c6eeddb307274cfa19cfe5c62a4d8842beb1b8e33f"
+    },
+    {
+      "frame": 4087,
+      "nativeRGBA": "ffc66d59d4b5f65fd82a14902a026352dc0c3e90bc3f563f908c53d35c15ef26",
+      "remotionRGBA": "40cfbdebad1da36e99489c256a428a04035f5c33681c3d83e56a1aa9a15ceb05",
+      "remotionWebP": "ddc994eaf1802f338ac7eaed68106441311ff611ff0f2db7bb3d04fabfdb24bc"
+    },
+    {
+      "frame": 4129,
+      "nativeRGBA": "6a3a540d0e568544f5f9764a90466da95a60f4893a39d5fdd1d4307ec9a8a169",
+      "remotionRGBA": "69e3b7aa545db0b183c16c63ae681038083623716a56fa67d706886d27b9981d",
+      "remotionWebP": "7c8fd8bface5784b2d03c7a998ea75a9ddaf393ed466cbb59a5ab1c11fe3e47e"
+    },
+    {
+      "frame": 4345,
+      "nativeRGBA": "63c8d1a58f5bac584dbf2c1de70aa9c1fade40e1a7e7d064590cafd00466b7eb",
+      "remotionRGBA": "5228f6cdbb0403018f90d18291bd7f7f866d5e263ea6bfdbca566b34608ad786",
+      "remotionWebP": "c59fbc446dadd501fc13fd70634751c16a53a77803d9a4004b070e56e4d67c39"
+    },
+    {
+      "frame": 4387,
+      "nativeRGBA": "270894844987c2f39f4a54ff3be5a39e3090d2ce099005930dcf29e523c734cb",
+      "remotionRGBA": "58d591996ede0082968bd5efb4095aa1f9d76ad362a55d1a22a9403ab47453d5",
+      "remotionWebP": "6baf9ec35be44fe79258b565125d78acfcafe2b6a394a6d55bc9830a2cf2155c"
+    },
+    {
+      "frame": 4645,
+      "nativeRGBA": "d13fc8c1ceead720a4741ad22848cf695f0c8858a553cd1d86c9349d25882c13",
+      "remotionRGBA": "8b429bee4f9b28b20342353c45f25531a15d660cf190e3802367158a4db49a5f",
+      "remotionWebP": "f8c18f3b499056819e630b9b094a9b8ce31dfb74bb06c851efad8b8ea542cae2"
+    },
+    {
+      "frame": 4687,
+      "nativeRGBA": "7dc46c2209b68cb1ba06abd3e2b22a8d2f289d3e20703f43ab82b3fdbd9b136c",
+      "remotionRGBA": "58a50c54bd2f1a82efb68926f25a066f2af280fd4cbec46be836e310d0ffd7de",
+      "remotionWebP": "5a64f38d03dcc0a8c9ad57a3346098fcf032125a58ba76f334efd50a21ae6220"
+    },
+    {
+      "frame": 5173,
+      "nativeRGBA": "cdcd9adb514c07abccd10cbc56ac6ce6fa04cf2503225544313ca1679c538b11",
+      "remotionRGBA": "a050d30aeb7cf0997eddcb722c077569e10f8c56a2b35ab4191f89610e115185",
+      "remotionWebP": "d67ff0f40ac8c664825904c2c4aa27b2f3d27709a3a7896ef1f6473b35936cb2"
+    },
+    {
+      "frame": 5215,
+      "nativeRGBA": "85feb9272d2f70f0e7753aa874669297fecccb1259cca8145c89d97327003213",
+      "remotionRGBA": "51e5e8ef3b1a6a6c853d061523a9f7b819d872aaf2662a534f500bb8dd1ad635",
+      "remotionWebP": "3bbcf40973ce65e1ff8e4f995a177dae730727cccdd9eaf5d11ce8696ea31c68"
+    },
+    {
+      "frame": 5440,
+      "nativeRGBA": "af10a38da752deda6de3a9b20b537fb84401d4498443e17be24b8de393eb537d",
+      "remotionRGBA": "f6b6fd2d521435768603bef0edb8d3b1d6faec6975d6a56cce7ecec78e25287d",
+      "remotionWebP": "6ad151c9deb1e9514a67ffabb5b63de95514955843b82267762e073ad562a794"
+    },
+    {
+      "frame": 5482,
+      "nativeRGBA": "65ce75bd6236ab03100f479c5bdbd9d088e63e3ca54e4fd617188743d7b30442",
+      "remotionRGBA": "69cccf2865868b93b15a062f8e5d48d6ca6b2c5eb5afe9eb7697d8d9130e6718",
+      "remotionWebP": "eafb455b7eddc1f3582c23df783ceb52674c83cd08ce24e4f4b7c6ba65aa97f5"
+    },
+    {
+      "frame": 5756,
+      "nativeRGBA": "f1bb85cf1bc679719e4cbdcf2f462849122cf50fd4715f226ffe81b98cf2eb23",
+      "remotionRGBA": "42df3efe9359e194c9e397a03be2d6fce11718d7c8b5f18453f1b3adce7568ae",
+      "remotionWebP": "dda2cde198202e3894e59a75f5beb9d8bc8d54e1544b0fe7e3899a63db328edf"
+    },
+    {
+      "frame": 5798,
+      "nativeRGBA": "37a4064b116892622f2c7fe2957c914b5b26b56337eec5bef11079838a23145f",
+      "remotionRGBA": "efbf5fe81814e2008e11f9024022f2fcf81c26cf40c4ab594815a400bf1ea85b",
+      "remotionWebP": "8ddd3c5a02f93ed1e09da8e81b8b347cd3d4316758640b9618f7b12fdf73488d"
+    },
+    {
+      "frame": 6068,
+      "nativeRGBA": "4754acc1552d8b38267638fb108ecf2fa5875c1f22dff754d0068723acd4856e",
+      "remotionRGBA": "3a9f65363ddd7a7199b181215048845bb15812e93175c2c4d2dea65a66e9f6d7",
+      "remotionWebP": "0a144a0ee9ebc9913f5c698c20c913a906c491b52e9010575a13022fbc920bf9"
+    },
+    {
+      "frame": 6110,
+      "nativeRGBA": "7449d86355feae087e980efcec258d9d475e6237bb75ffee56af64c98f6528f5",
+      "remotionRGBA": "50439ab6ce746d17642153b6118c1a9a0f6c43acc5785bc5c485f601c7e15c31",
+      "remotionWebP": "22d608b9bd6ddeea945f77b5a14879418b70abd817c4300c55a1b98b6118c7cf"
+    },
+    {
+      "frame": 6287,
+      "nativeRGBA": "82bc3a9802e24d6c5249ffc960bc5a04c13a5ca91ed2ab724b6136932bdcfe9d",
+      "remotionRGBA": "f3d4b1534a8d65d471e65eed830f36196aae5e6fd9f8fbb37808ada7d953ee70",
+      "remotionWebP": "8a01f88d6546719e1378b7a48d9537523b2a049249363ade09d91a596620ab43"
+    },
+    {
+      "frame": 6329,
+      "nativeRGBA": "93ebe2b7423dd7ef504134ac0d8d206d8b45c26fd6b6449c8a1feceb41942c03",
+      "remotionRGBA": "cabf1b9726cffd7507cb243496f3d5a2f3a9b6de603941a7519a7e100a0a6185",
+      "remotionWebP": "0ffb868417d920d96beaa3f90f20c0711ebfdc5bbd8ab89de2be385262e819a6"
+    },
+    {
+      "frame": 6572,
+      "nativeRGBA": "b720f48578796300fa0ca983a0ff9f50b3d042f7fc2eaa2702b6b69fc8626202",
+      "remotionRGBA": "d1530e57db24f6c29f3309f2329736ccee0636e96dcb03c46838a3eb31807524",
+      "remotionWebP": "6910527e0859ff2b43c691ad347ce3e71b5d5fff438a034fe1a1e6b202aeec22"
+    },
+    {
+      "frame": 6614,
+      "nativeRGBA": "9704e04171e40cba20ab6cbbe560b67596c94bb5bb3b19e5fcc2bfaf8c7c1a27",
+      "remotionRGBA": "cee205f286cda1cf3b0a945ab8988ec50ec223b4a135623cb5002c931f606bc3",
+      "remotionWebP": "d4140ac06199d80dff0149038df35be24cb6c3bcbcc3fa3ad7ba4a4b25c02598"
+    },
+    {
+      "frame": 6911,
+      "nativeRGBA": "804f238c91be9628b1437afe3a003d218680a602b72e91e5cd26e4e403321747",
+      "remotionRGBA": "44a8962d073b2b1b80d2b7f1638942a76e397706974aadbd1a160a27a48f09a9",
+      "remotionWebP": "daf137f2d5d2ad5652602f6504a136ab9b1df981625fbda6133433a45ab4b18d"
+    },
+    {
+      "frame": 6953,
+      "nativeRGBA": "a1dabd0090ec6cdaef0ddfeda7acbe2a6d17878b2317f0dff4b8054e7271e60f",
+      "remotionRGBA": "31b2d412ea198e97d07b9ef03b990c81bc35b3883ee2051ac83270174473c220",
+      "remotionWebP": "b2f20e50564c23203239037a7c48a82a9d509e324caa71c5565dc825cc9dcd31"
+    },
+    {
+      "frame": 7439,
+      "nativeRGBA": "0c7ccbf6df434bee36062bb05aaf7cc3d6fd58f1461f176ae5f86fe676ecb161",
+      "remotionRGBA": "84cb8fbd1853beabc8005c0e7c6f94bbaf25ad07d5216252f0eed1ffd782a3eb",
+      "remotionWebP": "6a31523763cd20fc4992f1ac1cc50505384f1f6638bdeb70a445f94590d9d7d6"
+    },
+    {
+      "frame": 7481,
+      "nativeRGBA": "003e520701d61ae3eee0ea4b4ff8d5260aec267c15fb39f1ec3cae16badf61a8",
+      "remotionRGBA": "c2f93b3b3674b64683f4a846fb55c1fb6920dd4d5dd6639775c64d90879037e0",
+      "remotionWebP": "1196754bef9de18393da0be53c26fc2afcb3f1058e0208ef827c998532bec302"
+    },
+    {
+      "frame": 7980,
+      "nativeRGBA": "2ed244562e9389b4ca97ef51298e7aa854169b388583897cf4f4937a44b3e7ba",
+      "remotionRGBA": "4291e9fff8e5fe05b08acfb1f196387b3bf63d3bdd260433028fd9cf0ebf6588",
+      "remotionWebP": "466abeeabf3d000a702abe8c0cc5292607a87353a1369145c40e6fb6fa75286e"
+    },
+    {
+      "frame": 8022,
+      "nativeRGBA": "a7bcbbd6421935e136e36b32f68a673c0bcfcb81b4977bdfdbb1f4030965b0a4",
+      "remotionRGBA": "b96f5c0c294affcd1985884d5412840ca42f194f1a00641d5f6854fa70b32b9d",
+      "remotionWebP": "ba5679ab7133609596826bd96116e195a98634e724dea20246a55bd9f3834995"
+    },
+    {
+      "frame": 8382,
+      "nativeRGBA": "44a4660efe46f42d7c6dc219724762c416513c1f04f1756de370fe6fe6491157",
+      "remotionRGBA": "fc1d82a5d31be53b21fde8bcd758107079e408ad80748f0f9ffd1116c7d1dcb5",
+      "remotionWebP": "4168ddf8eb339b81b148d0e1d484450bb1e3933d4855b8370bbb5fcafc01ff2f"
+    },
+    {
+      "frame": 8424,
+      "nativeRGBA": "37e8a7c8aa8aa6eed727684ea8e70bd73cf78296aa3914aacd439bd14d3c551c",
+      "remotionRGBA": "0dec9d86f85d936296ef958a0ffc1c53174bcd15850705d20d8e9fab3779f4f0",
+      "remotionWebP": "ed91644d6add61b64cb161e1f074a00e6fb7a1599b7d1f83a4307c17d563a468"
+    },
+    {
+      "frame": 8819,
+      "nativeRGBA": "5dc3edf84da6cbe35e4e4688599991d8f876d6dc3ceecc53c9bd3c9fdd39ed28",
+      "remotionRGBA": "6631e76864c5757f9b125940e99bbae91015e4f2d084209e15181e74ccccd0fd",
+      "remotionWebP": "032d0e85bb5cff65745ac47bb49955dccf725749a1c278359bccc0e6a46da90b"
+    },
+    {
+      "frame": 8861,
+      "nativeRGBA": "eb1a60dcd0ce28545703071d4b64324a6d780d2737dbc44756bece2bbb18a78c",
+      "remotionRGBA": "b9d69681e5e4c968e5256e5c471d729cf229f120ee0900d3a8bb0d3fb119fc89",
+      "remotionWebP": "efb0ce7838ea7b7d57772767368b88d5651030efc07a19ed76598f17652e5af5"
+    },
+    {
+      "frame": 9086,
+      "nativeRGBA": "efdd34b81d71d89d836ce023245a8894cc0980f1f98ce51c91f3f902bdd725ff",
+      "remotionRGBA": "ed4a1c05f0435de4330ddee23f6277087a08cd73557cd61ba75449f15dbe0b81",
+      "remotionWebP": "f7731e870500fbd345a823adc76904efc9b5a489e8a17024892f56862c0fa97b"
+    },
+    {
+      "frame": 9128,
+      "nativeRGBA": "798a467c6f1d7ab3c8ab1970d5ee8dc9c2ed5bf7cc6e89edcc0f097643b96f28",
+      "remotionRGBA": "996d361ee12f1fbd34f8b467b92aa71b8f402c32b105328e276f9aaf0256d428",
+      "remotionWebP": "0ef132e1bedfe37dfb73d0192844deb500d3cda2c5b625eecde85ef0ebbad9fc"
+    },
+    {
+      "frame": 9401,
+      "nativeRGBA": "9ba7d0f96da11d0071a59d8ba5771cc2c2d3863347d7290d64ba223c19034f87",
+      "remotionRGBA": "f1bf746ebeb7d8d24c15de9148aa3d5c845d94453df23b89e14f544cb1cb37cc",
+      "remotionWebP": "1ab8b8f62c5a03be640edfeba5e3a425479ee3bbd557c0722f4883fce143716b"
+    },
+    {
+      "frame": 9443,
+      "nativeRGBA": "3a8329434d813e627112eb047e6171bc7b346ad5b88d680f69dfa60054372f10",
+      "remotionRGBA": "b3d6e387a7699b85e6c50a8a5ec58e631500deeafb5a8c0a666a0acf543d2666",
+      "remotionWebP": "1f055679d793f199319c6fb6646699958b644d9874ad1c3b0c8874a9485c7598"
+    },
+    {
+      "frame": 9622,
+      "nativeRGBA": "45560ac8f61427696046a29b904a8fa8a3b53123aa1164670c87fb8b9ccf6d49",
+      "remotionRGBA": "4cad8c091e3d3acae9918e6d79aee25704633aeebfca549bbbe4bdeeab8d75be",
+      "remotionWebP": "fe3668162d0c108111157431e3b83a0ed96998e38ba4ff06e01b26c963cff8bc"
+    },
+    {
+      "frame": 9664,
+      "nativeRGBA": "458de2dc91601b7d3500a1d3471e578271c57c090436503d7f9cfa6141475a9a",
+      "remotionRGBA": "16f6c3c2cab685e82c9c93a80fe2e13aa79e5fa7aa9e431f71b8f26906f90652",
+      "remotionWebP": "5d16e4f5a36001640d737e97170777f36642b9d3c9a65203c0fbcd1621d4170a"
+    },
+    {
+      "frame": 10017,
+      "nativeRGBA": "81d7d5d31bfd4f70dc27a96c0ded75c5adbf4450d4243f8bb5d6b75fc875dd5a",
+      "remotionRGBA": "4c9b51e18280947506bbeef459559841e88bed74c20b142c8001b10849e892ca",
+      "remotionWebP": "3deeef883ab3651991844d82a045fcaab576089c17e5351a3548f97777f581c1"
+    },
+    {
+      "frame": 10059,
+      "nativeRGBA": "1da92cb338bc4b3af00c7c92518fbbf163adb7781edadb40a8872b4ede149a96",
+      "remotionRGBA": "4c00f4d6468590a657a7ec15e61cecbba59995dbbc74d7fcad16a986880e30b5",
+      "remotionWebP": "a41ab2c358c8aed4f9d749af22caf8ee1329731ff9d080ece8228c9df59f7b2c"
+    },
+    {
+      "frame": 10261,
+      "nativeRGBA": "f7c3ea9877afcd0db99e216cf46cc510a7adea03287879f388a22616b3b3d94e",
+      "remotionRGBA": "faaf89fe2bafa24c2a1917f45c3ebddfe88c13b64ba6f7ff27d2e7f39fe0dbef",
+      "remotionWebP": "ca65316b3a2104ec21de4eafad5d095e22653f794dde21f59dae436fc8e8c446"
+    },
+    {
+      "frame": 10303,
+      "nativeRGBA": "687773b312b7c7abb10a283f1b79ef3e6bb37803df44c4cfa94d98b4fcad9b23",
+      "remotionRGBA": "46c4b3e04b302d45e9b24856476eaff57f55b3b6b3de34d05d1a44fd2213ac2f",
+      "remotionWebP": "102c7f255ead823d9f8dabbe902fecdb9018abd94c81ab43c2d927a948093f2e"
+    },
+    {
+      "frame": 10966,
+      "nativeRGBA": "e5eef00711d2133120280eb92e55d38d0232497e58e83750f874ff8bf0fcdafc",
+      "remotionRGBA": "bcc0ee523e5f696fcd31d3029b13c3849b59c8f4599aa01e9c27927535bd92cf",
+      "remotionWebP": "74744df106c8be8f7a826575021fb899d34b18b51d1d5d5d97d02bce8da58402"
+    },
+    {
+      "frame": 11008,
+      "nativeRGBA": "e192a7272a9ff871e65f1da2a0e0d138ae1b6a87e1e7cd794155d9c80c663b98",
+      "remotionRGBA": "557ea9ee20eda506392fb8d9664c7250d62522392790269d4c3fc58e966bc6a2",
+      "remotionWebP": "2ca0dda6d1d629a1e9dbd5498c13c9f2ad2b71a7c316ee5333d962643e7fa257"
+    },
+    {
+      "frame": 11437,
+      "nativeRGBA": "dde1f93db86adc0d506a14f26af4989baba420244974550959a21146b980ee37",
+      "remotionRGBA": "110e19e837674785658af070c4867ec1632d244b513b15e67f46913ff96e8b0d",
+      "remotionWebP": "72713bb0823178d3a2b056e82f3561b23a48ad84c207c8f38965e2991fe74be9"
+    },
+    {
+      "frame": 11479,
+      "nativeRGBA": "9db047c525b2e4968528f57d05990e39f15265decfb45be1803a8681dc21c00d",
+      "remotionRGBA": "e27144add06fee4477d150cd8fdb5f740cb5b7d322556f527cfd89b9127e6126",
+      "remotionWebP": "8300cb5ac696708ee2f15f17ec6fa41e00c306ca6b4a5ccafd119685d933fc73"
+    },
+    {
+      "frame": 11953,
+      "nativeRGBA": "e216601ab8be463795e5b36edb5002ad31ab7cc22708a820abcecae68a8302b4",
+      "remotionRGBA": "9651d9cd4112c27cf10b515b9e412380c5b473974b561acf85e6bd33d04054a0",
+      "remotionWebP": "a4148bd23b134df636e96d6d7b9768bccae7fa5cba0f7ac9229ba7507f5f1f1f"
+    },
+    {
+      "frame": 11995,
+      "nativeRGBA": "e337e208e2fa646806ef1199a79f96cd81ebf6449c1b935291c035e5f9ab49dc",
+      "remotionRGBA": "ac334f6c34b52073e73115677ead193d781de3357c8380d2bb0f98296d8b2868",
+      "remotionWebP": "208cf7948b5900ea44704cd70a236eaaca9b8dbe8830b62dade0634ba83dd344"
+    },
+    {
+      "frame": 12340,
+      "nativeRGBA": "aa84c03fd3fa705c9b500d36067e17cadca1bf171d1d4e9ec192e841a8b9ad04",
+      "remotionRGBA": "f9ca362e71e0287a76ca72020205b757ca4c45400af2ae3e66cd640228192307",
+      "remotionWebP": "e1c9c525550809c9639095861e343c35ae648f72cc9e802a469e0e38b54e162d"
+    },
+    {
+      "frame": 12382,
+      "nativeRGBA": "2021841c3dd592b64af6834692c8dfe6ef70391d8ea1da6712224b92b5d6aa88",
+      "remotionRGBA": "e241f98676eb33e95d9963fd2f7001eeda515731b84f7061a6c3708505655609",
+      "remotionWebP": "6cbc501ca3316c3444b0d3bc5bd8deba49c6de233ba1df7ae5494cc5ee9b1204"
+    },
+    {
+      "frame": 12463,
+      "nativeRGBA": "03d546d1084e25db47e82a2a50ea104d865a97b00a9eda760b774b651042702b",
+      "remotionRGBA": "145e8209ecdd462884826169f2998329e3ce2b0564e7f7836a421401fa961c8b",
+      "remotionWebP": "c016766adbcfbc8b134f5767de2db2972dac574794822e1230da3e15d2a3c563"
+    },
+    {
+      "frame": 12505,
+      "nativeRGBA": "7e5e5706a220e04ede9a6657d00b1abbc339343c806a1d1de868789d9528a0c5",
+      "remotionRGBA": "ee9857eaac82a382d1e53070507c38025dcaa1ea9a47f4577bbadf4e9275539a",
+      "remotionWebP": "1513297f70dc9bc47b521ade9262e9da4faabd7b314e463a780eb9e821eb9a93"
+    },
+    {
+      "frame": 12924,
+      "nativeRGBA": "27174fd6cd9e1be2fb06dcc3db4e1b1b3aa87490e005514336bc86432e1226a0",
+      "remotionRGBA": "6cb84b09a404f633651ebc2a2bec624877d1fd63b48245382cd884ce4d74b893",
+      "remotionWebP": "57e00bd1621afbdd82306a3b14600138457fd30f98c9e15431bcc8472b0f238a"
+    }
+  ],
+  "chromiumOptions": {
+    "gl": "swangle"
+  },
+  "osRelease": "27.0.0",
+  "review": {
+    "workflowRun": "https://github.com/rxtech-lab/MotionSwift/actions/runs/43195761983",
+    "commit": "ae2ddc9d13c5e47854ceb634ffc8cc79dc72235a",
+    "runner": "runner-mac-mini_0",
+    "macOS": "27.0 (26A428)",
+    "nativeBinarySha256": "3f344a0239342874e724fe6bea1411cd5ebc7ec1b2c7962930d4bbd3cae63761",
+    "reviewedFramePairs": 73
+  }
+}

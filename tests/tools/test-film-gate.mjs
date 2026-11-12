@@ -18,7 +18,7 @@ export function maxChannelDelta(expected, actual) {
 export function validateBaseline(baseline, pins) {
   if (baseline.schema !== 1 || baseline.backend !== 'cpu' || !Array.isArray(baseline.frames) || !baseline.frames.length)
     throw Error('Invalid Test Film baseline');
-  for (const key of ['remotionVersion', 'platform', 'arch']) {
+  for (const key of ['remotionVersion', 'platform', 'arch', 'osRelease']) {
     if (baseline[key] !== pins[key]) throw Error(`Test Film ${key} changed; review and regenerate the baseline explicitly`);
   }
   if (JSON.stringify(baseline.browser) !== JSON.stringify(pins.browser)) throw Error('Test Film browser pin changed');

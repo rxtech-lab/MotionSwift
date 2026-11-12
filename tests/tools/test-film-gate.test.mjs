@@ -1,8 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {assessFrame, validateBaseline, maxChannelDelta} from './test-film-gate.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import {root} from './common.mjs';
+import {assessFrame, validateBaseline, maxChannelDelta, sha256} from './test-film-gate.mjs';
 
 const native = 'a'.repeat(64), reference = 'b'.repeat(64);
+test('reviewed OS profiles retain the same source/sample census and intact lossless goldens',()=>{
+  const fixture=path.join(root,'tests/fixtures/test-film');
+  const original=JSON.parse(fs.readFileSync(path.join(fixture,'baseline.json')));
+  const profiles=[fixture,...fs.readdirSync(path.join(fixture,'profiles')).map(name=>path.join(fixture,'profiles',name))];
+  for(const directory of profiles) {
+    const b=JSON.parse(fs.readFileSync(path.join(directory,'baseline.json')));
+    validateBaseline(b,b);
+    assert.deepEqual(b.files,original.files);
+    assert.deepEqual(b.frames.map(row=>row.frame),original.frames.map(row=>row.frame));
+    assert.deepEqual(b.composition,original.composition);
+    if(directory!==fixture)assert.equal(path.basename(directory),`${b.platform}-${b.osRelease}-${b.arch}`);
+    for(const row of b.frames)assert.equal(sha256(fs.readFileSync(path.join(directory,'golden',row.frame+'.webp'))),row.remotionWebP);
+  }
+});
 test('native snapshots and repeats are exact while known cross-engine differences are independent',()=>{
   const expected = {nativeRGBA:native,remotionRGBA:reference};
   assert.equal(assessFrame(expected,native,reference,native).pass,true);
@@ -22,11 +39,12 @@ test('Chrome rounding requires both the pixel-count and channel-delta bounds',()
   assert.throws(()=>maxChannelDelta(Buffer.from([1]),Buffer.from([1,2])));
 });
 test('changed provenance, unsafe source paths, and duplicate/missing samples fail before rendering',()=>{
-  const pins = {remotionVersion:'1',platform:'darwin',arch:'arm64',browser:{version:'2'},chromiumOptions:{gl:'swangle'}};
+  const pins = {remotionVersion:'1',platform:'darwin',arch:'arm64',osRelease:'27.2.0',browser:{version:'2'},chromiumOptions:{gl:'swangle'}};
   const baseline = {schema:1,backend:'cpu',...pins,composition:{durationInFrames:30},files:[{name:'index.ts',sha256:native}],
     frames:[{frame:0,nativeRGBA:native,remotionRGBA:reference}]};
   validateBaseline(baseline,pins);
   assert.throws(()=>validateBaseline(baseline,{...pins,remotionVersion:'3'}));
+  assert.throws(()=>validateBaseline(baseline,{...pins,osRelease:'27.0.0'}));
   assert.throws(()=>validateBaseline(baseline,{...pins,browser:{version:'3'}}));
   assert.throws(()=>validateBaseline(baseline,{...pins,chromiumOptions:{gl:'angle'}}));
   assert.throws(()=>validateBaseline({...baseline,files:[{name:'../index.ts',sha256:native}]},pins));
