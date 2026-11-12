@@ -22,7 +22,7 @@ build: native
 	swift build -c release
 
 test: lint build
-	swift test
+	swift test --no-parallel
 	npm test --prefix tests
 
 visual: build

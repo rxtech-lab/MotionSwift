@@ -1,4 +1,5 @@
 import {fixtureSourceHash,sha256} from '../tools/provenance.mjs';
+import {probeHardwareEncoding} from '../tools/hardware-capabilities.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,11 +21,11 @@ function readJSON(file) { return JSON.parse(fs.readFileSync(file,'utf8')); }
 function writeJSON(file,data) {fs.writeFileSync(file,JSON.stringify(data,null,2)+'\n');}
 function parseArgs() {
   const options={};
-  const allowed=['config','out','work-dir','runs','warmup','only','tiers','engines','native-bin','concurrency','baseline','regression-threshold','fail-on-regression'];
+  const allowed=['config','out','work-dir','runs','warmup','only','tiers','engines','native-bin','concurrency','baseline','regression-threshold','fail-on-regression','allow-unavailable-hardware'];
   for(let i=2;i<process.argv.length;i++) {
     const arg=process.argv[i]; const [key,inline]=arg.replace(/^--/,'').split('=',2);
     if(!arg.startsWith('--') || !allowed.includes(key) || options[key]!==undefined)throw Error(`Unknown/repeated argument: ${arg}`);
-    options[key]=key==='fail-on-regression'?true:(inline??process.argv[++i]);
+    options[key]=['fail-on-regression','allow-unavailable-hardware'].includes(key)?true:(inline??process.argv[++i]);
     if(options[key]===undefined)throw Error(`Missing --${key} value`);
   }
   return options;
@@ -92,6 +93,8 @@ function git(args) { try { return command('git',args).trim(); } catch { return '
 const results={schema:2,createdAt:new Date().toISOString(),git:{sha:git(['rev-parse','HEAD']),ref:git(['branch','--show-current'])},
   machine,settings,versions,sourceSha256,baselineCompatible:comparableBaseline,fixtures:[],totals:{}};
 let failed=false;
+const hardware=engines.some(engine=>['gpu-hw','gpu-shared'].includes(engine))?probeHardwareEncoding():null;
+results.hardwareEncoding=hardware;
 
 function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
   const times=[],logFile=`logs/${slug}-${engine}.log`,logPath=path.join(out,logFile);
@@ -138,6 +141,11 @@ try {
     const tierEngines=tier.engines??ENGINES;
     for(const engine of ENGINES) {
       if(!engines.includes(engine)||!tierEngines.includes(engine)||(engine!=='remotion'&&!native)) {record[engine]={status:'unavailable'};continue;}
+      if(['gpu-hw','gpu-shared'].includes(engine)&&!hardware.available) {
+        record[engine]={status:options['allow-unavailable-hardware']?'unavailable':'failed',error:hardware.reason};
+        if(!options['allow-unavailable-hardware'])failed=true;
+        continue;
+      }
       try {record[engine]=measure(record,engine,{fixture,tier,range,props,slug,expectedFrames});}
       catch(error) {record[engine]={status:'failed',error:String(error),logFile:`logs/${slug}-${engine}.log`};failed=true;}
     }
@@ -208,6 +216,8 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
   const hardwareTiers=Object.entries(totals).filter(([key])=>key.startsWith('hardwareVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
   const sharedTiers=Object.entries(totals).filter(([key])=>key.startsWith('sharedVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
   return `<!-- motionswift-bench -->\n## MotionSwift benchmark: Remotion vs native CPU vs native GPU\n\n`+
+    (results.hardwareEncoding&&!results.hardwareEncoding.available
+      ?`**Hardware encoding unavailable on this runner.** Hardware cells are excluded, not counted as passing or replaced with software. Session probe: ${results.hardwareEncoding.reason.split('\n')[0]}\n\n`:'')+
     `- **Shared IOSurface vs Metal + x264**: **${x(totals.sharedVsSoftware.geomean)}** over ${totals.sharedVsSoftware.fixtures} parity-passing fixture(s); by resolution: ${sharedTiers||'—'}.\n`+
     `- **Shared IOSurface vs FFmpeg VideoToolbox**: **${x(totals.sharedVsFFmpeg.geomean)}**; vs CPU + x264: **${x(totals.sharedVsCpu.geomean)}**.\n`+
     `- **Hardware vs software encoding** (both Metal rendering): **${x(totals.hardwareVsSoftware.geomean)}** over ${totals.hardwareVsSoftware.fixtures} parity-passing fixture(s); by resolution: ${hardwareTiers||'—'}.\n`+

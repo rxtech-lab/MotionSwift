@@ -37,14 +37,14 @@ jobs:
           args=()
           baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/results.json"
           if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
-          node tests/perf/bench.mjs --work-dir "$RUNNER_TEMP" "${args[@]}"
+          node tests/perf/bench.mjs --allow-unavailable-hardware --work-dir "$RUNNER_TEMP" "${args[@]}"
       - name: Measure sustained native throughput (300 frames)
         if: ${{ !cancelled() }}
         run: |
           args=()
           baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/long/results.json"
           if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
-          node tests/perf/bench.mjs --config tests/perf/bench.long.config.json --out tests/reports/bench/long --work-dir "$RUNNER_TEMP" "${args[@]}"
+          node tests/perf/bench.mjs --allow-unavailable-hardware --config tests/perf/bench.long.config.json --out tests/reports/bench/long --work-dir "$RUNNER_TEMP" "${args[@]}"
       - name: Combine short and long benchmark tables
         if: always()
         run: node tests/perf/combine-summaries.mjs

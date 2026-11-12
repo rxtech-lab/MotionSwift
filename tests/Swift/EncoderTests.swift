@@ -23,8 +23,10 @@ private func verifyVideo(encoder: VideoEncoder) throws {
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   defer { try? FileManager.default.removeItem(at: directory) }
   let output = directory.appendingPathComponent("video.mp4")
-  let stream = try VideoStream(output: output, width: 64, height: 64, fps: 24, encoder: encoder)
-  let frame = Data((0..<64 * 64).flatMap { _ in [UInt8(255), 0, 0, 255] })
+  let width = encoder == .software ? 64 : 320
+  let height = encoder == .software ? 64 : 180
+  let stream = try VideoStream(output: output, width: width, height: height, fps: 24, encoder: encoder)
+  let frame = Data((0..<width * height).flatMap { _ in [UInt8(255), 0, 0, 255] })
   do {
     #expect(throws: MotionError.self) { try stream.write(Data([0])) }
     for _ in 0..<3 { try stream.write(frame) }
@@ -41,13 +43,13 @@ private func verifyVideo(encoder: VideoEncoder) throws {
   let json = try #require(try JSONSerialization.jsonObject(with: metadata) as? [String: Any])
   let video = try #require((json["streams"] as? [[String: Any]])?.first)
   #expect(video["codec_name"] as? String == "h264")
-  #expect(video["width"] as? Int == 64 && video["height"] as? Int == 64)
+  #expect(video["width"] as? Int == width && video["height"] as? Int == height)
   #expect(video["nb_read_packets"] as? String == "3")
   #expect(video["r_frame_rate"] as? String == "24/1")
   let decoded = try encoderCommand([
     "ffmpeg", "-v", "error", "-i", output.path, "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
   ])
-  #expect(decoded.count == 64 * 64 * 3 * 3)
+  #expect(decoded.count == width * height * 3 * 3)
   if decoded.count >= 3 {
     #expect(decoded[0] > 240 && decoded[1] < 15 && decoded[2] < 15)
   }
@@ -69,10 +71,12 @@ func sharedIOSurfaceFramesStayIndependentAndEncodeInOrder() throws {
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   defer { try? FileManager.default.removeItem(at: directory) }
   let output = directory.appendingPathComponent("shared.mp4")
-  let renderer = try Renderer(width: 64, height: 64, backend: .gpu)
+  let width = 320
+  let height = 180
+  let renderer = try Renderer(width: width, height: height, backend: .gpu)
   let composition = try JSONDecoder().decode(
     Composition.self,
-    from: Data(#"{"id":"test","width":64,"height":64,"fps":24,"durationInFrames":3}"#.utf8))
+    from: Data(#"{"id":"test","width":320,"height":180,"fps":24,"durationInFrames":3}"#.utf8))
   let frames = try ["#ff0000", "#00ff00", "#0000ff"].map { color in
     try renderer.draw(RenderNode(type: "div", style: ["backgroundColor": .string(color)]), composition: composition)
     return try renderer.videoFrame()
@@ -87,7 +91,7 @@ func sharedIOSurfaceFramesStayIndependentAndEncodeInOrder() throws {
     } else { Issue.record("Missing verification pixels") }
     CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
   }
-  let stream = try SharedVideoStream(output: output, width: 64, height: 64, fps: 24)
+  let stream = try SharedVideoStream(output: output, width: width, height: height, fps: 24)
   do {
     for frame in frames { try stream.write(frame.pixelBuffer) }
     try stream.finish()
@@ -98,11 +102,11 @@ func sharedIOSurfaceFramesStayIndependentAndEncodeInOrder() throws {
   let decoded = try encoderCommand([
     "ffmpeg", "-v", "error", "-i", output.path, "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
   ])
-  #expect(decoded.count == 64 * 64 * 3 * 3)
-  if decoded.count == 64 * 64 * 3 * 3 {
+  #expect(decoded.count == width * height * 3 * 3)
+  if decoded.count == width * height * 3 * 3 {
     for frame in 0..<3 {
       for channel in 0..<3 {
-        let value = decoded[frame * 64 * 64 * 3 + channel]
+        let value = decoded[frame * width * height * 3 + channel]
         if channel == frame {
           #expect(value > 240, "frame \(frame), channel \(channel)")
         } else {
