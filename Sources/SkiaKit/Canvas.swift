@@ -1,15 +1,55 @@
 import CSkia
 import Foundation
+import Metal
 import MotionCore
 
+/// Where Skia rasterises. Both backends use the same drawing calls and produce
+/// unpremultiplied RGBA8888 output.
+public enum Backend: String, Sendable, CaseIterable {
+  /// Skia's CPU raster backend.
+  case cpu
+  /// Skia Ganesh on Metal. Each canvas owns its own GPU context and command queue.
+  case gpu
+
+  public var label: String { self == .cpu ? "skia-cpu" : "skia-metal" }
+}
+
+/// A Skia drawing surface. A canvas is not thread-safe: confine it to one render worker.
 public final class Canvas {
   private let surface: UnsafeMutableRawPointer
+  public let width: Int
+  public let height: Int
+  public let backend: Backend
+  // Kept alive for the surface's lifetime; Skia also retains them.
+  private let device: (any MTLDevice)?
+  private let queue: (any MTLCommandQueue)?
 
-  public init(width: Int, height: Int) throws {
-    guard let handle = msk_create(Int32(clamping: width), Int32(clamping: height)) else {
-      throw MotionError("Cannot allocate Skia raster surface")
+  public init(width: Int, height: Int, backend: Backend = .cpu) throws {
+    self.width = width
+    self.height = height
+    self.backend = backend
+    let pixelsWide = Int32(clamping: width)
+    let pixelsHigh = Int32(clamping: height)
+    switch backend {
+    case .cpu:
+      device = nil
+      queue = nil
+      guard let handle = msk_create(pixelsWide, pixelsHigh) else {
+        throw MotionError("Cannot allocate Skia raster surface")
+      }
+      surface = handle
+    case .gpu:
+      guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
+        throw MotionError("No Metal device available for --backend=gpu")
+      }
+      self.device = device
+      self.queue = queue
+      let handle = msk_create_gpu(
+        pixelsWide, pixelsHigh, Unmanaged.passUnretained(device as AnyObject).toOpaque(),
+        Unmanaged.passUnretained(queue as AnyObject).toOpaque())
+      guard let handle else { throw MotionError("Cannot allocate Skia Metal surface") }
+      surface = handle
     }
-    surface = handle
   }
 
   deinit { msk_destroy(surface) }
@@ -35,6 +75,17 @@ public final class Canvas {
     guard msk_text(surface, text, family, Float(size), color, Float(x), Float(baseline)) else {
       throw MotionError("Skia could not resolve font: \(family)")
     }
+  }
+
+  /// Unpremultiplied RGBA8888 pixels, rows tightly packed. GPU work is flushed first.
+  public func rgba() throws -> Data {
+    var data = Data(count: width * height * 4)
+    let count = data.count
+    let ok = data.withUnsafeMutableBytes { buffer in
+      msk_read_rgba(surface, buffer.bindMemory(to: UInt8.self).baseAddress, count)
+    }
+    guard ok else { throw MotionError("Cannot read back \(backend.rawValue) surface pixels") }
+    return data
   }
 
   public func writePNG(to url: URL) throws {

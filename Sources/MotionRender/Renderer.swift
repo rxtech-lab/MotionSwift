@@ -12,18 +12,39 @@ public struct LayoutBox: Codable, Sendable {
 }
 
 /// Strict Phase 0 box painter. Unsupported styles fail instead of silently drawing incorrect output.
+/// A renderer owns one Skia surface and is not thread-safe; parallel renders use one per worker.
 public final class Renderer {
   private let canvas: Canvas
   private let size: (Int, Int)
+  private let pixelScale: Double
   private var boxes: [LayoutBox] = []
 
-  public init(width: Int, height: Int) throws {
-    canvas = try Canvas(width: width, height: height)
+  /// `width`/`height` are composition (CSS) pixels; the surface is `scale` times larger,
+  /// matching Remotion's `scale` render option. Layout boxes stay in CSS pixels.
+  public init(width: Int, height: Int, scale: Double = 1, backend: Backend = .cpu) throws {
+    let pixels = try Self.pixelSize(width: width, height: height, scale: scale)
+    canvas = try Canvas(width: pixels.width, height: pixels.height, backend: backend)
     size = (width, height)
+    pixelScale = scale
   }
 
-  public func render(_ node: RenderNode, composition: Composition, to url: URL) throws
-    -> [LayoutBox] {
+  /// Output pixel dimensions for a composition size at `scale`.
+  public static func pixelSize(width: Int, height: Int, scale: Double) throws
+    -> (width: Int, height: Int) {
+    let scaled = ((Double(width) * scale).rounded(), (Double(height) * scale).rounded())
+    guard scale.isFinite, scale > 0, scaled.0 >= 1, scaled.1 >= 1, scaled.0 <= 16384,
+      scaled.1 <= 16384
+    else { throw MotionError("Invalid render scale: \(scale)") }
+    return (Int(scaled.0), Int(scaled.1))
+  }
+
+  public var backend: Backend { canvas.backend }
+  public var pixelWidth: Int { canvas.width }
+  public var pixelHeight: Int { canvas.height }
+
+  /// Paints one frame into the surface and returns its layout boxes.
+  @discardableResult
+  public func draw(_ node: RenderNode, composition: Composition) throws -> [LayoutBox] {
     guard composition.width == size.0, composition.height == size.1 else {
       throw MotionError("Composition and surface dimensions differ")
     }
@@ -31,10 +52,22 @@ public final class Renderer {
     boxes = []
     let layout = try LayoutEngine.calculate(
       node, width: Double(composition.width), height: Double(composition.height))
+    canvas.save()
+    defer { canvas.restore() }
+    if pixelScale != 1 { canvas.scale(pixelScale, pixelScale) }
     try paint(layout, id: "0", origin: (0, 0))
-    try canvas.writePNG(to: url)
     return boxes
   }
+
+  public func render(_ node: RenderNode, composition: Composition, to url: URL) throws
+    -> [LayoutBox] {
+    let result = try draw(node, composition: composition)
+    try canvas.writePNG(to: url)
+    return result
+  }
+
+  /// Unpremultiplied RGBA8888 pixels of the last drawn frame.
+  public func pixels() throws -> Data { try canvas.rgba() }
 
   private func transform(_ style: Style, width: Double, height: Double) throws {
     let value = style.string("transform")

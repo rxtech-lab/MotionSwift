@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:MotionSwift}",
+      "name": "Debug motionswift",
+      "target": "motionswift",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug motionswift"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:MotionSwift}",
+      "name": "Release motionswift",
+      "target": "motionswift",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release motionswift"
+    }
+  ]
+}

@@ -1,36 +1,84 @@
-use skia_safe::{surfaces, Color, EncodedImageFormat, Font, FontMgr, FontStyle, Paint, Rect, Surface, canvas::{SaveLayerRec, SaveLayerFlags}};
-use std::ffi::{c_char, CStr};
+use skia_safe::{color_filters, gpu, images, surfaces, ColorMatrix, Data, RuntimeEffect, AlphaType, Color, ColorType, EncodedImageFormat, Font, FontMgr, FontStyle, ImageInfo, Paint, Rect, Surface, canvas::{SaveLayerRec, SaveLayerFlags}};
+use std::ffi::{c_char, c_void, CStr};
 
-// Handles are owned by Swift's Canvas, confined to one render worker.
+/// One drawing target. A handle is owned by Swift's Canvas and confined to one render
+/// worker thread; GPU handles also own their Ganesh context, which is not thread-safe.
+/// Field order matters: the surface must be dropped before the context that backs it.
+pub struct Target { surface: Surface, context: Option<gpu::DirectContext>, solid: Option<RuntimeEffect> }
+
+// Ganesh folds constant paint colours (and colour filters on them) into premultiplied
+// byte vertex colours, rounding colour*coverage (81.5 -> 82). A runtime shader with a
+// float uniform cannot be folded, so GPU quads keep the raster pipeline's precision.
+const SOLID_SKSL: &str = "uniform float4 color; half4 main(float2 p) { return half4(color.rgb * color.a, color.a); }";
+
+fn valid(width: i32, height: i32) -> bool { width > 0 && height > 0 && width <= 16384 && height <= 16384 }
+fn boxed(mut surface: Surface, context: Option<gpu::DirectContext>) -> *mut Target {
+    surface.canvas().clear(Color::TRANSPARENT);
+    let solid = if context.is_some() {
+        match RuntimeEffect::make_for_shader(SOLID_SKSL, None) { Ok(effect) => Some(effect), Err(_) => return std::ptr::null_mut() }
+    } else { None };
+    Box::into_raw(Box::new(Target { surface, context, solid }))
+}
+
 #[no_mangle]
-pub extern "C" fn msk_create(width: i32, height: i32) -> *mut Surface {
-    if width <= 0 || height <= 0 || width > 16384 || height > 16384 { return std::ptr::null_mut(); }
-    surfaces::raster_n32_premul((width, height))
-        .map(|mut s| { s.canvas().clear(Color::TRANSPARENT); Box::into_raw(Box::new(s)) })
-        .unwrap_or(std::ptr::null_mut())
+pub extern "C" fn msk_create(width: i32, height: i32) -> *mut Target {
+    if !valid(width, height) { return std::ptr::null_mut(); }
+    surfaces::raster_n32_premul((width, height)).map(|s| boxed(s, None)).unwrap_or(std::ptr::null_mut())
+}
+/// Creates a Metal-backed Ganesh surface. `device` and `queue` are borrowed
+/// `id<MTLDevice>` / `id<MTLCommandQueue>` pointers; Skia retains its own references.
+#[no_mangle]
+pub unsafe extern "C" fn msk_create_gpu(width: i32, height: i32, device: *const c_void, queue: *const c_void) -> *mut Target {
+    if !valid(width, height) || device.is_null() || queue.is_null() { return std::ptr::null_mut(); }
+    let backend = gpu::mtl::BackendContext::new(device, queue);
+    let Some(mut context) = gpu::direct_contexts::make_metal(&backend, None) else { return std::ptr::null_mut(); };
+    // Blend in half-float and round to 8 bits once, on readback, like the raster backend's
+    // F16 layers. This also makes opaque layers unnecessary on the GPU (see msk_save).
+    let info = ImageInfo::new((width, height), ColorType::RGBAF16, AlphaType::Premul, None);
+    gpu::surfaces::render_target(&mut context, gpu::Budgeted::Yes, &info, None, gpu::SurfaceOrigin::TopLeft, None, false, None)
+        .map(|s| boxed(s, Some(context))).unwrap_or(std::ptr::null_mut())
 }
 #[no_mangle]
-pub unsafe extern "C" fn msk_clear(s: *mut Surface) { (*s).canvas().clear(Color::TRANSPARENT); }
+pub unsafe extern "C" fn msk_clear(s: *mut Target) { (*s).surface.canvas().clear(Color::TRANSPARENT); }
 #[no_mangle]
-pub unsafe extern "C" fn msk_destroy(s: *mut Surface) { if !s.is_null() { drop(Box::from_raw(s)); } }
+pub unsafe extern "C" fn msk_destroy(s: *mut Target) { if !s.is_null() { drop(Box::from_raw(s)); } }
+/// Multiplies alpha in a float colour filter (a fragment-shader uniform on Ganesh).
+fn alpha_filter(alpha: f32) -> skia_safe::ColorFilter {
+    let mut matrix = ColorMatrix::default();
+    matrix.set_scale(1., 1., 1., Some(alpha));
+    color_filters::matrix(&matrix, None)
+}
 #[no_mangle]
-pub unsafe extern "C" fn msk_save(s: *mut Surface, alpha: f32) {
+pub unsafe extern "C" fn msk_save(s: *mut Target, alpha: f32) {
     let mut paint = Paint::default();
-    paint.set_alpha_f(alpha);
+    let gpu = (*s).context.is_some();
+    if gpu && alpha >= 1. {
+        // The Metal target is already half-float, so an opaque layer adds a texture pass
+        // without changing any pixel. The raster backend keeps its F16 layers for precision.
+        (*s).surface.canvas().save();
+        return;
+    }
+    if gpu {
+        // Ganesh packs paint colours into 8-bit vertex colours (0.5 -> 128/255). A colour
+        // matrix keeps layer opacity as a float uniform, like the raster pipeline does.
+        paint.set_color_filter(alpha_filter(alpha));
+    } else {
+        paint.set_alpha_f(alpha);
+    }
     let layer = SaveLayerRec::default().paint(&paint).flags(SaveLayerFlags::F16_COLOR_TYPE);
-    (*s).canvas().save_layer(&layer);
+    (*s).surface.canvas().save_layer(&layer);
 }
 #[no_mangle]
-pub unsafe extern "C" fn msk_restore(s: *mut Surface) { (*s).canvas().restore(); }
+pub unsafe extern "C" fn msk_restore(s: *mut Target) { (*s).surface.canvas().restore(); }
 #[no_mangle]
-pub unsafe extern "C" fn msk_translate(s: *mut Surface, x: f32, y: f32) { (*s).canvas().translate((x,y)); }
+pub unsafe extern "C" fn msk_translate(s: *mut Target, x: f32, y: f32) { (*s).surface.canvas().translate((x,y)); }
 #[no_mangle]
-pub unsafe extern "C" fn msk_rotate(s: *mut Surface, degrees: f32) { (*s).canvas().rotate(degrees, None); }
+pub unsafe extern "C" fn msk_rotate(s: *mut Target, degrees: f32) { (*s).surface.canvas().rotate(degrees, None); }
 #[no_mangle]
-pub unsafe extern "C" fn msk_scale(s: *mut Surface, x: f32, y: f32) { (*s).canvas().scale((x,y)); }
+pub unsafe extern "C" fn msk_scale(s: *mut Target, x: f32, y: f32) { (*s).surface.canvas().scale((x,y)); }
 #[no_mangle]
-pub unsafe extern "C" fn msk_clip(s: *mut Surface, w: f32, h: f32) {
-    (*s).canvas().clip_rect(Rect::from_xywh(0.,0.,w,h), None, true);
+pub unsafe extern "C" fn msk_clip(s: *mut Target, w: f32, h: f32) {
+    (*s).surface.canvas().clip_rect(Rect::from_xywh(0.,0.,w,h), None, true);
 }
 // Use device-space coverage for axis-aligned quads, retaining its 256-step
 // precision through floating-point layers. Converting coverage to an alpha byte
@@ -44,7 +92,7 @@ fn axis_bands(start: f32, end: f32) -> Vec<(f32, f32, f32)> {
     if end.fract() != 0. { bands.push((end.floor(), end.ceil(), end-end.floor())); }
     bands
 }
-fn draw_quad(canvas: &skia_safe::Canvas, rect: Rect, color: u32) -> bool {
+fn draw_quad(canvas: &skia_safe::Canvas, rect: Rect, color: u32, solid: Option<&RuntimeEffect>) -> bool {
     let matrix = canvas.local_to_device_as_3x3();
     if !matrix.is_scale_translate() { return false; }
     let (device, _) = matrix.map_rect(rect);
@@ -60,7 +108,18 @@ fn draw_quad(canvas: &skia_safe::Canvas, rect: Rect, color: u32) -> bool {
             paint.set_color(Color::new(color));
             // Keep fractional coverage through the floating-point layer. Converting
             // the mask to an alpha byte here would divide by 255 instead of 256.
-            paint.set_alpha_f(((color >> 24) as f32 / 255.) * coverage);
+            let alpha = ((color >> 24) as f32 / 255.) * coverage;
+            match solid {
+                Some(effect) if alpha < 1. => {
+                    let c = Color::new(color);
+                    let uniform = [c.r() as f32 / 255., c.g() as f32 / 255., c.b() as f32 / 255., alpha];
+                    let bytes: Vec<u8> = uniform.iter().flat_map(|v| v.to_ne_bytes()).collect();
+                    let Some(shader) = effect.make_shader(Data::new_copy(&bytes), &[], None) else { return false; };
+                    paint.set_alpha_f(1.);
+                    paint.set_shader(shader);
+                }
+                _ => { paint.set_alpha_f(alpha); }
+            }
             canvas.draw_rect(Rect::new(left, top, right, bottom), &paint);
         }
     }
@@ -68,27 +127,51 @@ fn draw_quad(canvas: &skia_safe::Canvas, rect: Rect, color: u32) -> bool {
     true
 }
 #[no_mangle]
-pub unsafe extern "C" fn msk_rect(s: *mut Surface, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
-    if radius == 0. && draw_quad((*s).canvas(), Rect::from_xywh(x,y,w,h), color) { return; }
+pub unsafe extern "C" fn msk_rect(s: *mut Target, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    let target = &mut *s;
+    if radius == 0. && draw_quad(target.surface.canvas(), Rect::from_xywh(x,y,w,h), color, target.solid.as_ref()) { return; }
     let mut paint = Paint::default();
     paint.set_color(Color::new(color)).set_anti_alias(true);
-    (*s).canvas().draw_round_rect(Rect::from_xywh(x,y,w,h), radius, radius, &paint);
+    (*s).surface.canvas().draw_round_rect(Rect::from_xywh(x,y,w,h), radius, radius, &paint);
 }
 #[no_mangle]
-pub unsafe extern "C" fn msk_text(s: *mut Surface, text: *const c_char, family: *const c_char, size: f32, color: u32, x: f32, y: f32) -> bool {
+pub unsafe extern "C" fn msk_text(s: *mut Target, text: *const c_char, family: *const c_char, size: f32, color: u32, x: f32, y: f32) -> bool {
     let Ok(text) = CStr::from_ptr(text).to_str() else { return false; };
     let Ok(family) = CStr::from_ptr(family).to_str() else { return false; };
     let Some(face) = FontMgr::new().match_family_style(family, FontStyle::normal()) else { return false; };
     let font = Font::new(face, size);
     let mut paint = Paint::default();
     paint.set_color(Color::new(color)).set_anti_alias(true);
-    (*s).canvas().draw_str(text, (x,y), &font, &paint);
+    (*s).surface.canvas().draw_str(text, (x,y), &font, &paint);
     true
 }
+/// Reads unpremultiplied RGBA8888 rows (the PNG/ffmpeg `rgba` layout) into `dst`.
+/// GPU targets are half-float; Skia converts to 8-bit once, here.
 #[no_mangle]
-pub unsafe extern "C" fn msk_png(s: *mut Surface, path: *const c_char) -> bool {
+pub unsafe extern "C" fn msk_read_rgba(s: *mut Target, dst: *mut u8, len: usize) -> bool {
+    let target = &mut *s;
+    let (width, height) = (target.surface.width(), target.surface.height());
+    let row = width as usize * 4;
+    if dst.is_null() || len != row * height as usize { return false; }
+    if let Some(context) = target.context.as_mut() { context.flush_and_submit(); }
+    let info = ImageInfo::new((width, height), ColorType::RGBA8888, AlphaType::Unpremul, None);
+    target.surface.read_pixels(&info, std::slice::from_raw_parts_mut(dst, len), row, (0, 0))
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_png(s: *mut Target, path: *const c_char) -> bool {
     let Ok(path) = CStr::from_ptr(path).to_str() else { return false; };
-    let image = (*s).image_snapshot();
+    let target = &mut *s;
+    let (width, height) = (target.surface.width(), target.surface.height());
+    let image = if target.context.is_some() {
+        // Encode the same 8-bit pixels the video path uses.
+        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        if !msk_read_rgba(s, pixels.as_mut_ptr(), pixels.len()) { return false; }
+        let info = ImageInfo::new((width, height), ColorType::RGBA8888, AlphaType::Unpremul, None);
+        let Some(image) = images::raster_from_data(&info, Data::new_copy(&pixels), width as usize * 4) else { return false; };
+        image
+    } else {
+        target.surface.image_snapshot()
+    };
     let Some(data) = image.encode(None, EncodedImageFormat::PNG, None) else { return false; };
     std::fs::write(path, data.as_bytes()).is_ok()
 }
