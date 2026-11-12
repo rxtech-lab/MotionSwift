@@ -1,0 +1,22 @@
+# Generated reports and build output
+tests/reports/
+.build/
+native/target/
+native/pkgconfig/
+
+# Dependencies and caches
+node_modules/
+.swiftlint-cache/
+.remotion/
+.cache/
+
+# Local settings and credentials
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "project": "compositions",
+  "entryPoint": "src/index.ts",
+  "maxDiffRatio": 0.003,
+  "fixtures": [
+    {"id": "core/solid", "composition": "Solid", "frames": [0, 15, 29]},
+    {"id": "core/boxes", "composition": "Boxes", "frames": [0, 15, 29]},
+    {"id": "motion/translate", "composition": "Motion", "frames": [0, 7, 15, 29]},
+    {"id": "core/flex", "composition": "Flex", "frames": [0, 15, 29]},
+    {"id": "core/opacity", "composition": "Layers", "frames": [0, 15, 29]},
+    {"id": "motion/sequence-spring", "composition": "Timed", "frames": [0, 9, 10, 15, 24, 25, 29]}
+  ]
+}

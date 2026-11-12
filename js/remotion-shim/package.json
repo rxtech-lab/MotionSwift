@@ -1,0 +1,11 @@
+{
+  "name": "@motionswift/remotion",
+  "version": "0.1.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {"types": "./index.d.ts", "default": "./index.js"},
+    "./jsx-runtime": {"types": "./jsx-runtime.d.ts", "default": "./jsx-runtime.js"}
+  },
+  "peerDependencies": {"react": "18.3.1"}
+}
