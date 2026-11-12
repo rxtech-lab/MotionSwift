@@ -71,13 +71,15 @@ if(!fixtures.length||requested?.some(id=>!fixtures.some(f=>f.id===id)))throw Err
 const machine={platform:`${os.platform()} ${os.release()} (${os.arch()})`,cpu:os.cpus()[0]?.model,
   cores:os.cpus().length,availableCores:workerCounts.availableCores,memoryGB:Math.round(os.totalmem()/1024**3),runner:process.env.RUNNER_NAME||os.hostname(),node:process.version};
 const settings={runs,warmup,codec:config.codec,crf:18,preset:'medium',encoders:ENCODERS,hardwareQuality:65,concurrency,requestedConcurrency:workerCounts.requested,minSsim:config.minSsim,
+  remotionGl:config.remotionGl??process.env.REMOTION_GL??null,
   entryPoint:config.entryPoint,entrySha256:sha256(fs.readFileSync(path.resolve(project,config.entryPoint))),
   tiers:tiers.map(({id,scale,engines:tierEngines})=>({id,scale,engines:tierEngines??ENGINES})),regressionThreshold:threshold};
 const baseline=options.baseline?readJSON(path.resolve(options.baseline)):null;
-const sourceSha256=fixtureSourceHash();
+const sourceSha256=config.sourceSha256??fixtureSourceHash();
+if(!/^[a-f0-9]{64}$/.test(sourceSha256))throw Error('Invalid benchmark source hash');
 const browserPin=readJSON(path.join(root,'tests/browser.lock.json'));
 const comparableMachine=baseline?.schema===2 && baseline?.sourceSha256===sourceSha256 && JSON.stringify(baseline?.versions?.browser)===JSON.stringify(browserPin)
-  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
+  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','remotionGl','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
 const candidates=[options['native-bin'],process.env.MOTIONSWIFT_BIN,path.join(root,'.build/release/motionswift'),'motionswift'].filter(Boolean);
 const native=candidates.find(file=>{try{return !!command(file,['--version']).trim();}catch{return false;}});
 const versions={browser:browserPin,remotion:readJSON(path.join(root,'tests/node_modules/remotion/package.json')).version,
@@ -103,7 +105,8 @@ function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
       :['render','--project',project,'--entry',config.entryPoint,fixture.composition,video,'--codec=h264',`--backend=${engine.startsWith('gpu')?'gpu':engine}`,`--encoder=${ENCODERS[engine]}`,
         `--concurrency=${concurrency[engine]}`,`--scale=${tier.scale}`,`--frames=${range}`,`--props=${props}`,'--report-json',report];
     const begin=process.hrtime.bigint();
-    const result=spawnSync(engine==='remotion'?process.execPath:native,args,{cwd:project,encoding:'utf8',maxBuffer:128*1024*1024});
+    const result=spawnSync(engine==='remotion'?process.execPath:native,args,{cwd:project,encoding:'utf8',maxBuffer:128*1024*1024,
+      env:{...process.env,REMOTION_GL:settings.remotionGl??''}});
     const elapsed=Number(process.hrtime.bigint()-begin)/1e6;
     fs.appendFileSync(logPath,`\nRun ${index}: ${elapsed} ms\n${result.stdout||''}\n${result.stderr||''}`);
     if(result.error||result.status!==0)throw Error(String(result.error||`exit ${result.status}, signal ${result.signal??'none'}`));
@@ -194,13 +197,13 @@ finally {
   }
   results.pass=!failed;
   writeJSON(path.join(out,'results.json'),results);
-  fs.writeFileSync(path.join(out,'summary.md'),summary(results,{runs,warmup,concurrency,machine,versions,comparableMachine:comparableBaseline}));
+  fs.writeFileSync(path.join(out,'summary.md'),summary(results,{runs,warmup,concurrency,machine,versions,comparableMachine:comparableBaseline,notes:config.notes}));
   fs.rmSync(work,{recursive:true,force:true});
 }
 process.exitCode=failed?1:0;
 }
 
-function summary(results,{runs,warmup,concurrency,machine,versions,comparableMachine}) {
+function summary(results,{runs,warmup,concurrency,machine,versions,comparableMachine,notes}) {
   const x=value=>value?`${value.toFixed(2)}×`:'—';
   const cell=record=>record.status==='ok'?`${(record.medianMs/1000).toFixed(2)} s (${record.fps.toFixed(0)} fps)`:record.status==='unavailable'?'—':`❌ ${record.status}`;
   const size=item=>{const meta=(item.gpu.metadata||item.cpu.metadata||item.remotion.metadata);return meta?`${meta.width}×${meta.height}`:'—';};
@@ -212,6 +215,7 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
   const hardwareTiers=Object.entries(totals).filter(([key])=>key.startsWith('hardwareVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
   const sharedTiers=Object.entries(totals).filter(([key])=>key.startsWith('sharedVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
   return `<!-- motionswift-bench -->\n## MotionSwift benchmark: Remotion vs native CPU vs native GPU\n\n`+
+    (notes?`${notes}\n\n`:'')+
     (results.hardwareEncoding&&!results.hardwareEncoding.available
       ?`**Hardware encoding unavailable on this runner.** Hardware cells are excluded, not counted as passing or replaced with software. Session probe: ${results.hardwareEncoding.reason.split('\n')[0]}\n\n`:'')+
     `- **Shared IOSurface vs Metal + x264**: **${x(totals.sharedVsSoftware.geomean)}** over ${totals.sharedVsSoftware.fixtures} parity-passing fixture(s); by resolution: ${sharedTiers||'—'}.\n`+

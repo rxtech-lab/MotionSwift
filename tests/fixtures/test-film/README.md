@@ -51,3 +51,9 @@ node tests/tools/test-film-ci.mjs baseline
 The tracked baseline contains source hashes, pixel/image hashes, frame numbers, composition metadata, and renderer/browser pins. `golden/` stores the reviewed Remotion WebPs; baseline generation requires `cwebp`, and CI decodes them with the already-required ffmpeg. It refuses reviewed output from a different native binary or Remotion/browser pin; rerender and review before updating. Review the baseline diff alongside the renderer change.
 
 To review output captured in the runner environment, run `check`, inspect every captured pair in `tests/reports/test-film/index.html`, and only after accepting those images run `node tests/tools/test-film-ci.mjs baseline-ci` to replace the reviewed hashes and lossless Remotion WebPs. This explicit command requires a complete capture with deterministic native repeats and the current binary/pins. Rerun `check` afterward to verify the resulting gate. Ordinary CI never invokes either baseline command.
+
+## Full-project CI benchmark
+
+The benchmark workflow separately runs `node tests/perf/test-film.mjs --allow-unavailable-hardware` on the entire 12,925-frame clip at native 1080p resolution. It uses the existing benchmark harness for Remotion, native CPU/Metal, and available hardware encoders, with one measured run and no warmup per engine. Wall times include startup, compilation/bundling, rendering, and H.264 encoding. Frame counts/dimensions/fps and full-video SSIM >= 0.98 gate reported speedups.
+
+The **Actual Test Film project** table is first in the automated PR benchmark comment and job summary. Raw timings, frame rates, engine settings, source/archive hashes, and parity metrics are uploaded in `bench-results/test-film/`. Full videos and extracted source stay temporary. A setup or render failure is reported as a failure rather than omitted from the comment.
