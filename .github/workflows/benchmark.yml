@@ -68,7 +68,7 @@ jobs:
           retention-days: 30
   comment:
     needs: benchmark
-    if: always() && !cancelled() && github.ref != 'refs/heads/main'
+    if: always() && !cancelled() && github.event_name == 'pull_request'
     runs-on: [self-hosted, macOS, ARM64]
     permissions:
       actions: read
@@ -90,18 +90,10 @@ jobs:
               ? summary.slice(0, raw >= 0 ? raw : 58000) + '\nFull raw runs: bench-results artifact.\n'
               : summary;
             if (!body.startsWith(marker)) throw new Error('Unexpected benchmark report');
-            const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
-              ...context.repo, commit_sha: context.sha, per_page: 100
-            });
-            const pull = pulls.find(pr => pr.state === 'open'
-              && pr.head.sha === context.sha
-              && pr.head.ref === context.ref.replace('refs/heads/', '')
-              && pr.head.repo?.full_name === process.env.GITHUB_REPOSITORY);
-            if (!pull) {
-              core.info('No open pull request for this pushed commit; summary is available in the run.');
-              return;
+            const issue_number = context.payload.pull_request?.number;
+            if (!Number.isInteger(issue_number) || issue_number <= 0) {
+              throw new Error('Missing pull request number in benchmark event payload');
             }
-            const issue_number = pull.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo, issue_number, per_page: 100
             });

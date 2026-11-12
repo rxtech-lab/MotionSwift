@@ -1,5 +1,6 @@
 import {fixtureSourceHash,sha256} from '../tools/provenance.mjs';
 import {probeHardwareEncoding} from '../tools/hardware-capabilities.mjs';
+import {concurrencyFor} from './concurrency.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,13 +31,6 @@ function parseArgs() {
   }
   return options;
 }
-// Per-engine worker counts. A number applies to every engine; an object sets each one.
-function concurrencyFor(config,override) {
-  const raw=override!==undefined?Number(override):config.concurrency??1;
-  const result=Object.fromEntries(ENGINES.map(engine=>[engine,typeof raw==='object'?(raw[engine]??raw.gpu):raw]));
-  if(Object.values(result).some(value=>!Number.isInteger(value)||value<1))throw Error('Invalid concurrency');
-  return result;
-}
 function ssim(reference,candidate,logFile) {
   const compared=spawnSync('ffmpeg',['-hide_banner','-i',reference,'-i',candidate,'-lavfi','[0:v][1:v]ssim','-f','null','-'],
     {encoding:'utf8',maxBuffer:16*1024*1024});
@@ -57,7 +51,9 @@ if(!Number.isInteger(runs)||runs<1||!Number.isInteger(warmup)||warmup<0)throw Er
 // `native` is kept as an alias for the CPU engine used before the GPU backend existed.
 const engines=[...new Set((options.engines||ENGINES.join(',')).split(',').map(engine=>engine==='native'?'cpu':engine))];
 if(!engines.length||engines.some(engine=>!ENGINES.includes(engine)))throw Error(`Invalid engines; use ${ENGINES.join(',')}`);
-const concurrency=concurrencyFor(config,options.concurrency);
+const workerCounts=concurrencyFor(ENGINES,config,options.concurrency);
+const concurrency=workerCounts.effective;
+console.log(`Benchmark workers: ${JSON.stringify(concurrency)} (${workerCounts.availableCores} available cores)`);
 const threshold=Number(options['regression-threshold']??0.15);
 if(!Number.isFinite(threshold)||threshold<0)throw Error('Invalid regression threshold');
 const tierConfig=config.tiers??[{id:'1x',scale:1,engines:ENGINES}];
@@ -73,8 +69,8 @@ const requested=options.only?.split(',');
 const fixtures=fixtureConfig.filter(f=>!requested||requested.includes(f.id));
 if(!fixtures.length||requested?.some(id=>!fixtures.some(f=>f.id===id)))throw Error('No fixtures or unknown --only ID');
 const machine={platform:`${os.platform()} ${os.release()} (${os.arch()})`,cpu:os.cpus()[0]?.model,
-  cores:os.cpus().length,memoryGB:Math.round(os.totalmem()/1024**3),runner:process.env.RUNNER_NAME||os.hostname(),node:process.version};
-const settings={runs,warmup,codec:config.codec,crf:18,preset:'medium',encoders:ENCODERS,hardwareQuality:65,concurrency,minSsim:config.minSsim,
+  cores:os.cpus().length,availableCores:workerCounts.availableCores,memoryGB:Math.round(os.totalmem()/1024**3),runner:process.env.RUNNER_NAME||os.hostname(),node:process.version};
+const settings={runs,warmup,codec:config.codec,crf:18,preset:'medium',encoders:ENCODERS,hardwareQuality:65,concurrency,requestedConcurrency:workerCounts.requested,minSsim:config.minSsim,
   entryPoint:config.entryPoint,entrySha256:sha256(fs.readFileSync(path.resolve(project,config.entryPoint))),
   tiers:tiers.map(({id,scale,engines:tierEngines})=>({id,scale,engines:tierEngines??ENGINES})),regressionThreshold:threshold};
 const baseline=options.baseline?readJSON(path.resolve(options.baseline)):null;
@@ -226,7 +222,7 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
     `- **GPU vs Remotion**: **${x(totals.gpuVsRemotion.geomean)}** over ${totals.gpuVsRemotion.fixtures} fixture(s) with output parity.\n`+
     `- **CPU vs Remotion**: **${x(totals.cpuVsRemotion.geomean)}** over ${totals.cpuVsRemotion.fixtures} fixture(s) with output parity.\n\n`+
     `| Fixture | Size | Remotion | CPU + x264 | Metal + x264 | FFmpeg VT | Shared IOSurface VT | FFmpeg VT vs x264 | Shared vs x264 | Shared vs FFmpeg VT | SSIM CPU / GPU / HW / Shared | GPU vs main |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n${rows.join('\n')}\n\n`+
-    `Machine: ${machine.cpu}; ${machine.platform}; ${machine.cores} cores; ${machine.memoryGB} GB; runner ${machine.runner}.\n\n`+
+    `Machine: ${machine.cpu}; ${machine.platform}; ${machine.cores} cores (${machine.availableCores} available); ${machine.memoryGB} GB; runner ${machine.runner}. Worker counts are capped to available cores; requested: ${JSON.stringify(results.settings.requestedConcurrency)}.\n\n`+
     `Runs: ${runs}, warmups: ${warmup}. Workers: Remotion ${concurrency.remotion}, CPU ${concurrency.cpu}, GPU ${concurrency.gpu}, GPU-HW ${concurrency['gpu-hw']}, Shared ${concurrency['gpu-shared']}. Times are wall clock including startup and encoding. `+
     `Software: x264 CRF 18, medium. FFmpeg hardware: h264_videotoolbox quality 65, no software fallback; CPU readback/conversion and pipe remain. Shared: F16 -> BGRA8 GPU resolve into IOSurface, then native AVFoundation/VideoToolbox quality 0.65 with hardware required; no application CPU pixel readback or pipe. GPU completion is synchronized before submission; encoder color conversion may still occur. These quality controls are not equivalent; speedups require SSIM >= ${results.settings.minSsim}. SSIM reference is Remotion when available, otherwise CPU + x264. Output bytes and frame p50 are recorded in results.json.\n\n`+
     `Baseline ${comparableMachine?'matches this machine and settings':'unavailable or different machine/settings; deltas omitted'}.\n\n`+
