@@ -1,6 +1,9 @@
 import Foundation
+#if os(macOS)
 import MotionCompiler
+#endif
 import MotionCore
+import MotionPortable
 import MotionRender
 import MotionRuntime
 import Observation
@@ -10,15 +13,32 @@ import SkiaKit
 public enum MotionSource: Sendable, Equatable {
   /// An already compiled bundle, for example one shared from another player.
   case bundle(String)
-  /// A Remotion-style TSX project compiled with bundled native TypeScript 7 (tsgo).
+  /// A module graph from the portable compiler, a Mac (`motionswift graph`) or the cloud, linked
+  /// with the precompiled vendor graph. Works on every platform.
+  case graph(ModuleGraph)
+  /// A TSX project compiled in JavaScriptCore by the portable compiler (iOS, iPadOS and macOS; no
+  /// Node, no JIT required). `stamp` adds editor source stamps.
+  case portable(project: URL, entry: String, stamp: Bool = false)
+  /// In-memory project files compiled by the portable compiler.
+  case files([String: String], entry: String, stamp: Bool = false)
+  #if os(macOS)
+  /// A Remotion-style TSX project compiled with bundled native TypeScript 7 (tsgo). macOS only.
   /// `repository` is retained for source compatibility; tools and runtime assets come from the package bundle.
   case project(repository: URL, project: URL, entry: String)
+  #endif
 
   func compile() throws -> String {
     switch self {
     case .bundle(let bundle): return bundle
+    case .graph(let graph): return try GraphLinker.link(graph)
+    case .portable(let project, let entry, let stamp):
+      return try GraphLinker.link(PortableCompiler().compile(project: project, entry: entry, stamp: stamp))
+    case .files(let files, let entry, let stamp):
+      return try GraphLinker.link(PortableCompiler().compile(files: files, entry: entry, stamp: stamp))
+    #if os(macOS)
     case .project(let repository, let project, let entry):
       return try Compiler(repository: repository).compile(project: project, entry: entry)
+    #endif
     }
   }
 }
@@ -74,6 +94,9 @@ public final class MotionPlayer {
   /// The compiled bundle, reusable through `MotionSource.bundle` without recompiling.
   public private(set) var bundle: String?
   public var loops = true
+  /// Live style patches keyed by source stamp, applied on top of the reconciled tree of the
+  /// current frame without re-running JavaScript. Frames rendered with overrides are not cached.
+  public private(set) var previewOverrides: [String: [String: JSONValue]] = [:]
 
   @ObservationIgnored private var worker: FrameRenderWorker?
   @ObservationIgnored private var loadGeneration = 0
@@ -89,8 +112,20 @@ public final class MotionPlayer {
 
   // MARK: Loading
 
+  /// Recompiles `source` and keeps the composition, playhead and displayed picture until the new
+  /// frame arrives (hot reload). Clears preview overrides once the reloaded frame is requested.
+  public func reload(_ source: MotionSource) async {
+    let compositionID = composition?.id
+    let frame = currentFrame
+    await load(source, compositionID: compositionID, preservingFrame: frame)
+  }
+
   /// Compiles `source` off the main thread and selects `compositionID`, or the first composition.
   public func load(_ source: MotionSource, compositionID: String? = nil) async {
+    await load(source, compositionID: compositionID, preservingFrame: nil)
+  }
+
+  private func load(_ source: MotionSource, compositionID: String?, preservingFrame: Int?) async {
     pause()
     loadGeneration += 1
     let generation = loadGeneration
@@ -105,7 +140,14 @@ public final class MotionPlayer {
       compositions = catalog
       status = .ready
       let selected = catalog.first { $0.id == compositionID } ?? catalog[0]
-      select(compositionID: selected.id)
+      if let preservingFrame, selected.id == composition?.id {
+        composition = selected
+        currentFrame = min(preservingFrame, selected.durationInFrames - 1)
+        previewOverrides = [:]
+        restartWorker()
+      } else {
+        select(compositionID: selected.id)
+      }
     } catch {
       guard generation == loadGeneration else { return }
       worker = nil
@@ -141,6 +183,13 @@ public final class MotionPlayer {
     self.configuration = configuration
     cache.totalCostLimit = configuration.cacheBytes
     restartWorker()
+  }
+
+  /// Replaces the preview overrides and re-renders the current frame with them.
+  public func setPreviewOverrides(_ overrides: [String: [String: JSONValue]]) {
+    guard overrides != previewOverrides else { return }
+    previewOverrides = overrides
+    show(currentFrame)
   }
 
   // MARK: Transport
@@ -205,7 +254,7 @@ public final class MotionPlayer {
       throw MotionError("Frame out of range: \(frame)")
     }
     return try await withCheckedThrowingContinuation { continuation in
-      worker.request(frame, coalesces: false) { continuation.resume(with: $0) }
+      worker.request(frame, overrides: previewOverrides, coalesces: false) { continuation.resume(with: $0) }
     }
   }
 
@@ -231,12 +280,13 @@ public final class MotionPlayer {
 
   private func show(_ frame: Int) {
     currentFrame = frame
-    if let cached = cache.object(forKey: frame as NSNumber) {
+    let overrides = previewOverrides
+    if overrides.isEmpty, let cached = cache.object(forKey: frame as NSNumber) {
       present(cached.frame)
       return
     }
     let generation = renderGeneration
-    worker?.request(frame, coalesces: true) { [weak self] result in
+    worker?.request(frame, overrides: overrides, coalesces: true) { [weak self] result in
       Task { @MainActor in self?.receive(result, generation: generation) }
     }
   }
@@ -245,7 +295,12 @@ public final class MotionPlayer {
     guard generation == renderGeneration else { return }
     switch result {
     case .success(let frame):
-      cache.setObject(CachedFrame(frame), forKey: frame.frame as NSNumber, cost: frame.byteCount)
+      if frame.overridden {
+        // A late override frame must not replace the picture after the gesture ended.
+        guard !previewOverrides.isEmpty else { return }
+      } else {
+        cache.setObject(CachedFrame(frame), forKey: frame.frame as NSNumber, cost: frame.byteCount)
+      }
       // Frames finish in request order, so the newest delivery is the best available picture.
       present(frame)
       renderError = nil

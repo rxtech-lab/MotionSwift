@@ -9,7 +9,7 @@ concurrency:
 jobs:
   test:
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -28,6 +28,10 @@ jobs:
           shasum -a 256 -c tests/fixtures/test-film/project.zip.sha256
           unzip -q tests/fixtures/test-film/project.zip -d "$fixture"
           TEST_FILM_PROJECT="$fixture" node tests/tools/test-film-ci.mjs check
+      # Adding iOS native slices can run swift package clean and remove the host CLI.
+      # Finish the macOS visual checks before building those slices.
+      - name: Build MotionStudio for iOS and iPadOS (simulator + device, Debug + Release)
+        run: make ios
       - name: Upload visual comparisons
         if: always()
         uses: actions/upload-artifact@v7

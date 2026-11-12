@@ -11,7 +11,7 @@ public final class Runtime {
     self.bundle = bundle
     guard
       let url = Bundle.module.url(
-        forResource: "engine", withExtension: "js", subdirectory: "Resources")
+        forResource: "engine", withExtension: "js", subdirectory: "JavaScript")
     else {
       throw MotionError("Missing JavaScript runtime resource")
     }

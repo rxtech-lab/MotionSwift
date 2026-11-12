@@ -72,21 +72,50 @@ public struct RenderNode: Codable, Sendable {
   public let type: String
   public let style: [String: JSONValue]
   public let text: String?
+  /// The `src` prop of `img` elements.
   public let src: String?
+  /// Editor source stamp (`file:line:column`) from the portable compiler, if stamped.
+  public let source: String?
   public let children: [RenderNode]
 
   public init(
-    type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil,
+    type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil, source: String? = nil,
     children: [RenderNode] = []
   ) {
     self.type = type
     self.style = style
     self.text = text
     self.src = src
+    self.source = source
     self.children = children
+  }
+
+  /// Merges preview style patches into every node whose stamp has one. The editor uses this
+  /// for live gesture feedback without rewriting or recompiling source.
+  public func applying(_ overrides: [String: [String: JSONValue]]) -> RenderNode {
+    if overrides.isEmpty { return self }
+    var style = self.style
+    if let source, let patch = overrides[source] {
+      for (key, value) in patch { style[key] = value == .null ? nil : value }
+    }
+    return RenderNode(
+      type: type, style: style, text: text, src: src, source: source,
+      children: children.map { $0.applying(overrides) })
+  }
+
+  /// The node at a layout-box path such as `0.1.2` (the root is `0`).
+  public func node(at path: String) -> RenderNode? {
+    var node = self
+    for index in path.split(separator: ".").dropFirst() {
+      guard let index = Int(index), node.children.indices.contains(index) else { return nil }
+      node = node.children[index]
+    }
+    return node
   }
 }
 
+#if os(macOS)
+/// Child processes are a macOS tool path only; iOS and iPadOS cannot spawn them.
 public enum Subprocess {
   @discardableResult
   public static func run(_ executable: String, _ arguments: [String], directory: URL? = nil) throws
@@ -107,6 +136,8 @@ public enum Subprocess {
     return data
   }
 }
+
+#endif
 
 public struct Diagnostic: Codable, Sendable {
   public let rule: String

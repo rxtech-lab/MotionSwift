@@ -1,0 +1,2 @@
+// Release builds sync module graphs from the production graph service.
+MOTIONSWIFT_GRAPH_SERVER = https:/$()/motionswift.rxlab.app/api

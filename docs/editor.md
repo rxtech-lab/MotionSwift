@@ -1,6 +1,22 @@
 # Visual editor
 
-> Current executable behavior and remaining work: [runnable implementation](current-implementation.md). This document describes the target architecture and roadmap.
+> The first section describes the working editor. The numbered architecture sections below retain the broader roadmap.
+
+## Available editor and timeline
+
+The showcase's **Visual Editor** and the MotionStudio example both use `MotionEditorView`. On macOS a resizable split places the timeline below the canvas and transport; iPhone/iPad use a vertically divided workspace. `EditorCanvas` and `EditorTimeline` are separate public SwiftUI components taking the same `EditorModel`. That controller owns source selection, the `MotionPlayer` playhead, source write-back, notices, haptics and undo/redo.
+
+- Select an object on either surface. On macOS, hover near any corner to reveal its outside rotation control; drag to rotate, or hold Shift for 15° snapping. The inner corner handle still resizes. Drag the timeline ruler to scrub; use its zoom menu to change frame spacing.
+- Move an object by dragging its bar. Drag either edge to trim it, or open **Timing…** for exact composition-frame start and duration values. End frames are exclusive. Moving preserves local keyframe positions; trimming refuses to discard keyframes.
+- **Add Keyframe** immediately captures every editable numeric style attribute at the current playhead. Move to another frame, adjust the object on the canvas or in the inspector, and click again to save that pose. Adjustments to keyed attributes preview locally until capture; moving the playhead or changing selection discards uncaptured adjustments. Capturing again at an existing frame updates its values. All captured attributes share one undo step. Drag a diamond to move it in time, or select it to edit its frame/value or delete it with native confirmation. Values hold outside the keyed range; deleting the final keyframe restores the underlying static style.
+- Saves, refusals, conflicts and deletes use transient overlays. Canvas and timeline changes share one undo history and hot reload the source. Timed-out objects stay selectable in the timeline and inspector.
+
+Timing/animation edits write a `data-ms-timeline` object literal on the original JSX opening tag, keeping its source location stable. It contains `from`, nullable `duration`, and per-property `keyframes` with object-local `frame`, numeric `value` and `easing` (`linear` or `hold`). The MotionSwift JSX runtime evaluates it for both preview and native exports without adding a layout node. This is a MotionSwift extension; unmodified browser Remotion does not evaluate this metadata.
+
+Literal enclosing `Sequence` offsets/durations are respected. Computed Sequence timing, Loop/Freeze contexts, and descendants controlled by another object timeline are protected. Existing code-authored `interpolate`/`spring`, bound values, computed styles and spread styles are not converted to editable keyframes. Rewriting those expressions, arbitrary easing curves, media trimming, sequence reordering and composition settings remain roadmap work. Tracks are indexed from source and grouped by their owning function; reusable component definitions share timing across their rendered instances.
+
+Run `make compiler` after changing the JSX runtime or portable edit service so both native compiler and device vendor resources include the changes.
+
 
 The editor is a **pure SwiftUI** app for macOS and iOS/iPadOS. It uses no web views and no AppKit/UIKit views except the Metal-backed preview surface, which is wrapped in a SwiftUI representable. Users can:
 

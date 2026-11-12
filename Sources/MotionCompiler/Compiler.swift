@@ -1,6 +1,8 @@
+#if os(macOS)
 import Foundation
 import JavaScriptCore
 import MotionCore
+import MotionPortable
 
 /// Native TypeScript 7 (tsgo) emits and checks TS/TSX; esbuild links the emitted JavaScript.
 public struct Compiler {
@@ -10,19 +12,72 @@ public struct Compiler {
   public init(repository: URL) { self.repository = repository }
   public init() { repository = Bundle.module.bundleURL }
 
+  /// Emits the project with tsgo after subset inspection; returns the emitted entry module.
+  private func emit(project: URL, entry: String, toolchain: URL, temporary: URL, vendor: URL) throws -> URL {
+    let emitted = temporary.appendingPathComponent("emitted")
+    let config = try configuration(project: project, entry: entry, vendor: vendor, temporary: temporary,
+      emit: emitted)
+    let compilation = try run(toolchain.appendingPathComponent("typescript/lib/tsc"),
+      ["--project", config.path, "--pretty", "false", "--listFiles"], directory: project)
+    guard compilation.status == 0 else { throw MotionError("tsgo: \(compilation.output)") }
+    try inspect(files: compilation.output.components(separatedBy: .newlines), vendor: vendor)
+    let javascriptExtension = ["mts": "mjs", "cts": "cjs"][project.appendingPathComponent(entry).pathExtension] ?? "js"
+    return emitted.appendingPathComponent(entry).deletingPathExtension().appendingPathExtension(javascriptExtension)
+  }
+
+  /// Compiles a module graph for iOS/iPadOS devices: one CommonJS module with every npm package the
+  /// project imports bundled in, and vendor imports (React, the shim) left for the device's
+  /// precompiled vendor graph. Packages are resolved from the project's `node_modules` and still
+  /// pass the dynamic import/require inspection.
+  public func graph(project: URL, entry: String) throws -> ModuleGraph {
+    try withToolchain { toolchain, temporary in
+      let vendor = try resource("Vendor")
+      let compiledEntry = try emit(project: project, entry: entry, toolchain: toolchain, temporary: temporary,
+        vendor: vendor)
+      let output = temporary.appendingPathComponent("graph.js")
+      let metadata = temporary.appendingPathComponent("meta.json")
+      var arguments = [compiledEntry.path, "--bundle", "--platform=browser", "--format=cjs", "--target=es2022",
+        "--define:process.env.NODE_ENV=\"production\"", "--log-level=warning",
+        "--outfile=\(output.path)", "--metafile=\(metadata.path)"]
+      arguments += Vendor.specifiers.map { "--external:\($0)" }
+      let modules = project.appendingPathComponent("node_modules").path
+      let result = try run(toolchain.appendingPathComponent("esbuild/bin/esbuild"), arguments, directory: project,
+        environment: ["NODE_PATH": modules])
+      guard result.status == 0 else { throw MotionError("esbuild: \(result.output)") }
+      let graph = try JSONDecoder().decode(CompilerGraph.self, from: Data(contentsOf: metadata))
+      var packages = Set<String>()
+      var packageFiles: [String] = []
+      for input in graph.inputs.keys {
+        guard let range = input.range(of: "node_modules/", options: .backwards) else { continue }
+        let parts = input[range.upperBound...].split(separator: "/")
+        guard let first = parts.first else { continue }
+        packages.insert(first.hasPrefix("@") && parts.count > 1 ? "\(first)/\(parts[1])" : String(first))
+        packageFiles.append(input.hasPrefix("/") ? input : project.appendingPathComponent(input).path)
+      }
+      try inspect(files: packageFiles, vendor: vendor, subset: false)
+      let code = try String(contentsOf: output, encoding: .utf8)
+      var dependencies: [String: String] = [:]
+      let requires = try NSRegularExpression(pattern: #"\brequire\((["'])([^"']+)\1\)"#)
+      for match in requires.matches(in: code, range: NSRange(code.startIndex..., in: code)) {
+        guard let range = Range(match.range(at: 2), in: code) else { continue }
+        let specifier = String(code[range])
+        guard Vendor.specifiers.contains(specifier) else {
+          throw MotionError("ms/unsupported-package: \(specifier) could not be bundled from \(modules)")
+        }
+        dependencies[specifier] = "vendor:\(specifier)"
+      }
+      let name = "\(entry).bundle.js"
+      return ModuleGraph(
+        entry: name, modules: [name: .init(code: code, dependencies: dependencies)], packages: packages.sorted(),
+        producer: "tsgo 7.0.2 + esbuild 0.28.1 (macOS)", stamped: false)
+    }
+  }
+
   public func compile(project: URL, entry: String) throws -> String {
     try withToolchain { toolchain, temporary in
       let vendor = try resource("Vendor")
-      let emitted = temporary.appendingPathComponent("emitted")
-      let config = try configuration(project: project, entry: entry, vendor: vendor, temporary: temporary,
-        emit: emitted)
-      let compilation = try run(toolchain.appendingPathComponent("typescript/lib/tsc"),
-        ["--project", config.path, "--pretty", "false", "--listFiles"], directory: project)
-      guard compilation.status == 0 else { throw MotionError("tsgo: \(compilation.output)") }
-      try inspect(files: compilation.output.components(separatedBy: .newlines), vendor: vendor)
-      let javascriptExtension = ["mts": "mjs", "cts": "cjs"][project.appendingPathComponent(entry).pathExtension] ?? "js"
-      let compiledEntry = emitted.appendingPathComponent(entry).deletingPathExtension()
-        .appendingPathExtension(javascriptExtension)
+      let compiledEntry = try emit(project: project, entry: entry, toolchain: toolchain, temporary: temporary,
+        vendor: vendor)
       let bootstrap = temporary.appendingPathComponent("entry.js")
       let output = temporary.appendingPathComponent("bundle.js")
       let metadata = temporary.appendingPathComponent("meta.json")
@@ -128,12 +183,16 @@ public struct Compiler {
     return try body(temporary, temporary)
   }
 
-  private func run(_ executable: URL, _ arguments: [String], directory: URL? = nil) throws
-    -> (status: Int32, output: String) {
+  private func run(
+    _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String] = [:]
+  ) throws -> (status: Int32, output: String) {
     let process = Process()
     process.executableURL = executable
     process.arguments = arguments
     process.currentDirectoryURL = directory
+    if !environment.isEmpty {
+      process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+    }
     let pipe = Pipe()
     process.standardOutput = pipe
     process.standardError = pipe
@@ -156,7 +215,7 @@ public struct Compiler {
     }
   }
 
-  private func inspect(files: [String], vendor: URL) throws {
+  private func inspect(files: [String], vendor: URL, subset: Bool = true) throws {
     guard let context = JSContext() else { throw MotionError("Cannot create compiler inspector") }
     context.evaluateScript(try String(contentsOf: resource("inspect.js"), encoding: .utf8))
     for file in files where !file.isEmpty {
@@ -165,7 +224,7 @@ public struct Compiler {
         || url.path.hasPrefix(vendor.resolvingSymlinksInPath().path + "/") || url.pathExtension == "json" { continue }
       let source = try String(contentsOf: url, encoding: .utf8)
       let result = context.objectForKeyedSubscript("MotionInspector")?.forProperty("inspect")?.call(withArguments: [
-        source, url.path, !url.path.contains("node_modules"),
+        source, url.path, subset && !url.path.contains("node_modules"),
       ])
       if let error = context.exception { throw MotionError("Compiler: \(error.toString() ?? "inspection failed")") }
       guard result?.toString() == "[]" else { throw MotionError(result?.toString() ?? "Compiler inspection failed") }
@@ -196,8 +255,11 @@ public struct Compiler {
 }
 
 private struct CompilerGraph: Decodable {
+  let inputs: [String: CompilerInput]
   let outputs: [String: CompilerOutput]
 }
+
+private struct CompilerInput: Decodable {}
 
 private struct CompilerOutput: Decodable {
   let imports: [CompilerImport]
@@ -207,3 +269,4 @@ private struct CompilerImport: Decodable {
   let path: String
   let external: Bool?
 }
+#endif

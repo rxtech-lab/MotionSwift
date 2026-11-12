@@ -1,6 +1,10 @@
 # Runnable implementation
 
-The repository now contains a **macOS Phase 0 package**, not the complete multi-platform engine described by the design documents. `docs/implementation-plan.md` remains the roadmap. The following is the implemented contract.
+The repository contains a **macOS renderer and SwiftUI editor targeting macOS/iOS**, with a smaller rendering subset than the complete engine described by the design documents. `docs/implementation-plan.md` remains the roadmap. The following is the implemented contract.
+
+## Visual editor and object timeline
+
+`MotionEditorView` is used by the showcase Visual Editor and the MotionStudio example. Separate public `EditorCanvas` and `EditorTimeline` surfaces share `EditorModel` for selection, playback/scrubbing, source writes and undo/redo. The timeline offers object bars with move/trim gestures, an exact timing sheet, numeric keyframe lanes and add/edit/delete sheets with linear/hold interpolation. Timing and keyframes are saved as `data-ms-timeline` literals and evaluated by the MotionSwift JSX runtime in previews and native exports. Existing code-authored animation expressions remain protected. See [editor.md](editor.md#available-editor-and-timeline) for the implemented contract and remaining limitations.
 
 ## Build and commands
 
@@ -101,4 +105,4 @@ node tests/perf/bench.mjs --engines cpu,gpu,gpu-hw,gpu-shared --tiers 4k --nativ
 
 Phase 0 gate status on real content: **no-go**. See [phase0-validation.md](phase0-validation.md). None of the 15 real Film Studio compositions pass `motionswift check`; text, inline SVG, borders, shadows, filters and gradients are the main blockers. Remotion baselines live in `tests/perf/baseline/film-studio.json`, and the anonymized census in `tests/compositions/real/manifest.json` (`node tests/tools/real-fixtures.mjs`).
 
-Not implemented yet: an in-process portable compiler/module cache/source maps, incremental retained bridge, full CSS/text/effects/SVG/media, motion/layout trace CLI, video audio checks, published binary/npm distributions, the SwiftUI MotionStudio editor (selection, gestures, timeline, TSX write-back), iOS compilation/runtime packaging, Linux JSC and non-Metal GPU backends, and production cloud worker. The existing design documents describe these next phases rather than current capabilities.
+Not implemented yet: incremental portable compiler caches and full source maps, incremental retained bridge, full CSS/text/effects/SVG/media, motion/layout trace CLI, video audio checks, published binary/npm distributions, full code-expression animation editing, media/sequence editing, Linux JSC and non-Metal GPU backends, and production cloud worker. The existing design documents describe these next phases rather than current capabilities.

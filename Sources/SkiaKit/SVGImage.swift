@@ -5,6 +5,11 @@ import Foundation
 /// for missing glyphs. Express these as SVG positioning and explicit font spans.
 /// Geometry and rasterization still run entirely through Skia's SVG DOM.
 enum SVGImage {
+  #if !os(macOS)
+  /// Foundation's XML DOM is macOS-only. On iOS and iPadOS, SVG text keeps Skia's own shaping
+  /// (no letter-spacing offsets or per-glyph font fallback spans); geometry is unaffected.
+  static func prepare(_ data: Data) throws -> Data { data }
+  #else
   static func prepare(_ data: Data) throws -> Data {
     let document = try XMLDocument(data: data, options: [.nodePreserveAll])
     for case let element as XMLElement in try document.nodes(forXPath: "//*[local-name()='text']") {
@@ -55,8 +60,10 @@ enum SVGImage {
     if let parent = element.parent as? XMLElement { return attribute(name, of: parent) }
     return nil
   }
+  #endif
 }
 
+#if os(macOS)
 private extension XMLNode {
   func named(_ name: String, value: String) -> XMLNode {
     self.name = name
@@ -64,3 +71,4 @@ private extension XMLNode {
     return self
   }
 }
+#endif

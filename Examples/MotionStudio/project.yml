@@ -1,0 +1,71 @@
+# Generate with: xcodegen generate --spec Examples/MotionStudio/project.yml
+name: MotionStudio
+options:
+  bundleIdPrefix: app.rxlab.motionswift
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  MotionSwift:
+    path: ../..
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+targets:
+  MotionStudio:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Sources
+      - path: SampleProject
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: MotionSwift
+        product: MotionSwift
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: MotionStudio
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Graph sync server: Debug uses localhost, Release the production domain (see Config/*.xcconfig).
+        MotionSwiftGraphServer: $(MOTIONSWIFT_GRAPH_SERVER)
+        NSLocalNetworkUsageDescription: MotionStudio fetches module graphs from motionswift serve-graph on your Mac.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.rxlab.motionswift.studio
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_HARDENED_RUNTIME: YES
+        # MotionSwiftNative.xcframework ships arm64 simulator and device slices (Apple silicon).
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        CODE_SIGN_STYLE: Automatic
+  MotionStudioUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS]
+    sources: [UITests]
+    dependencies:
+      - target: MotionStudio
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TEST_TARGET_NAME: MotionStudio
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+schemes:
+  MotionStudio:
+    build:
+      targets:
+        MotionStudio: all
+    test:
+      targets: [MotionStudioUITests]

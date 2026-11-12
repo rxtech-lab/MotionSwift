@@ -1,5 +1,7 @@
 import AVFoundation
 import Foundation
+import MotionCore
+import MotionEditor
 import MotionSwiftUI
 import Testing
 @testable import motionswift_showcase
@@ -64,4 +66,35 @@ func showcaseExportsFullBenchmarkFilmWithMemory() async throws {
       + "baseline RSS \(AppMemory.formatted(baseline)); peak RSS \(AppMemory.formatted(peak)); "
       + "end RSS \(AppMemory.formatted(job.currentBytes))")
   }
+}
+
+/// The showcase's Visual Editor opens a writable copy of the sample and edits it, never the repo.
+@Test @MainActor
+func showcaseEditorEditsACopyOfTheSampleProject() async throws {
+  let sample = try EditorWorkspace.prepareSample(reset: true)
+  #expect(sample.path.hasPrefix(EditorWorkspace.root.path))
+  let model = EditorModel(project: sample, entry: ShowcaseDefaults.entry, configuration: .init(scale: 1))
+  await model.open(compositionID: "Cards")
+  for _ in 0..<500 where model.player.displayedFrame == nil { try await Task.sleep(for: .milliseconds(10)) }
+  model.select(at: CGPoint(x: 400, y: 200))
+  #expect(model.selection == "src/Cards.tsx:7:3")
+  for _ in 0..<500 where model.styles == nil { try await Task.sleep(for: .milliseconds(10)) }
+  await model.setStyle("borderRadius", .number(40))
+  let edited = try String(contentsOf: sample.appendingPathComponent("src/Cards.tsx"), encoding: .utf8)
+  #expect(edited.contains("height: 180, borderRadius: 40"))
+  let original = try String(
+    contentsOf: EditorWorkspace.bundledSample.appendingPathComponent("src/Cards.tsx"), encoding: .utf8)
+  #expect(original.contains("height: 180, borderRadius: 90"))
+  let track = try #require(model.timelineTracks.first { $0.src == model.selection })
+  model.selectTrack(track)
+  await model.setTiming(of: track.src, start: 10, duration: 50)
+  await model.setKeyframe(of: track.src, key: "left", frame: 10, value: 320)
+  await model.setKeyframe(of: track.src, key: "left", frame: 30, value: 400)
+  let frame = try await model.player.render(frame: 20)
+  #expect(frame.layout.first { $0.source == track.src }?.x == 360)
+  #expect(try String(contentsOf: sample.appendingPathComponent("src/Cards.tsx"), encoding: .utf8)
+    .contains("data-ms-timeline"))
+  #expect(try String(contentsOf: EditorWorkspace.bundledSample.appendingPathComponent("src/Cards.tsx"), encoding: .utf8)
+    == original)
+  _ = try EditorWorkspace.prepareSample(reset: true)
 }

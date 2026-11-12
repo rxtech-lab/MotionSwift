@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 export PKG_CONFIG_PATH := $(CURDIR)/native/pkgconfig:$(PKG_CONFIG_PATH)
-.PHONY: lint lint-fix bootstrap compiler native build test visual goldens benchmark showcase ci
+.PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark showcase ci
 .NOTPARALLEL:
 
 lint:
@@ -16,12 +16,20 @@ tests/node_modules/.package-lock.json: tests/package.json tests/package-lock.jso
 
 compiler: tests/node_modules/.package-lock.json
 	node tests/tools/package-compiler.mjs
+	node tests/tools/package-portable.mjs
 
 bootstrap: compiler native
 	node tests/tools/prepare-browser.mjs
 
 native:
 	./tests/tools/build-native.sh
+
+native-ios:
+	./tests/tools/build-native.sh --ios
+
+# iOS/iPadOS: device and simulator builds of the MotionStudio example app (no signing).
+ios: compiler native-ios
+	./tests/tools/build-ios.sh
 
 build: compiler native
 	swift build -c release

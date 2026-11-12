@@ -30,7 +30,7 @@ public final class SharedVideoStream {
       try FileManager.default.removeItem(at: output)
     }
     writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
-    let settings: [String: Any] = [
+    var settings: [String: Any] = [
       AVVideoCodecKey: AVVideoCodecType.h264,
       AVVideoWidthKey: width, AVVideoHeightKey: height,
       // Match ffmpeg's existing untagged RGBA -> yuv420p conversion. Explicit
@@ -40,14 +40,17 @@ public final class SharedVideoStream {
         AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
         AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_601_4,
       ],
-      AVVideoEncoderSpecificationKey: [
-        kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true,
-      ],
       AVVideoCompressionPropertiesKey: [
         kVTCompressionPropertyKey_Quality as String: 0.65,
         AVVideoExpectedSourceFrameRateKey: fps,
       ],
     ]
+    #if os(macOS)
+    settings[AVVideoEncoderSpecificationKey] = [
+      kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true,
+    ]
+    #endif
+    // iOS and iPadOS AVAssetWriter H.264 always uses the hardware encoder; there is no switch.
     guard writer.canApply(outputSettings: settings, forMediaType: .video) else {
       throw MotionError("Native hardware H.264 settings are unavailable")
     }

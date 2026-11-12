@@ -1,0 +1,1 @@
+stale-source: src/Title.tsx:9:1 no longer names an element; reselect it

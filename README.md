@@ -36,7 +36,7 @@ done
 
 ## SDK setup (macOS)
 
-The current Swift package targets **macOS 14+**. Add this checkout as a local package dependency in Xcode and link its **MotionSwift** library product; import the individual modules shown below (there is no umbrella `import MotionSwift`). iOS support and the full visual editor remain planned; the [SwiftUI preview](#swiftui-preview-macos) is available now.
+The current Swift package targets **macOS 14+**. Add this checkout as a local package dependency in Xcode and link its **MotionSwift** library product; import the individual modules shown below (there is no umbrella `import MotionSwift`). The showcase includes a visual editor with a shared canvas/timeline controller, object timing, and numeric keyframes; the MotionStudio example also targets iOS/iPadOS. See the [editor contract and limitations](docs/editor.md#available-editor-and-timeline).
 
 First follow the [build prerequisites](docs/current-implementation.md#build-and-commands), then run:
 
@@ -210,16 +210,9 @@ This is the easy part, as long as we **run the real TSX in JavaScriptCore** and 
 
 ### UI editing of rendered components
 
-The editor is **pure SwiftUI**: a preview canvas with drag, resize, and rotate handles, a timeline for sequence timing and duration, keyframe lanes for animations, and an inspector. Because the render tree is retained (not screenshotted pixels), editing fits naturally:
+The showcase's **Visual Editor** combines separate `EditorCanvas` and `EditorTimeline` components sharing one `EditorModel`. Select, drag, resize or rotate objects on the canvas; scrub, move and trim object bars on the timeline. Dedicated sheets edit exact timing and numeric keyframes with linear/hold interpolation. Both surfaces share selection, playback, source write-back, hot reload and undo/redo.
 
-1. The planned editor source transform stamps each JSX element with its source location (file:line:col).
-2. On click, a native hit test finds the node and its source location, and the inspector shows its props and style.
-3. Canvas gestures (drag, resize, rotate) and timeline edits (moving a `Sequence`, changing its duration, editing keyframes and easing) become edit operations. They're written back to the TSX through an AST transform (ts-morph), then hot-reloaded.
-   - Static props (color, text, position, rotation) rewrite the literal.
-   - Animated props (`interpolate(frame, [0, 30], [0, 1])`, `spring(...)`) appear as keyframes. A gesture on an animated property edits or inserts the keyframe at the playhead.
-4. While a gesture is in progress, a preview override keeps feedback under one frame. Scrubbing renders a single frame in a few milliseconds.
-
-Details: [docs/editor.md](docs/editor.md).
+Timing and animation are stored as MotionSwift `data-ms-timeline` JSX literals and evaluated in both native previews and exports. Existing code-authored animation expressions remain protected; browser Remotion does not interpret this metadata. See the [implemented editor contract and roadmap](docs/editor.md).
 
 ### Speed estimates
 
@@ -283,10 +276,10 @@ MotionSwift/
 │   ├── MotionRender/          # (planned) retained tree → Skia painter
 │   ├── MotionMedia/           # (planned) image/video decode, audio mix, fonts
 │   ├── MotionEncode/          # (planned) VideoToolbox / ffmpeg writers
-│   ├── MotionEditor/          # (planned) hit testing, gesture → edit ops, timeline model
+│   ├── MotionEditor/          # shared controller, canvas, timeline and source edit sheets
 │   └── motionswift-cli/       # (planned) `motionswift render|still|check`
 ├── Apps/
-│   └── MotionStudio/          # (planned) pure SwiftUI editor app (macOS + iOS/iPadOS)
+│   └── MotionStudio/          # pure SwiftUI editor example (macOS + iOS/iPadOS)
 ├── js/
 │   ├── remotion-shim/         # (planned) @motionswift/remotion: shim + subset .d.ts
 │   ├── tsconfig/              # (planned) @motionswift/tsconfig preset

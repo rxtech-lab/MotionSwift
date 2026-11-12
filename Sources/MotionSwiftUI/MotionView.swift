@@ -49,7 +49,7 @@ public struct MotionPlayerView: View {
   public var body: some View {
     VStack(spacing: 12) {
       MotionView(player: player, showsLayoutBounds: showsLayoutBounds)
-      TransportBar(player: player)
+      MotionTransportBar(player: player)
     }
   }
 }
@@ -91,50 +91,79 @@ public struct MotionCompositionView: View {
   }
 }
 
-private struct TransportBar: View {
-  let player: MotionPlayer
+/// Play/pause, frame stepping, a scrubber and render timing for a player.
+public struct MotionTransportBar: View {
+  private let player: MotionPlayer
 
-  var body: some View {
-    let duration = player.composition?.durationInFrames ?? 1
-    HStack(spacing: 12) {
-      Button { player.step(by: -1) } label: { Image(systemName: "backward.frame.fill") }
-        .help("Previous frame")
-        .accessibilityLabel("Previous frame")
-      Button { player.togglePlayback() } label: {
-        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
+  public init(player: MotionPlayer) { self.player = player }
+
+  public var body: some View {
+    // Narrow layouts (iPhone, iPad split view) move the timing readouts below the scrubber.
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 12) {
+        controls
+        scrubber.frame(minWidth: 180)
+        position
+        rates
       }
-      .keyboardShortcut(.space, modifiers: [])
-      .help(player.isPlaying ? "Pause" : "Play")
-      .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-      Button { player.step(by: 1) } label: { Image(systemName: "forward.frame.fill") }
-        .help("Next frame")
-        .accessibilityLabel("Next frame")
-      Slider(
-        value: Binding(
-          get: { Double(player.currentFrame) },
-          set: {
-            player.pause()
-            player.seek(to: Int($0.rounded()))
-          }),
-        in: 0...Double(max(duration - 1, 1))
-      )
-      .accessibilityLabel("Playhead")
-      Text("\(player.currentFrame) / \(duration - 1)")
-        .monospacedDigit()
-        .frame(minWidth: 64, alignment: .trailing)
-      Text(player.liveFPS.map { String(format: "Live %.1f fps", $0) } ?? "Live — fps")
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        .frame(minWidth: 94, alignment: .trailing)
-        .help("Preview-frame deliveries over the last second, including cached frames. Play to measure.")
-      Text(player.renderFPS.map { String(format: "Render %.1f fps", $0) } ?? "Render — fps")
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        .frame(minWidth: 104, alignment: .trailing)
-        .help("1000 divided by the displayed frame's render time: JS, layout, paint and readback. Excludes playback pacing.")
+      VStack(spacing: 6) {
+        HStack(spacing: 12) {
+          controls
+          scrubber
+          position
+        }
+        HStack(spacing: 12) { rates }.font(.caption)
+      }
     }
     .buttonStyle(.borderless)
     .disabled(player.composition == nil)
+  }
+
+  private var duration: Int { player.composition?.durationInFrames ?? 1 }
+
+  @ViewBuilder private var controls: some View {
+    Button { player.step(by: -1) } label: { Image(systemName: "backward.frame.fill") }
+      .help("Previous frame")
+      .accessibilityLabel("Previous frame")
+    Button { player.togglePlayback() } label: {
+      Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
+    }
+    .keyboardShortcut(.space, modifiers: [])
+    .help(player.isPlaying ? "Pause" : "Play")
+    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+    Button { player.step(by: 1) } label: { Image(systemName: "forward.frame.fill") }
+      .help("Next frame")
+      .accessibilityLabel("Next frame")
+  }
+
+  private var scrubber: some View {
+    Slider(
+      value: Binding(
+        get: { Double(player.currentFrame) },
+        set: {
+          player.pause()
+          player.seek(to: Int($0.rounded()))
+        }),
+      in: 0...Double(max(duration - 1, 1))
+    )
+    .accessibilityLabel("Playhead")
+  }
+
+  private var position: some View {
+    Text("\(player.currentFrame) / \(duration - 1)")
+      .monospacedDigit()
+      .frame(minWidth: 64, alignment: .trailing)
+  }
+
+  @ViewBuilder private var rates: some View {
+    Text(player.liveFPS.map { String(format: "Live %.1f fps", $0) } ?? "Live — fps")
+      .monospacedDigit()
+      .foregroundStyle(.secondary)
+      .help("Preview-frame deliveries over the last second, including cached frames. Play to measure.")
+    Text(player.renderFPS.map { String(format: "Render %.1f fps", $0) } ?? "Render — fps")
+      .monospacedDigit()
+      .foregroundStyle(.secondary)
+      .help("1000 divided by the displayed frame's render time: JS, layout, paint and readback. Excludes playback pacing.")
   }
 }
 

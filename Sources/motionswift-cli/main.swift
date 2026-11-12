@@ -12,7 +12,7 @@ struct Arguments {
   init(_ input: [String]) throws {
     let allowed: Set<String> = [
       "project", "entry", "frame", "frames", "props", "report-json", "dump-layout", "codec",
-      "concurrency", "backend", "scale", "encoder",
+      "concurrency", "backend", "scale", "encoder", "compiler", "stamp", "port", "host",
     ]
     var index = 0
     while index < input.count {
@@ -87,6 +87,9 @@ func run() throws {
       motionswift check|list --project <dir> --entry <file>
       motionswift still --project <dir> --entry <file> <composition> <out.png> --frame=0
       motionswift render --project <dir> --entry <file> <composition> <out.mp4> --codec=h264
+      motionswift graph --project <dir> --entry <file> <out.msgraph> [--compiler=tsgo|portable --stamp=true]
+      motionswift serve-graph --project <dir> --entry <file> [--port=4317 --host=127.0.0.1]
+      motionswift budget --project <dir> --entry <file> <composition> [--frames=a-b --scale=N --compiler=portable|tsgo]
       Options: --frames=a-b --props=file.json --report-json=file --dump-layout=file
                --backend=cpu|gpu (Skia raster or Skia Metal) --concurrency=N|auto --scale=N
                --encoder=software|videotoolbox|videotoolbox-shared (default: software)
@@ -95,10 +98,14 @@ func run() throws {
     return
   }
   let command = input[0]
-  guard ["check", "list", "still", "render"].contains(command) else {
+  guard ["check", "list", "still", "render"].contains(command) || DeviceCommands.names.contains(command) else {
     throw MotionError("Unknown command: \(command)")
   }
   let arguments = try Arguments(Array(input.dropFirst()))
+  if DeviceCommands.names.contains(command) {
+    try DeviceCommands.run(command, arguments)
+    return
+  }
   let project = URL(fileURLWithPath: arguments.options["project"] ?? ".").standardizedFileURL
   let startup = Date()
   if command == "check" {

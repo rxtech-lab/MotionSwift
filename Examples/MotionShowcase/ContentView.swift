@@ -1,10 +1,12 @@
 import MotionCore
+import MotionEditor
 import MotionSwiftUI
 import SwiftUI
 
 enum SidebarItem: Hashable {
   case gallery
   case testFilm
+  case editor
   case composition(String)
 }
 
@@ -22,13 +24,21 @@ struct ProjectLocation: Equatable {
 struct ContentView: View {
   @State private var player = MotionPlayer()
   @State private var testFilmPlayer = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
-  @State private var selection: SidebarItem? = .gallery
+  /// `MOTIONSWIFT_SHOWCASE_START=editor` opens the visual editor first (demos and screenshots).
+  @State private var selection: SidebarItem? =
+    ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "editor" ? .editor : .gallery
   @State private var settings = ShowcaseSettings()
   @State private var location = ProjectLocation(
     project: ShowcaseDefaults.project, entry: ShowcaseDefaults.entry)
   @State private var showsSettings = false
   @State private var showsOpenProject = false
   @State private var toast: String?
+  /// The visual editor and the project it edits (a copy of the sample unless the user chose one).
+  @State private var editor: EditorModel?
+  @State private var editorLocation: ProjectLocation?
+  @State private var showsEditProject = false
+  @State private var pendingEditLocation: ProjectLocation?
+  @State private var resettingSample = false
 
   var body: some View {
     NavigationSplitView {
@@ -40,14 +50,14 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .disabled(selection == .testFilm)
+          .disabled(selection == .testFilm || selection == .editor)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
           .keyboardShortcut("r")
-          .disabled(selection == .testFilm)
+          .disabled(selection == .testFilm || selection == .editor)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .disabled(selection == .testFilm)
+          .disabled(selection == .testFilm || selection == .editor)
       }
     }
     .sheet(isPresented: $showsSettings) {
@@ -59,8 +69,30 @@ struct ContentView: View {
         Task { await load() }
       }
     }
+    .sheet(isPresented: $showsEditProject) {
+      OpenProjectSheet(location: editorLocation ?? ProjectLocation(
+        project: EditorWorkspace.sample, entry: ShowcaseDefaults.entry)) { pendingEditLocation = $0 }
+    }
+    .confirmationDialog(
+      "Edit \(pendingEditLocation?.project.lastPathComponent ?? "project") in place?",
+      isPresented: Binding(get: { pendingEditLocation != nil }, set: { if !$0 { pendingEditLocation = nil } }),
+      titleVisibility: .visible, presenting: pendingEditLocation
+    ) { location in
+      Button("Edit Source Files") { openEditor(location) }
+    } message: { location in
+      Text("Canvas and inspector edits are written to the TSX files in \(location.project.path). Undo restores them.")
+    }
+    .confirmationDialog("Reset the sample project?", isPresented: $resettingSample, titleVisibility: .visible) {
+      Button("Reset Sample", role: .destructive) { openSample(reset: true) }
+    } message: {
+      Text("Your edits to the editor's copy of the sample are discarded.")
+    }
+    .onChange(of: selection) { _, item in if item == .editor, editor == nil { openSample(reset: false) } }
     .overlay(alignment: .bottom) { ToastOverlay(message: toast) }
-    .task { await load() }
+    .task {
+      if selection == .editor { openSample(reset: false) }
+      await load()
+    }
     .onChange(of: selection) { _, item in
       if case .composition(let id) = item { player.select(compositionID: id) } else { player.pause() }
     }
@@ -77,6 +109,13 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
         }
         .tag(SidebarItem.testFilm)
+        VStack(alignment: .leading, spacing: 2) {
+          Label("Visual Editor", systemImage: "cursorarrow.motionlines")
+          Text(editorLocation.map { $0.project.lastPathComponent } ?? "Canvas, timeline and keyframes")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .tag(SidebarItem.editor)
       }
       Section("Compositions") {
         ForEach(player.compositions, id: \.id) { composition in
@@ -100,6 +139,29 @@ struct ContentView: View {
     switch selection {
     case .testFilm:
       TestFilmView(player: testFilmPlayer)
+    case .editor:
+      if let editor {
+        MotionEditorView(model: editor)
+          .id(editorLocation?.project)
+          .navigationTitle("Visual Editor")
+          .navigationSubtitle((editorLocation?.project.lastPathComponent ?? "") + " · Canvas & Timeline")
+          .toolbar {
+            ToolbarItem {
+              Menu {
+                Button("Edit Project…", systemImage: "folder") { showsEditProject = true }
+                Button("Edit Sample", systemImage: "doc.text.image") { openSample(reset: false) }
+                Button("Reset Sample…", systemImage: "arrow.counterclockwise", role: .destructive) {
+                  resettingSample = true
+                }
+              } label: {
+                Label("Project", systemImage: "folder.badge.gearshape")
+              }
+              .help("Choose which Remotion project the editor writes to")
+            }
+          }
+      } else {
+        ProgressView()
+      }
     case .composition(let id):
       MotionPlayerView(player: player, showsLayoutBounds: settings.showsLayoutBounds)
         .padding(20)
@@ -110,6 +172,23 @@ struct ContentView: View {
         .navigationTitle("Gallery")
         .navigationSubtitle(location.project.lastPathComponent)
     }
+  }
+
+  private func openSample(reset: Bool) {
+    do {
+      let sample = try EditorWorkspace.prepareSample(reset: reset)
+      openEditor(ProjectLocation(project: sample, entry: ShowcaseDefaults.entry))
+      if reset { show("Sample project reset") }
+    } catch {
+      show("Cannot open the sample: \(error)")
+    }
+  }
+
+  private func openEditor(_ location: ProjectLocation) {
+    editor?.player.pause()
+    editorLocation = location
+    editor = EditorModel(
+      project: location.project, entry: location.entry, configuration: .init(scale: 2, backend: .gpu))
   }
 
   private func liveRate(_ player: MotionPlayer) -> String {
