@@ -1,0 +1,54 @@
+{
+  "project": "../compositions",
+  "entryPoint": "../perf/long.tsx",
+  "codec": "h264",
+  "runs": 3,
+  "warmup": 1,
+  "minSsim": 0.98,
+  "concurrency": {
+    "remotion": 8,
+    "cpu": 8,
+    "gpu": 8,
+    "gpu-hw": 8,
+    "gpu-shared": 8
+  },
+  "tiers": [
+    {
+      "id": "720p",
+      "scale": 4,
+      "engines": [
+        "cpu",
+        "gpu",
+        "gpu-hw",
+        "gpu-shared"
+      ]
+    },
+    {
+      "id": "4k",
+      "scale": 12,
+      "engines": [
+        "cpu",
+        "gpu",
+        "gpu-hw",
+        "gpu-shared"
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "long/flex",
+      "composition": "Flex",
+      "frames": "0-299"
+    },
+    {
+      "id": "long/opacity",
+      "composition": "Layers",
+      "frames": "0-299"
+    },
+    {
+      "id": "long/sequence-spring",
+      "composition": "LoopingTimed",
+      "frames": "0-299"
+    }
+  ]
+}

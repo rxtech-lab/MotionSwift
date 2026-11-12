@@ -5,11 +5,11 @@
   "runs": 3,
   "warmup": 1,
   "minSsim": 0.98,
-  "concurrency": {"remotion": 8, "cpu": 8, "gpu": 8},
+  "concurrency": {"remotion": 8, "cpu": 8, "gpu": 8, "gpu-hw": 8, "gpu-shared": 8},
   "tiers": [
-    {"id": "180p", "scale": 1, "engines": ["remotion", "cpu", "gpu"]},
-    {"id": "720p", "scale": 4, "engines": ["remotion", "cpu", "gpu"]},
-    {"id": "4k", "scale": 12, "engines": ["cpu", "gpu"]}
+    {"id": "180p", "scale": 1, "engines": ["remotion", "cpu", "gpu", "gpu-hw", "gpu-shared"]},
+    {"id": "720p", "scale": 4, "engines": ["remotion", "cpu", "gpu", "gpu-hw", "gpu-shared"]},
+    {"id": "4k", "scale": 12, "engines": ["cpu", "gpu", "gpu-hw", "gpu-shared"]}
   ],
   "fixtures": "../fixtures.json"
 }

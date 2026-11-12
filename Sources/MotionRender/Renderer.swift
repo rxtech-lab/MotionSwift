@@ -68,6 +68,7 @@ public final class Renderer {
 
   /// Unpremultiplied RGBA8888 pixels of the last drawn frame.
   public func pixels() throws -> Data { try canvas.rgba() }
+  public func videoFrame() throws -> MetalVideoFrame { try canvas.videoFrame() }
 
   private func transform(_ style: Style, width: Double, height: Double) throws {
     let value = style.string("transform")

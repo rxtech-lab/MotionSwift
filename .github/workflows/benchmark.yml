@@ -1,6 +1,7 @@
 name: Benchmark
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
 permissions:
   contents: read
 concurrency:
@@ -31,12 +32,22 @@ jobs:
           if [ -n "$run_id" ] && [ "$run_id" != null ]; then
             gh run download "$run_id" --name bench-results --dir "$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID"
           fi
-      - name: Measure both engines and check video parity
+      - name: Measure render and encoder combinations and check video parity
         run: |
           args=()
           baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/results.json"
           if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
           node tests/perf/bench.mjs --work-dir "$RUNNER_TEMP" "${args[@]}"
+      - name: Measure sustained native throughput (300 frames)
+        if: ${{ !cancelled() }}
+        run: |
+          args=()
+          baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/long/results.json"
+          if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
+          node tests/perf/bench.mjs --config tests/perf/bench.long.config.json --out tests/reports/bench/long --work-dir "$RUNNER_TEMP" "${args[@]}"
+      - name: Combine short and long benchmark tables
+        if: always()
+        run: node tests/perf/combine-summaries.mjs
       - name: Report setup or build failures
         if: always()
         run: |

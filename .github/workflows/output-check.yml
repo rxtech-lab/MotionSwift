@@ -18,6 +18,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make bootstrap
       - run: make ci
+        env:
+          MOTIONSWIFT_TEST_HARDWARE: '1'
       - name: Upload visual comparisons
         if: always()
         uses: actions/upload-artifact@v7

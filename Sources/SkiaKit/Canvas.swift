@@ -1,4 +1,5 @@
 import CSkia
+import CoreVideo
 import Foundation
 import Metal
 import MotionCore
@@ -23,6 +24,7 @@ public final class Canvas {
   // Kept alive for the surface's lifetime; Skia also retains them.
   private let device: (any MTLDevice)?
   private let queue: (any MTLCommandQueue)?
+  private var videoPool: MetalVideoPool?
 
   public init(width: Int, height: Int, backend: Backend = .cpu) throws {
     self.width = width
@@ -86,6 +88,19 @@ public final class Canvas {
     }
     guard ok else { throw MotionError("Cannot read back \(backend.rawValue) surface pixels") }
     return data
+  }
+
+  /// GPU-only F16 -> BGRA8 resolve into an IOSurface shared with VideoToolbox.
+  /// Synchronizes GPU completion without reading or mapping pixel bytes on the CPU.
+  public func videoFrame() throws -> MetalVideoFrame {
+    guard let device else { throw MotionError("IOSurface video output requires the GPU backend") }
+    if videoPool == nil { videoPool = try MetalVideoPool(device: device, width: width, height: height) }
+    guard let frame = try videoPool?.allocate(), let wrapper = frame.texture,
+      let texture = CVMetalTextureGetTexture(wrapper)
+    else { throw MotionError("Cannot allocate shared Metal video frame") }
+    guard msk_copy_to_metal_texture(surface, Unmanaged.passUnretained(texture as AnyObject).toOpaque())
+    else { throw MotionError("Cannot resolve Metal frame into IOSurface") }
+    return frame
   }
 
   public func writePNG(to url: URL) throws {

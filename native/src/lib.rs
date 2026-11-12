@@ -4,7 +4,7 @@ use std::ffi::{c_char, c_void, CStr};
 /// One drawing target. A handle is owned by Swift's Canvas and confined to one render
 /// worker thread; GPU handles also own their Ganesh context, which is not thread-safe.
 /// Field order matters: the surface must be dropped before the context that backs it.
-pub struct Target { surface: Surface, context: Option<gpu::DirectContext>, solid: Option<RuntimeEffect> }
+pub struct Target { surface: Surface, context: Option<gpu::DirectContext>, solid: Option<RuntimeEffect>, resolve: Option<RuntimeEffect> }
 
 // Ganesh folds constant paint colours (and colour filters on them) into premultiplied
 // byte vertex colours, rounding colour*coverage (81.5 -> 82). A runtime shader with a
@@ -17,7 +17,7 @@ fn boxed(mut surface: Surface, context: Option<gpu::DirectContext>) -> *mut Targ
     let solid = if context.is_some() {
         match RuntimeEffect::make_for_shader(SOLID_SKSL, None) { Ok(effect) => Some(effect), Err(_) => return std::ptr::null_mut() }
     } else { None };
-    Box::into_raw(Box::new(Target { surface, context, solid }))
+    Box::into_raw(Box::new(Target { surface, context, solid, resolve: None }))
 }
 
 #[no_mangle]
@@ -156,6 +156,36 @@ pub unsafe extern "C" fn msk_read_rgba(s: *mut Target, dst: *mut u8, len: usize)
     if let Some(context) = target.context.as_mut() { context.flush_and_submit(); }
     let info = ImageInfo::new((width, height), ColorType::RGBA8888, AlphaType::Unpremul, None);
     target.surface.read_pixels(&info, std::slice::from_raw_parts_mut(dst, len), row, (0, 0))
+}
+/// Resolve the F16 render target into a caller-owned IOSurface-backed BGRA8 texture
+/// on the GPU. No pixel mapping/readback occurs. The caller retains the texture until
+/// this returns; GPU completion is synchronized before handing it to another framework.
+#[no_mangle]
+pub unsafe extern "C" fn msk_copy_to_metal_texture(s: *mut Target, texture: *const c_void) -> bool {
+    if s.is_null() || texture.is_null() { return false; }
+    let target = &mut *s;
+    let Some(context) = target.context.as_mut() else { return false; };
+    let info = gpu::mtl::TextureInfo::new(texture as *mut c_void);
+    let backend = gpu::backend_textures::make_mtl(
+        (target.surface.width(), target.surface.height()), gpu::Mipmapped::No, &info, "IOSurface output");
+    let Some(mut output) = gpu::surfaces::wrap_backend_texture(
+        context, &backend, gpu::SurfaceOrigin::TopLeft, None, ColorType::BGRA8888, None, None
+    ) else { return false; };
+    let image = target.surface.image_snapshot();
+    if target.resolve.is_none() {
+        target.resolve = RuntimeEffect::make_for_shader(
+            "uniform shader frame; half4 main(float2 p) { half4 c = frame.eval(p); return half4(c.a > 0 ? c.rgb / c.a : half3(0), 1); }", None).ok();
+    }
+    let Some(effect) = target.resolve.as_ref() else { return false; };
+    let Some(source) = image.to_shader(None, skia_safe::SamplingOptions::default(), None) else { return false; };
+    let Some(shader) = effect.make_shader(Data::new_empty(), &[source.into()], None) else { return false; };
+    let mut paint = Paint::default();
+    // Match raw RGBA video: unpremultiply RGB before dropping alpha (H.264 is opaque).
+    paint.set_blend_mode(skia_safe::BlendMode::Src);
+    paint.set_shader(shader);
+    output.canvas().draw_paint(&paint);
+    context.flush_submit_and_sync_cpu();
+    !context.abandoned()
 }
 #[no_mangle]
 pub unsafe extern "C" fn msk_png(s: *mut Target, path: *const c_char) -> bool {

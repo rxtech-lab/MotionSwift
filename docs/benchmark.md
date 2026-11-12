@@ -2,6 +2,23 @@
 
 > The Phase 0 benchmark is implemented. See [the current contract](current-implementation.md#benchmark-and-runner-setup) for the active fixtures, exact runner labels, browser pin, API worker, and limitations. The extended CLI/output schema below remains the target.
 
+## Hardware encoding comparison
+
+See the [local hardware-encoding benchmark snapshot](benchmarks/2026-11-12-hardware-encoding.md) for measured short- and long-clip results, quality checks, output sizes, and raw run timings.
+
+The active benchmark includes `gpu-hw` (Metal + FFmpeg VideoToolbox) and `gpu-shared` (Metal → shared IOSurface → native AVFoundation/VideoToolbox) alongside `cpu` (CPU + x264), `gpu` (Metal + x264), and Remotion. Every native command explicitly selects its encoder, so the existing `gpu` result continues to isolate rendering speed and both CLI render backends retain their software default.
+
+VideoToolbox uses `h264_videotoolbox -allow_sw 0 -q:v 65 -realtime 0`; software remains x264 CRF 18/medium. Hardware encoding uses Apple's media engine and fails if unavailable; it does not fall back to software. These quality scales are different. All speedups require the same SSIM >= 0.98 and metadata checks. Output byte sizes and FFmpeg version are included in `results.json` to expose compression tradeoffs. The FFmpeg hardware path retains GPU readback, CPU pixel conversion, and pipe transport. The shared path performs F16-to-BGRA8 conversion on the GPU, synchronizes completion, and passes the IOSurface-backed pixel buffer directly to native hardware encoding at quality 0.65. Encoder color conversion and internal copies may still occur.
+
+The PR table compares both hardware paths against Metal + x264 and compares shared IOSurface transport against FFmpeg VideoToolbox. It includes per-resolution speedups and quality checks. Short clips have 30 frames; a second native-only matrix has 300-frame clips at 720p and 4K. Run the native matrix locally with:
+
+```sh
+node tests/perf/bench.mjs --engines cpu,gpu,gpu-hw,gpu-shared
+node tests/perf/bench.mjs --config tests/perf/bench.long.config.json --out tests/reports/bench/long
+```
+
+`--encoder=software|videotoolbox|videotoolbox-shared` selects the CLI video encoder independently of `--backend`. Both render backends and the library `VideoStream` initializer default to software. The shared encoder requires `--backend=gpu`. Hardware tests run in CI and can be enabled locally with `MOTIONSWIFT_TEST_HARDWARE=1 make test`.
+
 Every pull request gets a benchmark comment that compares Remotion's render time with MotionSwift's Skia CPU and Skia Metal (GPU) backends for the same compositions, at several output resolutions. This doc specifies the script, its config, its output, and the CI workflow. They are built in Phase 0 ([implementation-plan.md](implementation-plan.md)). See [performance.md](performance.md) for the performance model and budgets.
 
 ## Files (planned)

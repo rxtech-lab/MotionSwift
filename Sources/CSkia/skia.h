@@ -17,4 +17,6 @@ void msk_rect(MSKSurface s, float x, float y, float w, float h, float radius, ui
 bool msk_text(MSKSurface s, const char* text, const char* family, float size, uint32_t color, float x, float y);
 /// Unpremultiplied RGBA8888, tightly packed; len must equal width * height * 4.
 bool msk_read_rgba(MSKSurface s, uint8_t* dst, size_t len);
+/// GPU resolve to a borrowed id<MTLTexture> (BGRA8, same dimensions), synchronized on return.
+bool msk_copy_to_metal_texture(MSKSurface s, const void* texture);
 bool msk_png(MSKSurface s, const char* path);
