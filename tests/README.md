@@ -4,7 +4,7 @@ This folder holds the CI suite that proves MotionSwift's output matches Remotion
 
 > The Phase 0 suite now runs: `make test visual benchmark`. See [the implemented contract](../docs/current-implementation.md) for the exact active gate and remaining layers. Visual sources are in `compositions/visuals/`, test dependencies in this folder, and the same fixtures feed the benchmark. The extended layers below are the design specification.
 
-**Active CI:** every push and same-repository PR on `[self-hosted, macOS, ARM64]`, exact RGBA comparison with a maximum 0.3% changed pixels, plus native repeatability. References are committed Remotion PNGs; ordinary CI never regenerates them.
+**Active CI:** pushes only on `[self-hosted, macOS, ARM64]`, exact RGBA comparison with a maximum 0.3% changed pixels, plus native repeatability. The shared setup action installs the current Node LTS, stable Rust, and missing native tools. References are committed Remotion PNGs; ordinary CI never regenerates them. Golden regeneration remains manual.
 
 ## Folder layout
 

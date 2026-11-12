@@ -8,22 +8,14 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: tests/package-lock.json
-      - uses: actions/cache@v4
-        with:
-          path: .cache/chrome-for-testing
-          key: chrome-for-testing-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/browser.lock.json') }}
+      - uses: ./.github/actions/setup
       - run: npm ci --prefix tests
       - run: make goldens
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: remotion-goldens-for-review
           path: tests/golden/

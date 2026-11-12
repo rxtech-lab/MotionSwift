@@ -1,0 +1,41 @@
+name: Set up MotionSwift CI
+description: Install the Node LTS and native build tools on macOS runners.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7.1.0
+      with:
+        node-version: 'lts/*'
+        cache: npm
+        cache-dependency-path: tests/package-lock.json
+    - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      with:
+        toolchain: stable
+    - name: Install missing macOS tools
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: '1'
+      run: |
+        packages=()
+        command -v swiftlint >/dev/null || packages+=(swiftlint)
+        command -v pkg-config >/dev/null || packages+=(pkgconf)
+        if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+          packages+=(ffmpeg)
+        fi
+        if [ "${#packages[@]}" -gt 0 ]; then
+          brew install "${packages[@]}"
+        fi
+    - name: Verify runner prerequisites
+      shell: bash
+      run: |
+        swift --version
+        swiftlint version
+        rustc --version
+        cargo --version
+        pkg-config --version
+        ffmpeg -version
+        ffprobe -version
+    - uses: actions/cache@v6.1.0
+      with:
+        path: .cache/chrome-for-testing
+        key: chrome-for-testing-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/browser.lock.json') }}

@@ -44,7 +44,7 @@ All test dependencies are installed in `tests/node_modules`. Production JS packa
 
 ## Visual gate
 
-Every push and same-repository PR triggers `.github/workflows/output-check.yml` on `[self-hosted, macOS, ARM64]`. There are no path filters. Fork code is not executed on the self-hosted runner.
+Only pushes trigger `.github/workflows/output-check.yml` on `[self-hosted, macOS, ARM64]`. There are no path filters or duplicate pull-request runs. Fork PR events do not execute code on the self-hosted runner.
 
 The comparator checks **every RGBA channel exactly**. A pixel counts as different if any channel differs, including alpha and anti-aliasing. The test fails when more than **0.003 of all pixels (0.3%)** differ; exactly 0.3% passes. Dimensions must match. There is no per-fixture relaxation, ignored anti-aliasing region, or known-issue exemption. Each frame is rendered twice to require bit-identical native repeatability. Sampling uses a shuffled order and fresh frame VMs.
 
@@ -54,13 +54,13 @@ References come only from real Remotion and the pinned stock Chrome for Testing 
 
 ## Benchmark and runner setup
 
-Register an Apple Silicon Mac with the repository and labels `self-hosted`, `macOS`, and `ARM64`. Install the prerequisites above. Both workflows use that runner with no GitHub-hosted fallback. This checkout initially has no remote; a repository must be configured and these files published before a remote run can be dispatched.
+Register an Apple Silicon Mac with the repository and labels `self-hosted`, `macOS`, and `ARM64`. Provide Xcode/Swift, Homebrew, and Git LFS. The shared `.github/actions/setup` action selects the current Node LTS, installs stable Rust via rustup, installs missing SwiftLint, pkg-config, and ffmpeg tools through Homebrew, and verifies prerequisites before building. Actions using Node 24 require runner 2.327.1 or newer; the initial remote run used 2.338.2. Both workflows use that runner with no GitHub-hosted fallback.
 
-The benchmark runs on every push, same-repository PR, and manual dispatch. It uses the six shared shape/motion fixtures, three measured runs and one warmup per engine, with concurrency one. These are small synthetic compositions, not anonymized Film Studio projects or a representative 1080p workload.
+The benchmark runs only on pushes. Golden regeneration remains a separate manual workflow. The benchmark uses the six shared shape/motion fixtures, three measured runs and one warmup per engine, with concurrency one. These are small synthetic compositions, not anonymized Film Studio projects or a representative 1080p workload.
 
 Each Remotion measurement launches a fresh Node worker that bundles the TSX, opens the pinned browser, and calls the real `renderMedia()` API. Each native measurement launches the CLI. Both encoders use H.264, CRF 18, the medium x264 preset and yuv420p. Both wall times include startup; browser installation happens during bootstrap. Videos are checked with ffprobe for codec, dimensions, fps and exact frame count, then ffmpeg SSIM (minimum 0.98). Only fixtures passing video parity enter the geometric-mean speedup. PNG parity is checked independently by the output workflow.
 
-Each same-repository PR gets one updated comment marked `<!-- motionswift-bench -->`. Push runs store results; successful `main` artifacts become PR baselines. Deltas are omitted when the physical runner/hardware, Node, browser, fixture sources, or render settings differ. The benchmark records failures and logs, and is informational for speed regressions unless `--fail-on-regression` is requested. A failed render or failed parity check returns nonzero.
+Push runs store results and update one comment marked `<!-- motionswift-bench -->` when an open same-repository PR matches the pushed branch and current commit. A PR opened after its push receives a comment on its next push. Successful `main` artifacts become branch baselines. Deltas are omitted when the physical runner/hardware, Node, browser, fixture sources, or render settings differ. The benchmark records failures and logs, and is informational for speed regressions unless `--fail-on-regression` is requested. A failed render or failed parity check returns nonzero.
 
 ```sh
 node tests/perf/bench.mjs --runs 1 --warmup 0

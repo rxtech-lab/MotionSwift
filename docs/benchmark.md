@@ -142,26 +142,26 @@ Markers: ✅/❌ for SSIM parity, ⚠️ on a speedup whose parity failed, 🔺 
 
 ## CI workflow: `benchmark.yml`
 
-**Triggers:** `pull_request`, `push` to `main`, and `workflow_dispatch`.
+**Triggers:** `push` only, on all branches. Pull-request and manual events do not start benchmark or test runs.
 **Permissions:** `contents: read`, `pull-requests: write`, `actions: read`.
-**Concurrency:** one run per PR. A new push cancels the previous run.
-**Runner:** `${{ vars.BENCH_RUNNER || 'macos-15' }}`. Set the repository variable to a self-hosted Apple Silicon label for stable numbers, since GitHub-hosted runners are noisy (±10–20%). The table always shows the machine, so results from different machines aren't compared by mistake.
+**Concurrency:** one run per branch. A new push cancels the previous run.
+**Runner:** `[self-hosted, macOS, ARM64]`. The table always shows the machine, so results from different machines aren't compared by mistake.
 
 Steps:
 
 | # | Step | Notes |
 |---|---|---|
-| 1 | Checkout, set up Node 22 | |
-| 2 | Install ffmpeg | Only if missing (`brew install ffmpeg`). |
-| 3 | Install the fixture project | `npm ci` and `npx remotion browser ensure` in `tests/compositions` (`working-directory`). Skipped until the project exists. |
-| 4 | Build native | `swift build -c release --product motionswift`. Skipped until `Package.swift` exists. |
-| 5 | Download baseline (PRs only) | `gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1`, then `gh run download <id> --name bench-results` into `$RUNNER_TEMP/baseline`. `continue-on-error`. |
+| 1 | Checkout, set up Node LTS and stable Rust | Shared `.github/actions/setup` action. |
+| 2 | Install missing native tools | Homebrew supplies SwiftLint, pkg-config, and ffmpeg/ffprobe when missing; verify all prerequisites. |
+| 3 | Install fixtures and pinned browser | `make bootstrap` installs `tests/` dependencies, the pinned Chrome, and the native archive. |
+| 4 | Build native | `make build`. |
+| 5 | Download baseline (branches other than main) | `gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1`, then `gh run download <id> --name bench-results` into a run-specific directory in `$RUNNER_TEMP`. `continue-on-error`. |
 | 6 | Run benchmark | `node tests/perf/bench.mjs --work-dir $RUNNER_TEMP/bench [--baseline …]` |
 | 7 | Job summary | `if: always()`: append `summary.md` to `$GITHUB_STEP_SUMMARY`. |
 | 8 | Upload artifact | `if: always()`: upload `tests/reports/bench/` as `bench-results` (30-day retention). `main` runs become the next baseline. |
-| 9 | Post or update the PR comment | `if: always()` on same-repo PRs. Find an existing comment containing the marker through `gh api repos/{repo}/issues/{pr}/comments`. PATCH it if found (`-F body=@summary.md`); otherwise run `gh pr comment --body-file`. One sticky comment per PR, never a new comment on every push. |
+| 9 | Post or update the PR comment | On non-cancelled branch runs, find an open same-repository PR associated with the pushed SHA and branch. Update the bot's marked comment or create it. Skip commenting if there is no matching current PR. |
 
-**Fork PRs** get a read-only token, so they get only the job summary and the artifact. If fork comments are needed later, add a separate `workflow_run` workflow that comments using the uploaded artifact.
+**Fork PR events** do not start these workflows. Golden regeneration remains a separate manual workflow.
 
 **Gating:** the benchmark is informational. It fails only if a render fails, until Phase 5. After Phase 5, `--fail-on-regression` is enabled and the job becomes a required check.
 

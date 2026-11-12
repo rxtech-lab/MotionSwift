@@ -1,44 +1,26 @@
 name: Output check
 on:
   push:
-  pull_request:
-  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: output-${{ github.event.pull_request.number || github.ref }}
+  group: output-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   test:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: tests/package-lock.json
-      - uses: actions/cache@v4
-        with:
-          path: .cache/chrome-for-testing
-          key: chrome-for-testing-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/browser.lock.json') }}
-      - name: Verify runner prerequisites
-        run: |
-          swift --version
-          swiftlint version
-          cargo --version
-          ffmpeg -version
-          ffprobe -version
+      - uses: ./.github/actions/setup
       - run: make bootstrap
       - run: make ci
       - name: Upload visual comparisons
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: visual-results
           path: tests/reports/
