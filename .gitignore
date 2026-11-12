@@ -21,3 +21,4 @@ xcuserdata/
 !.env.*.example
 *.log
 tests/compositions/real/local/
+tests/fixtures/test-film/local/

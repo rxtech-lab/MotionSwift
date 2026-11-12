@@ -79,6 +79,16 @@ public final class Canvas {
     }
   }
 
+  /// Renders SVG bytes through Skia's SVG DOM with the system font manager.
+  public func svg(_ data: Data, width: Double, height: Double) throws {
+    let data = try SVGImage.prepare(data)
+    let ok = data.withUnsafeBytes { bytes in
+      msk_svg(surface, bytes.bindMemory(to: UInt8.self).baseAddress, data.count,
+        Float(width), Float(height))
+    }
+    guard ok else { throw MotionError("Cannot decode SVG image") }
+  }
+
   /// Unpremultiplied RGBA8888 pixels, rows tightly packed. GPU work is flushed first.
   public func rgba() throws -> Data {
     var data = Data(count: width * height * 4)

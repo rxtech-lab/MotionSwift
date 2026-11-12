@@ -15,6 +15,7 @@ void msk_scale(MSKSurface s, float x, float y);
 void msk_clip(MSKSurface s, float w, float h);
 void msk_rect(MSKSurface s, float x, float y, float w, float h, float radius, uint32_t color);
 bool msk_text(MSKSurface s, const char* text, const char* family, float size, uint32_t color, float x, float y);
+bool msk_svg(MSKSurface s, const uint8_t* bytes, size_t len, float w, float h);
 /// Unpremultiplied RGBA8888, tightly packed; len must equal width * height * 4.
 bool msk_read_rgba(MSKSurface s, uint8_t* dst, size_t len);
 /// GPU resolve to a borrowed id<MTLTexture> (BGRA8, same dimensions), synchronized on return.

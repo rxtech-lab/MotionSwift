@@ -1,10 +1,11 @@
 {
   "note": "Anonymized census of real Film Studio compositions. Raw sources stay in the gitignored local/ folder because they contain private user content.",
-  "generatedAt": "2026-11-12T05:16:47.403Z",
-  "commit": "6911770d991c837c1bb56bf6f5ab911d1e31a597",
-  "nativeBinarySha256": "30f10a9317f1eff1400a0cee4d31c798e7e383e26e83426302001d50d7df329e",
+  "generatedAt": "2026-11-12T08:16:52.747Z",
+  "commit": "55bad317f96b0affc62b04d4a3e822e8965593b3",
+  "nativeBinarySha256": "f9079a524b209cbe73646e7a29e47abafa1d5e3c9c1cb4d5e00160c46e93381f",
   "command": "node tests/tools/real-fixtures.mjs check",
   "supported": [],
+  "stillPassed": [],
   "blockersByFixtureCount": {
     "JSX element: <svg>": 11,
     "CSS property: border": 11,
@@ -114,6 +115,15 @@
           "CSS property: mixBlendMode": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: line is not implemented": 4,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: path is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -148,6 +158,22 @@
           "JSX element: <rect>": 2
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: g is not implemented": 10,
+          "ms/unsupported-element: stop is not implemented": 6,
+          "ms/unsupported-element: polygon is not implemented": 5,
+          "ms/unsupported-element: circle is not implemented": 3,
+          "ms/unsupported-element: text is not implemented": 2,
+          "ms/unsupported-element: rect is not implemented": 1,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: defs is not implemented": 1,
+          "ms/unsupported-element: linearGradient is not implemented": 1,
+          "ms/unsupported-element: radialGradient is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -180,6 +206,13 @@
           "CSS property: boxShadow": 1,
           "CSS property: boxSizing": 1,
           "CSS property: textAlign": 1
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: br is not implemented": 1
         }
       },
       "supported": false
@@ -227,6 +260,19 @@
           "CSS property: borderTop": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: path is not implemented": 36,
+          "ms/unsupported-element: circle is not implemented": 8,
+          "ms/unsupported-element: rect is not implemented": 4,
+          "ms/unsupported-element: svg is not implemented": 4,
+          "ms/unsupported-css-value: Only flex/none is supported": 3,
+          "ms/unsupported-element: g is not implemented": 1,
+          "ms/unsupported-element: line is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -263,6 +309,19 @@
           "CSS value: transformOrigin top left": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: svg is not implemented": 2,
+          "ms/unsupported-css-value: Only flex/none is supported": 1,
+          "ms/unsupported-element: polyline is not implemented": 1,
+          "ms/unsupported-element: br is not implemented": 1,
+          "ms/unsupported-element: path is not implemented": 1,
+          "ms/unsupported-element: line is not implemented": 1,
+          "ms/unsupported-element: circle is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -292,6 +351,13 @@
           "CSS property: lineHeight": 1,
           "CSS property: border": 1,
           "CSS property: boxShadow": 1
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "runtime",
+        "reasons": {
+          "runtime: JavaScript: TypeError: easing is not a function. (In 'easing(x * 2)', 'easing' is undefined)": 1
         }
       },
       "supported": false
@@ -348,6 +414,26 @@
           "CSS value: display inline-block": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: svg is not implemented": 14,
+          "ms/unsupported-element: circle is not implemented": 13,
+          "ms/unsupported-element: path is not implemented": 12,
+          "ms/unsupported-element: rect is not implemented": 9,
+          "ms/unsupported-element: stop is not implemented": 7,
+          "ms/unsupported-element: g is not implemented": 6,
+          "ms/unsupported-element: defs is not implemented": 3,
+          "ms/unsupported-element: linearGradient is not implemented": 3,
+          "ms/unsupported-element: polygon is not implemented": 3,
+          "ms/unsupported-element: line is not implemented": 2,
+          "ms/unsupported-element: clipPath is not implemented": 1,
+          "ms/unsupported-element: text is not implemented": 1,
+          "ms/unsupported-css-value: Only flex/none is supported": 1,
+          "ms/unsupported-element: ellipse is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -389,6 +475,14 @@
           "CSS value: transformOrigin center center": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: h1 is not implemented": 3,
+          "ms/unsupported-css-value: Only flex/none is supported": 2
+        }
+      },
       "supported": false
     },
     {
@@ -425,6 +519,16 @@
           "CSS property: textShadow": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: filter is not implemented": 1,
+          "ms/unsupported-element: feTurbulence is not implemented": 1,
+          "ms/unsupported-element: rect is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -458,6 +562,23 @@
           "JSX element: <defs>": 3,
           "JSX element: <linearGradient>": 3,
           "JSX element: <clipPath>": 3
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: g is not implemented": 16,
+          "ms/unsupported-element: circle is not implemented": 12,
+          "ms/unsupported-element: rect is not implemented": 12,
+          "ms/unsupported-element: path is not implemented": 11,
+          "ms/unsupported-element: stop is not implemented": 3,
+          "ms/unsupported-element: text is not implemented": 3,
+          "ms/unsupported-element: ellipse is not implemented": 2,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: defs is not implemented": 1,
+          "ms/unsupported-element: linearGradient is not implemented": 1,
+          "ms/unsupported-element: clipPath is not implemented": 1
         }
       },
       "supported": false
@@ -528,6 +649,25 @@
           "CSS value: display inline-flex": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: svg is not implemented": 16,
+          "ms/unsupported-element: rect is not implemented": 15,
+          "ms/unsupported-element: circle is not implemented": 13,
+          "ms/unsupported-css-value: Only flex/none is supported": 13,
+          "ms/unsupported-element: g is not implemented": 11,
+          "ms/unsupported-element: line is not implemented": 9,
+          "ms/unsupported-element: path is not implemented": 9,
+          "ms/unsupported-element: text is not implemented": 4,
+          "ms/unsupported-element: stop is not implemented": 2,
+          "ms/unsupported-element: ellipse is not implemented": 2,
+          "ms/unsupported-element: polyline is not implemented": 1,
+          "ms/unsupported-element: defs is not implemented": 1,
+          "ms/unsupported-element: linearGradient is not implemented": 1
+        }
+      },
       "supported": false
     },
     {
@@ -560,6 +700,18 @@
           "CSS property: fontWeight": 2,
           "JSX element: <circle>": 2,
           "CSS value: transformOrigin top left": 1
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: rect is not implemented": 6,
+          "ms/unsupported-element: line is not implemented": 4,
+          "ms/unsupported-element: g is not implemented": 2,
+          "ms/unsupported-element: polyline is not implemented": 1,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: circle is not implemented": 1
         }
       },
       "supported": false
@@ -598,6 +750,22 @@
           "remotion API: staticFile": 1,
           "Easing.back": 1,
           "other type error": 1
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: g is not implemented": 15,
+          "ms/unsupported-element: circle is not implemented": 13,
+          "ms/unsupported-element: path is not implemented": 10,
+          "ms/unsupported-element: rect is not implemented": 8,
+          "ms/unsupported-element: ellipse is not implemented": 7,
+          "ms/unsupported-element: stop is not implemented": 5,
+          "ms/unsupported-element: text is not implemented": 3,
+          "ms/unsupported-element: linearGradient is not implemented": 2,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: defs is not implemented": 1
         }
       },
       "supported": false
@@ -639,6 +807,13 @@
           "CSS property: border": 1
         }
       },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-css-value: Only flex/none is supported": 4
+        }
+      },
       "supported": false
     },
     {
@@ -678,6 +853,24 @@
           "JSX element: <line>": 2,
           "CSS value: transformOrigin 50% 100%": 1,
           "CSS property: borderLeft": 1
+        }
+      },
+      "still": {
+        "exitCode": 1,
+        "failedAt": "diagnostics",
+        "reasons": {
+          "ms/unsupported-element: g is not implemented": 29,
+          "ms/unsupported-element: circle is not implemented": 20,
+          "ms/unsupported-element: path is not implemented": 16,
+          "ms/unsupported-element: rect is not implemented": 14,
+          "ms/unsupported-element: ellipse is not implemented": 11,
+          "ms/unsupported-element: stop is not implemented": 11,
+          "ms/unsupported-element: radialGradient is not implemented": 3,
+          "ms/unsupported-element: defs is not implemented": 2,
+          "ms/unsupported-element: clipPath is not implemented": 1,
+          "ms/unsupported-element: linearGradient is not implemented": 1,
+          "ms/unsupported-element: svg is not implemented": 1,
+          "ms/unsupported-element: line is not implemented": 1
         }
       },
       "supported": false

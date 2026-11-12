@@ -72,14 +72,17 @@ public struct RenderNode: Codable, Sendable {
   public let type: String
   public let style: [String: JSONValue]
   public let text: String?
+  public let src: String?
   public let children: [RenderNode]
 
   public init(
-    type: String, style: [String: JSONValue], text: String? = nil, children: [RenderNode] = []
+    type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil,
+    children: [RenderNode] = []
   ) {
     self.type = type
     self.style = style
     self.text = text
+    self.src = src
     self.children = children
   }
 }

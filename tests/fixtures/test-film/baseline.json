@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "remotionVersion": "4.0.542",
+  "browser": {
+    "version": "157.0.8103.39",
+    "mode": "chrome-for-testing",
+    "platform": "mac-arm64"
+  },
+  "platform": "darwin",
+  "arch": "arm64",
+  "backend": "cpu",
+  "note": "Reviewed normal-runner native CPU and pinned software Chrome snapshots. Native hashes are exact. Chrome allows at most 0.3% changed pixels with a maximum one-unit channel delta. No automatic baseline updates.",
+  "composition": {
+    "id": "Main",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationInFrames": 2700
+  },
+  "files": [
+    {
+      "name": "Composition.tsx",
+      "sha256": "c0c3858aea6e63afc8e2ca53869b355b2b6c8667c075c8eeac556f4e35a530a4"
+    },
+    {
+      "name": "Root.tsx",
+      "sha256": "48deb9c1c98ac6b185a328d0024bde86b4e43003cec25d358ce7cf24fd7e2115"
+    },
+    {
+      "name": "index.ts",
+      "sha256": "957e481dd33a29b4a55ae0e95dbf763b7e48c37c427ca4bd1275faf34bc07a74"
+    }
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "nativeRGBA": "195651bcd14f345fef1845d422be6a6b1b524f315758b724d816cb98e4cf068c",
+      "remotionRGBA": "6f07a886ed68af8904c48ff5e6cb9f7ef000db2c010e7fe301f014f9f55fd809",
+      "remotionWebP": "96302e9f1896810661735292e4387a86efadcd3eaec817efd14a3a3ad20c416b"
+    },
+    {
+      "frame": 18,
+      "nativeRGBA": "7a22658f46f0af8f9169ddde57b74497d0c34a0901a882a156fd29740494c38a",
+      "remotionRGBA": "62d5b086f439ffb5be9b3c5ce054c0d7be1227af279a19c5c1ad229530470e95",
+      "remotionWebP": "0bc903cc3801f33a4e5abe08d2e98d726b950ad861e5c8fa04f20dc7ae063052"
+    },
+    {
+      "frame": 60,
+      "nativeRGBA": "8d4063fea308326ccfd3bc748ba07e046f5c9e1524ed558c6dca005adfe84510",
+      "remotionRGBA": "33173b1ad41718d4443b203ead4837b264b4df809d5d967b90a3e03e9dab8912",
+      "remotionWebP": "fae5dcc48f190be95198c18b6d1322a5dd66d97211ecea87e45cd90e1e8a9d03"
+    },
+    {
+      "frame": 318,
+      "nativeRGBA": "b97d9aa3371e7322d03b3fe7a68eaa3daa05b356edefac0f7f0a13891dff5a39",
+      "remotionRGBA": "0a14af0ad88ba1bf143b83fcc459f26aeea6f6a8a4de97aef26e30cff1abf459",
+      "remotionWebP": "39fda7c140ab738c1840fa0483a114f659c91843517830387bfe119fa34374e6"
+    },
+    {
+      "frame": 360,
+      "nativeRGBA": "c2c64cf5746d87f478af24fd0910dbccfa64c53acfb811f7e199a484a701d044",
+      "remotionRGBA": "af18ac9cb77a798b44962d62e95243b4e89be151407c98c3536174c5f14a6dac",
+      "remotionWebP": "e99f1ce6acd62812c45e6bd2ec29f98aa1707d0da88ce70a97d3c958d212fbd5"
+    },
+    {
+      "frame": 678,
+      "nativeRGBA": "540a932e31464ba8dd1d2b2d103440ab636e563c6ed769387d3cff1191388ac3",
+      "remotionRGBA": "b0a94e5031c04559abbaaa26d1bcd87cc5280740fa6772a936d8aa73112e4c62",
+      "remotionWebP": "d2730b0769a92653f5b97a2f86f0910b7dfbd6df51a94b239a5e15e53e6cad07"
+    },
+    {
+      "frame": 720,
+      "nativeRGBA": "fbee8fe46d2f187958cf67208693df90ab5f79c096e593d5fc7794277031a7c5",
+      "remotionRGBA": "de6507cb0d71b35424adad5eb7b08fb08b290339164c67397180928905eb8bc9",
+      "remotionWebP": "b8cf27a281b796f68ebeae68fda38a2be432602c7bcc6c949c536891a1af40ac"
+    },
+    {
+      "frame": 1068,
+      "nativeRGBA": "1ab75753406c0468a56aea0d6fc56188c784555c4d3400fad06b7445f076964b",
+      "remotionRGBA": "1fd6d60c0932c64daa75f6119d2e3471653605aa5cf6935a9b70cd35094cb389",
+      "remotionWebP": "849f89583b15fb82ef3d8c1b644f85242c96b26cad2b84a82a88138c040b43b5"
+    },
+    {
+      "frame": 1110,
+      "nativeRGBA": "dd98e7c577b90b353d382a05ec88752e4daaf96c738882ef0f49db6146d4997f",
+      "remotionRGBA": "f78e5ea547560844240f45dca6aa21c02332644b851ce91e719f90fac8095d14",
+      "remotionWebP": "88f4654d8de8ec72c85ddc146b762cf6b34385c407744b1db7ac5d8f032d125e"
+    },
+    {
+      "frame": 1442,
+      "nativeRGBA": "2be9865e7dda6267f8c061da27ddadd7804516432d6e339f7b25cc56697fd1de",
+      "remotionRGBA": "0fc5ca1c048cfd7b0a016050e8bdcd0fc7cce6df00924ae8f32b2d83397c9640",
+      "remotionWebP": "72241eaae43782a3b67a467653249161da98682954cb5cf2c8f14ae280f24c5c"
+    },
+    {
+      "frame": 1484,
+      "nativeRGBA": "01b1f6eef47e3bb9ed2ebab5fa75a0d2ec59e8ad41fbf1c9b2c00fa0b54b5c75",
+      "remotionRGBA": "8c71327089779041a5beaf1d1c09bb4a52cd45d81ac9f78aa960d42b6c3bb4ab",
+      "remotionWebP": "15b3260e9371876a64421e1b5ae75c15dc3b42f957dc530a58c376326ecaaea6"
+    },
+    {
+      "frame": 1800,
+      "nativeRGBA": "a1d093bf0479106df99dcf39a93e322f8564009478e7c11c37148902fe8881c3",
+      "remotionRGBA": "04a27ffd14936f4c6e295fd11b33f06cfd4325f6bcd323ec2fa668c33927b2f0",
+      "remotionWebP": "5e1a4f9409ee703576d05438335fa1b1e3f3bd28d05384acb6b26c78b00c8446"
+    },
+    {
+      "frame": 2100,
+      "nativeRGBA": "c6e4cc6f270185156312ccc276727f312ca1d5b16fc2dde4bc55316646e6a465",
+      "remotionRGBA": "cf93524f1309ce52760ab7fd80b297165da54acc16da6d2c9e5d3ef1eb56d855",
+      "remotionWebP": "d9c8d10b7ac5317e05bd41205f6856157d5c13351e36db0b03bada558247e05c"
+    },
+    {
+      "frame": 2400,
+      "nativeRGBA": "f7b44d3a5790dadebe0ab10f58c79d731d00b80bd238dfb2df0088876b146d5c",
+      "remotionRGBA": "57591fcd67d13b4fd60f83d0f3f1951eadb0665fd5ea125999c1369a691fbbaa",
+      "remotionWebP": "d639253c7edb05e6bfae900c497a584d8057b8ecec4fff0246fa520579a37bca"
+    },
+    {
+      "frame": 2592,
+      "nativeRGBA": "8bf10276cd84e420cde9a65c063eed86226c29d7e062df634056841f8467e757",
+      "remotionRGBA": "60dffbfb5f2b9fc748fd9fc1dbfa669782681bbe6bb91c2d4ddb1b37f3ffe6bf",
+      "remotionWebP": "6ae6e67e31ff5f3a8063f5d2fa45eecf938a1953de63cb3d1431ba3e35512eca"
+    },
+    {
+      "frame": 2634,
+      "nativeRGBA": "34d8cab5ba113431640dfd46b55920b647d863134c983d3845094869d2170390",
+      "remotionRGBA": "ec24b15c3f001904cf4b025e7e213f6e9bd4aaa20fc90090039c822b65a25fdf",
+      "remotionWebP": "e04a6b487bc679c96a41174b6a128542cdc684a590dc99c53d837e1196a4164a"
+    }
+  ],
+  "chromiumOptions": {
+    "gl": "swangle"
+  },
+  "osRelease": "27.2.0"
+}

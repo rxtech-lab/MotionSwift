@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "remotionVersion": "4.0.542",
+  "browser": {
+    "version": "157.0.8103.39",
+    "mode": "chrome-for-testing",
+    "platform": "mac-arm64"
+  },
+  "platform": "darwin",
+  "arch": "arm64",
+  "backend": "cpu",
+  "note": "Reviewed macOS 27.0 CI font/raster baseline. Native snapshots remain exact and repeatable; Chrome retains the existing 0.3% pixel and one-unit channel bounds.",
+  "composition": {
+    "id": "Main",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationInFrames": 2700
+  },
+  "files": [
+    {
+      "name": "Composition.tsx",
+      "sha256": "c0c3858aea6e63afc8e2ca53869b355b2b6c8667c075c8eeac556f4e35a530a4"
+    },
+    {
+      "name": "Root.tsx",
+      "sha256": "48deb9c1c98ac6b185a328d0024bde86b4e43003cec25d358ce7cf24fd7e2115"
+    },
+    {
+      "name": "index.ts",
+      "sha256": "957e481dd33a29b4a55ae0e95dbf763b7e48c37c427ca4bd1275faf34bc07a74"
+    }
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "nativeRGBA": "195651bcd14f345fef1845d422be6a6b1b524f315758b724d816cb98e4cf068c",
+      "remotionRGBA": "6f07a886ed68af8904c48ff5e6cb9f7ef000db2c010e7fe301f014f9f55fd809",
+      "remotionWebP": "96302e9f1896810661735292e4387a86efadcd3eaec817efd14a3a3ad20c416b"
+    },
+    {
+      "frame": 18,
+      "nativeRGBA": "f6cf8a87eec9c57216bf5aaea293df425501e40fee86373653115bde77f3c913",
+      "remotionRGBA": "03ddec2df6b5fad55cdcfb6885bb48967b77fa77ca3337ac066eeb185bbf060a",
+      "remotionWebP": "b305d350c94b3353e77d55ea1036b0ecd01885634bb05f2ac76512c20a779645"
+    },
+    {
+      "frame": 60,
+      "nativeRGBA": "3ac36bf6deb8cd682864b89e721cbe45858e1bd1c6a80745caf11a130b112c4d",
+      "remotionRGBA": "be7b815761f7099ff076df32dfe32053e04d4c2a0931b67e0b6b77565ff9b9db",
+      "remotionWebP": "7fd97d3adad85d705ab49c1d7cda0312cc605f0e54da79d0abf3d02a491751c2"
+    },
+    {
+      "frame": 318,
+      "nativeRGBA": "496670044046c12b356f25de6995bae5ce2b37a3f4cc687b239f8f6cb50a861a",
+      "remotionRGBA": "e0faa8405092b92d7cef46adf93a2bb9af9436b7e2d24eebc30b0c69d8f88000",
+      "remotionWebP": "1693960bfd987125d15c587b08bb51c41fa49dfee6fed3fa0a5f1c24146056af"
+    },
+    {
+      "frame": 360,
+      "nativeRGBA": "b8296ae1f085d34ecf71bd4d4993dd50b328ab0ff973d997681eb46a629bb056",
+      "remotionRGBA": "1ec5625477906ca2f479cab4683d5d6107fcee628ff4b3d87609cd96ee6fdb8a",
+      "remotionWebP": "1d65c252275f2c3a73f3e44a19343ddd1cabd88327a6c8533c9994914338d408"
+    },
+    {
+      "frame": 678,
+      "nativeRGBA": "65d6c5c05b8131e5cec45ecb1194828f9066d06692fd42d07c2cf5b3988795b7",
+      "remotionRGBA": "4aa7712d3d57653801005f2d2a283e43abd4a037f55ed269aaf0d78466c54cf7",
+      "remotionWebP": "c76acf0e379249c01539b0159c097f482f06a7ce11ff33ae73172a429be2bd52"
+    },
+    {
+      "frame": 720,
+      "nativeRGBA": "38be3b37f8890276e3e11f84bd9868f17daf10bd7cc079fba913485e4b8aa318",
+      "remotionRGBA": "0f4165365b964c275e6924f5abcdc451e58fdcd7b222dde93e046b150b513507",
+      "remotionWebP": "6ab8d9a7b8228b14141a0c3917fedc05e3477b56df1047f7b0be741e7449129d"
+    },
+    {
+      "frame": 1068,
+      "nativeRGBA": "33194e69835f012857d09c39c19f74ca3e2407db681f5ef23268ff41c6d61552",
+      "remotionRGBA": "616e7e5d896f1f65e10fd585ae766f89907b6636f7d47de4cd5dfb76f454bdaf",
+      "remotionWebP": "b41e584b14a16babe6a473f24a87582e39fe8a7033f1bd305f9d8f2cff1449a2"
+    },
+    {
+      "frame": 1110,
+      "nativeRGBA": "dd98e7c577b90b353d382a05ec88752e4daaf96c738882ef0f49db6146d4997f",
+      "remotionRGBA": "f78e5ea547560844240f45dca6aa21c02332644b851ce91e719f90fac8095d14",
+      "remotionWebP": "88f4654d8de8ec72c85ddc146b762cf6b34385c407744b1db7ac5d8f032d125e"
+    },
+    {
+      "frame": 1442,
+      "nativeRGBA": "102a32d7891f874bf827a345a79a6746bc2fa48508c626bd9ca09a05a616f15e",
+      "remotionRGBA": "644eb74259433cd34940c936eb5b8cb67e46f8f5245d8faf46f4c66b40c47934",
+      "remotionWebP": "c02ea3ee61db8b093bf4423981dca543a4e780820d57587a64574079967132a5"
+    },
+    {
+      "frame": 1484,
+      "nativeRGBA": "81c29efa725051c5e170d6d55af33ba56b233f53f03d52b7e8bb72adf4526fd3",
+      "remotionRGBA": "734b84dde125f7eb01eb44bf4600ba0b5a5d9bf2072f02b5e58f86770dbd99a8",
+      "remotionWebP": "f233ba8b7a2c09883c80088f10f7e5694a1040c8f0b89ff818350c9bd7d76c9b"
+    },
+    {
+      "frame": 1800,
+      "nativeRGBA": "77e073d452521120537e983cf5ea1f78070da1aa88b8eac4e79313385ee8feb0",
+      "remotionRGBA": "91ce5fd08794f7db916dc30f23f6952591a60f4c9cc330500a0282bb24724f27",
+      "remotionWebP": "70280f92ea87f2206b916f5fb0dc97c0acda99757516fa991091637a069dcf67"
+    },
+    {
+      "frame": 2100,
+      "nativeRGBA": "8ea01e2a7c752b83d96b83507945d227e0751cc1311ab05b7d05863223ba6484",
+      "remotionRGBA": "52a19d60a8cce3f67fd2b42c003dff70c7013ca283a8fd60967bd54a979e58a7",
+      "remotionWebP": "06e3aa377422fa54a018774d694aa6438918d2c1503b2d86683f93f086567eb3"
+    },
+    {
+      "frame": 2400,
+      "nativeRGBA": "28591f1316312949f5268e9effbde8128f50b64e51fedf03111d0f28a78870e7",
+      "remotionRGBA": "adc7a35d8cfa870b2ea4b56dc507763613324c8beeb400c32cbce9703624aee1",
+      "remotionWebP": "9126b8405576694a70b7e92aa9534f7dc8a2866a0a3897c56cffdd70ce2f3690"
+    },
+    {
+      "frame": 2592,
+      "nativeRGBA": "16f6d276b414bd7b43de095ffe46677fc9d0d60715cdd51e48b84605e5742f99",
+      "remotionRGBA": "ff4c6d4668836920c08edcb697920c67a763db712bf474fb4181f296df9757c1",
+      "remotionWebP": "c7924369b5b357bae76e0ca4ffe48fb6dc831e584b490441d1dbbe0e474134fe"
+    },
+    {
+      "frame": 2634,
+      "nativeRGBA": "0848a8223ced5d86b82d9a8bc325112c1854df59f01a752374afede533b93257",
+      "remotionRGBA": "47929a6bc6aecf4776b2b3ede0cacab49f0826623cb43aa6fdd7cb17c8601469",
+      "remotionWebP": "d6397ce138a95aff8a9d6fd5f6435d6f01724411ff00efe6cbabaf63e6b80ec0"
+    }
+  ],
+  "chromiumOptions": {
+    "gl": "swangle"
+  },
+  "osRelease": "27.0.0",
+  "review": {
+    "workflowRun": "https://github.com/rxtech-lab/MotionSwift/actions/runs/43195761983",
+    "commit": "ae2ddc9d13c5e47854ceb634ffc8cc79dc72235a",
+    "runner": "runner-mac-mini_0",
+    "macOS": "27.0 (26A428)",
+    "nativeBinarySha256": "3f344a0239342874e724fe6bea1411cd5ebc7ec1b2c7962930d4bbd3cae63761",
+    "capturedFramePairs": 73,
+    "retainedFramePairs": 16,
+    "trim": "Duration-only trim to frames 0-2699; retained sample pixels are unchanged."
+  }
+}

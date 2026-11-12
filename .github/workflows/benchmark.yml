@@ -10,7 +10,7 @@ concurrency:
 jobs:
   benchmark:
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
       actions: read
@@ -45,7 +45,10 @@ jobs:
           baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/long/results.json"
           if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
           node tests/perf/bench.mjs --allow-unavailable-hardware --config tests/perf/bench.long.config.json --out tests/reports/bench/long --work-dir "$RUNNER_TEMP" "${args[@]}"
-      - name: Combine short and long benchmark tables
+      - name: Benchmark actual Test Film project (full clip)
+        if: ${{ !cancelled() }}
+        run: node tests/perf/test-film.mjs --allow-unavailable-hardware --work-dir "$RUNNER_TEMP"
+      - name: Combine synthetic and Test Film benchmark tables
         if: always()
         run: node tests/perf/combine-summaries.mjs
       - name: Report setup or build failures
