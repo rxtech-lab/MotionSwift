@@ -69,7 +69,7 @@ globalThis.__ms_start = function() {
     if(comp.calculateMetadata) throw Error('calculateMetadata is not supported in Phase 0');
     const element=React.createElement(shim.__Config.Provider,{value:comp},
       React.createElement(shim.__Frame.Provider,{value:frame},React.createElement(comp.component,{...comp.defaultProps,...JSON.parse(props)})));
-    const serialize = node => ({type:node.type,style:node.props.style||{},text:node.text||null,src:node.props.src||null,children:node.children.map(serialize)});
+    const serialize = node => ({type:node.type,style:node.props.style||{},text:node.text||null,src:node.props.src||null,source:node.props['data-ms-src']||null,children:node.children.map(serialize)});
     return JSON.stringify({type:'div',style:{},text:null,children:render(element).children.map(serialize)});
   };
 };

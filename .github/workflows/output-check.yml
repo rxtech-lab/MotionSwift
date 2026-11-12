@@ -9,7 +9,7 @@ concurrency:
 jobs:
   test:
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,6 +20,8 @@ jobs:
       - name: Probe hardware encoder access
         run: node tests/tools/hardware-capabilities.mjs
       - run: make ci
+      - name: Build MotionStudio for iOS and iPadOS (simulator + device, Debug + Release)
+        run: make ios
       - name: Check real Test Film visual regressions
         shell: bash
         run: |

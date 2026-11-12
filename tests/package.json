@@ -20,6 +20,7 @@
     "@babel/parser": "7.24.1",
     "@types/react": "18.3.27",
     "esbuild": "0.28.1",
+    "sucrase": "3.35.1",
     "typescript": "5.9.3"
   }
 }

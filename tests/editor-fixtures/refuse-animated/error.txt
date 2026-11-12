@@ -1,0 +1,1 @@
+refused: left is animated; edit its keyframes on the timeline

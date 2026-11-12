@@ -24,6 +24,7 @@ public enum VideoEncoder: String, Sendable {
   }
 }
 
+#if os(macOS)
 /// Streams unpremultiplied RGBA8888 frames into ffmpeg through a pipe, so rendered
 /// frames never round-trip through PNG files. Write frames in presentation order.
 /// Hardware encoding still reads CPU pixels; this is not a zero-copy Metal encoder.
@@ -83,3 +84,4 @@ public final class VideoStream {
     process.waitUntilExit()
   }
 }
+#endif

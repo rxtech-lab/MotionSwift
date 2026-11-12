@@ -14,6 +14,10 @@ public struct MotionFrame: @unchecked Sendable {
   public let layout: [LayoutBox]
   /// Evaluate + layout + paint + readback time in milliseconds.
   public let renderMs: Double
+  /// The reconciled render tree, before preview overrides. The editor reads styles from it.
+  public let tree: RenderNode
+  /// Whether preview overrides were applied (such frames are never cached).
+  public let overridden: Bool
 
   var byteCount: Int { image.bytesPerRow * image.height }
 }
@@ -44,8 +48,11 @@ final class FrameRenderWorker: Sendable {
 
   /// Queues `frame`. With `coalesces`, any earlier coalescing request that has not started is
   /// dropped without calling its completion.
-  func request(_ frame: Int, coalesces: Bool, completion: @escaping Completion) {
-    queue.push(JobQueue.Job(frame: frame, coalesces: coalesces, completion: completion))
+  func request(
+    _ frame: Int, overrides: [String: [String: JSONValue]] = [:], coalesces: Bool,
+    completion: @escaping Completion
+  ) {
+    queue.push(JobQueue.Job(frame: frame, overrides: overrides, coalesces: coalesces, completion: completion))
   }
 
   private static func run(
@@ -62,16 +69,26 @@ final class FrameRenderWorker: Sendable {
       queue.fail(error)
       return
     }
+    // Override frames reuse the last evaluated tree: gestures re-layout and re-paint only.
+    var lastTree: (frame: Int, tree: RenderNode)?
     while let job = queue.next() {
       let result = autoreleasepool {
         Result { () throws -> MotionFrame in
           let begin = DispatchTime.now().uptimeNanoseconds
-          let tree = try runtime.frame(composition: composition, number: job.frame, props: props)
-          let layout = try renderer.draw(tree, composition: composition)
+          let tree: RenderNode
+          if let lastTree, lastTree.frame == job.frame {
+            tree = lastTree.tree
+          } else {
+            tree = try runtime.frame(composition: composition, number: job.frame, props: props)
+            lastTree = (job.frame, tree)
+          }
+          let layout = try renderer.draw(tree.applying(job.overrides), composition: composition)
           let image = try makeImage(
             try renderer.pixels(), width: renderer.pixelWidth, height: renderer.pixelHeight)
           let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
-          return MotionFrame(frame: job.frame, image: image, layout: layout, renderMs: elapsed)
+          return MotionFrame(
+            frame: job.frame, image: image, layout: layout, renderMs: elapsed, tree: tree,
+            overridden: !job.overrides.isEmpty)
         }
       }
       job.completion(result)
@@ -96,6 +113,7 @@ final class FrameRenderWorker: Sendable {
 private final class JobQueue: @unchecked Sendable {
   struct Job {
     let frame: Int
+    let overrides: [String: [String: JSONValue]]
     let coalesces: Bool
     let completion: FrameRenderWorker.Completion
   }

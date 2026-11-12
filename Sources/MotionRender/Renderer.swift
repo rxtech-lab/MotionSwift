@@ -3,12 +3,24 @@ import MotionCore
 import MotionLayout
 import SkiaKit
 
-public struct LayoutBox: Codable, Sendable {
+public struct LayoutBox: Codable, Sendable, Equatable {
+  /// Tree path of the node, for example `0.1.2`.
   public let id: String
   public let x: Double
   public let y: Double
   public let width: Double
   public let height: Double
+  /// Editor source stamp of the node, when the bundle was compiled with stamps.
+  public var source: String?
+
+  public init(id: String, x: Double, y: Double, width: Double, height: Double, source: String? = nil) {
+    self.id = id
+    self.x = x
+    self.y = y
+    self.width = width
+    self.height = height
+    self.source = source
+  }
 }
 
 /// Strict Phase 0 box painter. Unsupported styles fail instead of silently drawing incorrect output.
@@ -121,7 +133,7 @@ public final class Renderer {
     }
     let style = try Style(node.style)
     if style.string("display") == "none" { return }
-    boxes.append(LayoutBox(id: id, x: origin.0, y: origin.1, width: width, height: height))
+    boxes.append(LayoutBox(id: id, x: origin.0, y: origin.1, width: width, height: height, source: node.source))
     let opacity = try style.length("opacity", relativeTo: 1, fallback: 1)
     guard (0...1).contains(opacity) else { throw MotionError("Opacity must be in 0...1") }
     canvas.save(opacity: opacity)
