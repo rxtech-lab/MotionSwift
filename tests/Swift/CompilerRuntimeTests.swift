@@ -42,6 +42,23 @@ private var repository: URL {
   }
 }
 
+@Test func sustainedBenchmarkCompilesAndEvaluatesLastFrame() throws {
+  struct BenchmarkConfiguration: Decodable {
+    let project: String
+    let entryPoint: String
+  }
+  let configURL = repository.appendingPathComponent("tests/perf/bench.long.config.json")
+  let config = try JSONDecoder().decode(BenchmarkConfiguration.self, from: Data(contentsOf: configURL))
+  let project = configURL.deletingLastPathComponent().appendingPathComponent(config.project).standardizedFileURL
+  let runtime = try Runtime(bundle: Compiler().compile(project: project, entry: config.entryPoint))
+  let compositions = try runtime.compositions()
+  #expect(Set(compositions.map(\.id)) == ["Flex", "Layers", "LoopingTimed"])
+  for composition in compositions {
+    #expect(composition.durationInFrames == 300)
+    _ = try runtime.frame(composition: composition, number: 299)
+  }
+}
+
 @Test func javaScriptCoreMotionMatchesRemotionTrace() throws {
   struct Sample: Decodable {
     let frame: Int
