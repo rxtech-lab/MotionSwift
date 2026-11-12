@@ -42,7 +42,7 @@ Following the app UI guidelines:
 
 ## 1. Source stamping (compile time)
 
-The source-stamp transform in `MotionCompiler` (swc, so it also runs on iOS; see [typescript-and-packages.md](typescript-and-packages.md)) rewrites every **host** JSX element:
+The planned source-stamp transform in `MotionCompiler` (see [typescript-and-packages.md](typescript-and-packages.md); iOS integration remains unimplemented) rewrites every **host** JSX element:
 
 ```tsx
 <div style={{opacity}}>Hello</div>

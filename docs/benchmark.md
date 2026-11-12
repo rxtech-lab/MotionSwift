@@ -2,6 +2,16 @@
 
 > The Phase 0 benchmark is implemented. See [the current contract](current-implementation.md#benchmark-and-runner-setup) for the active fixtures, exact runner labels, browser pin, API worker, and limitations. The extended CLI/output schema below remains the target.
 
+## Memory measurement
+
+See the [local memory snapshot](benchmarks/2026-11-12-memory.md) for measured 30- and 300-frame peaks across all configured engines and tiers.
+
+Each render samples the renderer's process tree with `ps` approximately every 100 ms. The sum of resident set sizes (RSS) at each snapshot includes the CLI or Node driver and its compiler, Chrome, and FFmpeg descendants. `results.json` records `settings.memory`, each engine's `memory.runs` (peak RSS in bytes, sample count, maximum observed process count, and availability/errors), and `memory.peakRssBytes` (the maximum over measured runs). The Markdown summary includes a peak-memory table in MiB. Warmups and subsequent ffprobe/SSIM analysis are excluded.
+
+This is sampled process-tree RSS, not total physical-memory pressure: short peaks can be missed, shared pages may be counted more than once, and GPU/media-engine allocations are not separately measured. Sampling overhead is included in wall time. Baselines without matching memory instrumentation are excluded from timing regression comparisons. If process statistics are blocked, memory is explicitly unavailable rather than zero; render results are still reported.
+
+Run a single-pass local measurement with `node tests/perf/bench.mjs --runs 1 --warmup 0`. The same instrumentation is used by the sustained and Test Film benchmarks, and their memory tables are retained in the combined CI comment.
+
 ## Hardware encoding comparison
 
 See the [local hardware-encoding benchmark snapshot](benchmarks/2026-11-12-hardware-encoding.md) for measured short- and long-clip results, quality checks, output sizes, and raw run timings.
@@ -190,7 +200,7 @@ Steps:
 |---|---|---|
 | 1 | Checkout, set up Node LTS and stable Rust | Shared `.github/actions/setup` action. |
 | 2 | Install missing native tools | Homebrew supplies SwiftLint, pkg-config, and ffmpeg/ffprobe when missing; verify all prerequisites. |
-| 3 | Install fixtures and pinned browser | `make bootstrap` installs `tests/` dependencies, the pinned Chrome, and the native archive. |
+| 3 | Install fixtures and pinned browser | `make bootstrap` installs `tests/` dependencies, generates compiler resources, and prepares the pinned Chrome and native archive. |
 | 4 | Build native | `make build`. |
 | 5 | Download baseline (branches other than main) | `gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1`, then `gh run download <id> --name bench-results` into a run-specific directory in `$RUNNER_TEMP`. `continue-on-error`. |
 | 6 | Run benchmark | `node tests/perf/bench.mjs --work-dir $RUNNER_TEMP/bench [--baseline …]` |

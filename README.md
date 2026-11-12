@@ -2,7 +2,7 @@
 
 A native, Remotion-compatible video rendering engine built with **Swift + Skia**.
 
-The first runnable package compiles Remotion-style TSX with SWC, executes React in JavaScriptCore, lays out boxes with Yoga, draws with native Skia, and writes PNG stills or silent H.264 video on macOS. Metal GPU rendering and shared IOSurface hardware H.264 encoding are available on macOS; retained incremental rendering is planned. The same engine is meant to power:
+The first runnable package compiles Remotion-style TSX with native TypeScript 7 (tsgo), executes React in JavaScriptCore, lays out boxes with Yoga, draws with native Skia, and writes PNG stills or silent H.264 video on macOS. Metal GPU rendering and shared IOSurface hardware H.264 encoding are available on macOS; retained incremental rendering is planned. The same engine is meant to power:
 
 - a **pure SwiftUI visual editor** on macOS/iOS: select a rendered element, drag/resize/rotate it, adjust its timing and duration, and edit animation keyframes on a timeline. Every change is written back to the TSX.
 - a **headless cloud render worker** on Linux, replacing Remotion Lambda.
@@ -36,17 +36,68 @@ done
 
 ## SDK setup (macOS)
 
-The current Swift package targets **macOS 14+**. Add this checkout as a local package dependency in Xcode and link its **MotionSwift** library product; import the individual modules shown below (there is no umbrella `import MotionSwift`). iOS support and the full visual editor remain planned.
+The current Swift package targets **macOS 14+**. Add this checkout as a local package dependency in Xcode and link its **MotionSwift** library product; import the individual modules shown below (there is no umbrella `import MotionSwift`). iOS support and the full visual editor remain planned; the [SwiftUI preview](#swiftui-preview-macos) is available now.
 
 First follow the [build prerequisites](docs/current-implementation.md#build-and-commands), then run:
 
 ```sh
 make bootstrap
 make build
-export PKG_CONFIG_PATH="$PWD/native/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 ```
 
-The consuming build must also see this `PKG_CONFIG_PATH` so it can link the native Skia archive. The current compiler needs this checkout, its installed `tests/node_modules`, and Node on the app process's `PATH`. The example below is for a local macOS development app with access to the checkout; a standalone sandboxed app needs its own toolchain/resource packaging and file-access setup.
+Run `make compiler native` before building directly in Xcode or with SwiftPM. `make build` and `make showcase` prepare both automatically. Compiler executables and vendor resources are downloaded/generated into the gitignored `Sources/MotionCompiler/Resources/` directory; they are bundled into build output rather than committed to Git. The package locates the resulting native Skia archive relative to its checkout, including when Xcode is launched from Finder. The local archive search path uses a SwiftPM unsafe linker flag, so packages consumed as remote dependencies require a separately distributed binary instead. The compiler bundles native TypeScript 7.0.2 (tsgo) for compilation/type checking and esbuild 0.28.1 for JavaScript bundling for Apple Silicon and Intel. Compilation and type checking need only the project sources: no Node, npm install, repository path, or `MOTIONSWIFT_NODE` setting is required. `Compiler()` loads its tools, React runtime, and type declarations from SwiftPM resources. `Compiler(repository:)` remains source compatible. This macOS implementation launches bundled executables; iOS and signed/sandboxed app distribution need a separate integration and have not been validated. Node is still used by repository development and browser comparison tests.
+
+## SwiftUI preview (macOS)
+
+The `MotionSwiftUI` library previews compositions live in a SwiftUI app. `MotionPlayer` compiles a TSX project (or reuses a compiled bundle), lists its compositions, and renders frames on a dedicated thread that owns a JavaScriptCore runtime and a Skia surface. Rendering never blocks the main thread. While you scrub or play, it renders only the newest requested frame and drops stale ones. Rendered frames are cached (256 MB by default), so replays and scrubbing reuse them.
+
+```swift
+import MotionSwiftUI
+import SwiftUI
+
+// Drop-in: owns its player, compiles, and autoplays one composition.
+struct Preview: View {
+    let repository = URL(fileURLWithPath: "/path/to/MotionSwift")
+    var body: some View {
+        MotionCompositionView(
+            source: .project(repository: repository,
+                             project: repository.appendingPathComponent("tests/compositions"),
+                             entry: "src/index.ts"),
+            compositionID: "Timed", showsControls: true)
+    }
+}
+
+// Or drive the player yourself: transport, props, render settings, layout boxes.
+struct Studio: View {
+    @State private var player = MotionPlayer(configuration: .init(scale: 2, backend: .gpu))
+    let source: MotionSource
+
+    var body: some View {
+        MotionPlayerView(player: player, showsLayoutBounds: true)  // or MotionView: preview only
+            .task {
+                await player.load(source, compositionID: "Motion")
+                player.play()
+            }
+    }
+}
+// player.seek(to: 12); player.step(by: 1); try player.setProps("{\"title\":\"Hi\"}")
+// let frame = try await player.render(frame: 15)  // CGImage + layout boxes + render time
+```
+
+Loading and render errors appear as overlays on the preview; unsupported styles stop rendering instead of drawing something wrong. Compilation uses the bundled native tools and project sources. `.bundle(player.bundle!)` reuses a compiled bundle without recompiling.
+
+### Showcase app
+
+`Examples/MotionShowcase` is a small SwiftUI app built on this library. It has a gallery that plays every composition at once (one `MotionCompositionView` per tile), and a composition page with transport controls and an optional layout-bounds overlay. A Render Settings sheet switches backend (CPU or Metal), scale, and looping; an Open Project sheet previews another TSX project folder.
+
+The **Test Film** sidebar destination opens the same checksum-verified project archive used by the benchmark (1080p, 30 fps, 90 seconds). Its preview shows live app RSS and preview peak memory. **Render Test Film** opens a dedicated sheet to save all 2,700 frames as H.264 using Metal, shared IOSurfaces and native VideoToolbox, with worker selection, progress, Stop, and current/peak app RSS. Memory is sampled every 250 ms and includes the app's preview cache; it excludes other processes and separate GPU accounting. Sidebar rows show resolution and FPS.
+
+The preview controls show **Live FPS** (distinct preview-frame deliveries over a rolling second, including cached frames) and **Render FPS** (1000 divided by the displayed frame's render time). The selected composition and Test Film sidebar rows also show Live FPS. Play to measure; the live readout shows a dash while paused or during its initial quarter-second. Playhead jumps do not count skipped frames as delivered frames. The composition's fixed FPS in the header describes the source timeline; Live FPS measures updates delivered to SwiftUI, rather than physical display refreshes.
+
+```sh
+make bootstrap   # once
+make showcase    # builds and launches the app on tests/compositions
+```
 
 ## GPU-accelerated rendering with the SDK
 
@@ -117,7 +168,7 @@ Use `--backend=cpu --encoder=software` for the CPU/software path. The report rec
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Modules, data flow, threading, platform backends |
 | [docs/implementation-plan.md](docs/implementation-plan.md) | Phases, milestones, exit criteria, risks |
-| [docs/typescript-and-packages.md](docs/typescript-and-packages.md) | TS compilation (swc on every platform), module resolution, JS runtime globals, type-level compatibility, published npm packages |
+| [docs/typescript-and-packages.md](docs/typescript-and-packages.md) | Native TypeScript compilation, module resolution, JS runtime globals, type-level compatibility, published npm packages |
 | [docs/compatibility.md](docs/compatibility.md) | Supported Remotion APIs and CSS subset, plus lint rules |
 | [docs/editor.md](docs/editor.md) | Pure SwiftUI editor: selection, drag/resize/rotate, timeline timing and duration, keyframe editing, TSX write-back |
 | [docs/performance.md](docs/performance.md) | Speed model, estimates, and how to measure them |
@@ -161,7 +212,7 @@ This is the easy part, as long as we **run the real TSX in JavaScriptCore** and 
 
 The editor is **pure SwiftUI**: a preview canvas with drag, resize, and rotate handles, a timeline for sequence timing and duration, keyframe lanes for animations, and an inspector. Because the render tree is retained (not screenshotted pixels), editing fits naturally:
 
-1. The compiler (swc) stamps each JSX element with its source location (file:line:col).
+1. The planned editor source transform stamps each JSX element with its source location (file:line:col).
 2. On click, a native hit test finds the node and its source location, and the inspector shows its props and style.
 3. Canvas gestures (drag, resize, rotate) and timeline edits (moving a `Sequence`, changing its duration, editing keyframes and easing) become edit operations. They're written back to the TSX through an AST transform (ts-morph), then hot-reloaded.
    - Static props (color, text, position, rotation) rewrite the literal.
@@ -225,7 +276,7 @@ MotionSwift/
 ├── Package.swift              # (planned) SwiftPM root
 ├── Sources/
 │   ├── CSkia/                 # (planned) C shim over Skia, prebuilt binaries
-│   ├── MotionCompiler/        # (planned) swc-based TS/TSX compiler (Rust, C ABI, prebuilt)
+│   ├── MotionCompiler/        # native TypeScript 7 emit/check and JavaScript bundling
 │   ├── SkiaKit/               # (planned) Swift wrapper over CSkia
 │   ├── MotionLayout/          # (planned) Yoga bindings + style resolution
 │   ├── MotionRuntime/         # (planned) JSC host, bridge, frame scheduler
@@ -236,7 +287,6 @@ MotionSwift/
 │   └── motionswift-cli/       # (planned) `motionswift render|still|check`
 ├── Apps/
 │   └── MotionStudio/          # (planned) pure SwiftUI editor app (macOS + iOS/iPadOS)
-├── compiler/                  # (planned) Rust crate on swc_core: TS strip, JSX, source stamp
 ├── js/
 │   ├── remotion-shim/         # (planned) @motionswift/remotion: shim + subset .d.ts
 │   ├── tsconfig/              # (planned) @motionswift/tsconfig preset

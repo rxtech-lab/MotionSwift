@@ -1,5 +1,6 @@
 import {fixtureSourceHash,sha256} from '../tools/provenance.mjs';
 import {probeHardwareEncoding} from '../tools/hardware-capabilities.mjs';
+import {measureProcess,memoryMethod} from './memory.mjs';
 import {concurrencyFor} from './concurrency.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -40,7 +41,7 @@ function ssim(reference,candidate,logFile) {
   return value;
 }
 
-function main() {
+async function main() {
 const options=parseArgs();
 const configFile=path.resolve(options.config||path.join(root,'tests/perf/bench.config.json'));
 const config=readJSON(configFile);
@@ -71,7 +72,7 @@ if(!fixtures.length||requested?.some(id=>!fixtures.some(f=>f.id===id)))throw Err
 const machine={platform:`${os.platform()} ${os.release()} (${os.arch()})`,cpu:os.cpus()[0]?.model,
   cores:os.cpus().length,availableCores:workerCounts.availableCores,memoryGB:Math.round(os.totalmem()/1024**3),runner:process.env.RUNNER_NAME||os.hostname(),node:process.version};
 const settings={runs,warmup,codec:config.codec,crf:18,preset:'medium',encoders:ENCODERS,hardwareQuality:65,concurrency,requestedConcurrency:workerCounts.requested,minSsim:config.minSsim,
-  remotionGl:config.remotionGl??process.env.REMOTION_GL??null,
+  memory:memoryMethod,remotionGl:config.remotionGl??process.env.REMOTION_GL??null,
   entryPoint:config.entryPoint,entrySha256:sha256(fs.readFileSync(path.resolve(project,config.entryPoint))),
   tiers:tiers.map(({id,scale,engines:tierEngines})=>({id,scale,engines:tierEngines??ENGINES})),regressionThreshold:threshold};
 const baseline=options.baseline?readJSON(path.resolve(options.baseline)):null;
@@ -79,7 +80,7 @@ const sourceSha256=config.sourceSha256??fixtureSourceHash();
 if(!/^[a-f0-9]{64}$/.test(sourceSha256))throw Error('Invalid benchmark source hash');
 const browserPin=readJSON(path.join(root,'tests/browser.lock.json'));
 const comparableMachine=baseline?.schema===2 && baseline?.sourceSha256===sourceSha256 && JSON.stringify(baseline?.versions?.browser)===JSON.stringify(browserPin)
-  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','remotionGl','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
+  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','memory','remotionGl','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
 const candidates=[options['native-bin'],process.env.MOTIONSWIFT_BIN,path.join(root,'.build/release/motionswift'),'motionswift'].filter(Boolean);
 const native=candidates.find(file=>{try{return !!command(file,['--version']).trim();}catch{return false;}});
 const versions={browser:browserPin,remotion:readJSON(path.join(root,'tests/node_modules/remotion/package.json')).version,
@@ -94,8 +95,8 @@ let failed=false;
 const hardware=engines.some(engine=>['gpu-hw','gpu-shared'].includes(engine))?probeHardwareEncoding():null;
 results.hardwareEncoding=hardware;
 
-function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
-  const times=[],logFile=`logs/${slug}-${engine}.log`,logPath=path.join(out,logFile);
+async function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
+  const times=[],memoryRuns=[],logFile=`logs/${slug}-${engine}.log`,logPath=path.join(out,logFile);
   const video=path.join(work,`${slug}-${engine}.mp4`),report=path.join(work,`${slug}-${engine}-stages.json`);
   fs.writeFileSync(logPath,'');
   for(let index=0;index<warmup+runs;index++) {
@@ -105,18 +106,21 @@ function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
       :['render','--project',project,'--entry',config.entryPoint,fixture.composition,video,'--codec=h264',`--backend=${engine.startsWith('gpu')?'gpu':engine}`,`--encoder=${ENCODERS[engine]}`,
         `--concurrency=${concurrency[engine]}`,`--scale=${tier.scale}`,`--frames=${range}`,`--props=${props}`,'--report-json',report];
     const begin=process.hrtime.bigint();
-    const result=spawnSync(engine==='remotion'?process.execPath:native,args,{cwd:project,encoding:'utf8',maxBuffer:128*1024*1024,
+    const result=await measureProcess(engine==='remotion'?process.execPath:native,args,{cwd:project,
       env:{...process.env,REMOTION_GL:settings.remotionGl??''}});
     const elapsed=Number(process.hrtime.bigint()-begin)/1e6;
     fs.appendFileSync(logPath,`\nRun ${index}: ${elapsed} ms\n${result.stdout||''}\n${result.stderr||''}`);
     if(result.error||result.status!==0)throw Error(String(result.error||`exit ${result.status}, signal ${result.signal??'none'}`));
-    if(index>=warmup)times.push(elapsed);
+    if(index>=warmup) {times.push(elapsed);memoryRuns.push(result.memory);}
   }
   const metadata=JSON.parse(command('ffprobe',['-v','error','-select_streams','v:0','-count_packets','-show_entries',
     'stream=codec_name,width,height,r_frame_rate,nb_read_packets','-of','json',video])).streams[0];
   const count=Number(metadata?.nb_read_packets);
   if(count!==expectedFrames)throw Error(`Expected ${expectedFrames} frames, got ${count}`);
   const measured={status:'ok',runsMs:times,medianMs:median(times),stdevMs:stdev(times),frames:count,
+    memory:{...memoryMethod,runs:memoryRuns,
+      status:memoryRuns.every(run=>run.status==='ok')?'ok':'unavailable',
+      peakRssBytes:memoryRuns.every(run=>run.status==='ok')?Math.max(...memoryRuns.map(run=>run.peakRssBytes)):null},
     fps:count/(median(times)/1000),outputBytes:fs.statSync(video).size,metadata,logFile,video};
   if(engine!=='remotion') {
     measured.stages=readJSON(report);
@@ -145,7 +149,7 @@ try {
         if(!options['allow-unavailable-hardware'])failed=true;
         continue;
       }
-      try {record[engine]=measure(record,engine,{fixture,tier,range,props,slug,expectedFrames});}
+      try {record[engine]=await measure(record,engine,{fixture,tier,range,props,slug,expectedFrames});}
       catch(error) {record[engine]={status:'failed',error:String(error),logFile:`logs/${slug}-${engine}.log`};failed=true;}
     }
     // Remotion is the reference when it ran; otherwise (tiers beyond Chrome's reliable scale)
@@ -210,6 +214,8 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
   const parity=item=>NATIVE.map(engine=>{const p=item.parity[engine];return p?`${p.ssim?.toFixed(4)??'—'} ${p.result==='pass'?'✅':'❌'}`:'—';}).join(' / ');
   const delta=item=>{const d=item.baseline?.gpu;return d?`${(d.deltaPct*100).toFixed(1)}%${d.regression?' 🔺':''}`:'—';};
   const rows=results.fixtures.map(item=>`| ${item.id} | ${size(item)} | ${cell(item.remotion)} | ${cell(item.cpu)} | ${cell(item.gpu)} | ${cell(item['gpu-hw'])} | ${cell(item['gpu-shared'])} | ${x(item.speedups.hardwareVsSoftware)} | **${x(item.speedups.sharedVsSoftware)}** | ${x(item.speedups.sharedVsFFmpeg)} | ${parity(item)} | ${delta(item)} |`);
+  const memoryCell=record=>record.memory?.status==='ok'?`${(record.memory.peakRssBytes/1024**2).toFixed(1)}`:'—';
+  const memoryRows=results.fixtures.map(item=>`| ${item.id} | ${ENGINES.map(engine=>memoryCell(item[engine])).join(' | ')} |`);
   const totals=results.totals;
   const perTier=Object.entries(totals).filter(([key])=>key.startsWith('gpuVsCpu@')).map(([key,value])=>`${key.slice(9)} ${x(value.geomean)}`).join(', ');
   const hardwareTiers=Object.entries(totals).filter(([key])=>key.startsWith('hardwareVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
@@ -226,6 +232,8 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
     `- **GPU vs Remotion**: **${x(totals.gpuVsRemotion.geomean)}** over ${totals.gpuVsRemotion.fixtures} fixture(s) with output parity.\n`+
     `- **CPU vs Remotion**: **${x(totals.cpuVsRemotion.geomean)}** over ${totals.cpuVsRemotion.fixtures} fixture(s) with output parity.\n\n`+
     `| Fixture | Size | Remotion | CPU + x264 | Metal + x264 | FFmpeg VT | Shared IOSurface VT | FFmpeg VT vs x264 | Shared vs x264 | Shared vs FFmpeg VT | SSIM CPU / GPU / HW / Shared | GPU vs main |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n${rows.join('\n')}\n\n`+
+    `### Sampled peak memory (MiB)\n\n| Fixture | Remotion | CPU + x264 | Metal + x264 | FFmpeg VT | Shared IOSurface VT |\n|---|---|---|---|---|---|\n${memoryRows.join('\n')}\n\n`+
+    `Process-tree resident memory sampled every ${memoryMethod.intervalMs} ms during each render, including compiler, Chrome and FFmpeg descendants. Values are the maximum across measured runs; warmups and parity analysis are excluded. Sampling may miss short peaks, RSS can count shared pages more than once, and GPU/media-engine allocations are not separately measured. — means unavailable; per-run samples and errors are in results.json. Sampling overhead is included in wall time.\n\n`+
     `Machine: ${machine.cpu}; ${machine.platform}; ${machine.cores} cores (${machine.availableCores} available); ${machine.memoryGB} GB; runner ${machine.runner}. Worker counts are capped to available cores; requested: ${JSON.stringify(results.settings.requestedConcurrency)}.\n\n`+
     `Runs: ${runs}, warmups: ${warmup}. Workers: Remotion ${concurrency.remotion}, CPU ${concurrency.cpu}, GPU ${concurrency.gpu}, GPU-HW ${concurrency['gpu-hw']}, Shared ${concurrency['gpu-shared']}. Times are wall clock including startup and encoding. `+
     `Software: x264 CRF 18, medium. FFmpeg hardware: h264_videotoolbox quality 65, no software fallback; CPU readback/conversion and pipe remain. Shared: F16 -> BGRA8 GPU resolve into IOSurface, then native AVFoundation/VideoToolbox quality 0.65 with hardware required; no application CPU pixel readback or pipe. GPU completion is synchronized before submission; encoder color conversion may still occur. These quality controls are not equivalent; speedups require SSIM >= ${results.settings.minSsim}. SSIM reference is Remotion when available, otherwise CPU + x264. Output bytes and frame p50 are recorded in results.json.\n\n`+
@@ -235,4 +243,4 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
     `${results.error?`Error: ${results.error}\n\n`:''}Full logs and results.json: workflow artifact **bench-results**.\n`;
 }
 
-try { main(); } catch(error) { console.error(error); process.exitCode=2; }
+try { await main(); } catch(error) { console.error(error); process.exitCode=2; }

@@ -1,7 +1,9 @@
 included:
   - Package.swift
   - Sources
+  - Examples
   - tests/Swift
+  - tests/Showcase
 excluded:
   - .build
   - native/target
