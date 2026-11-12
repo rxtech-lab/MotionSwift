@@ -49,7 +49,10 @@ function lint(ast, file) {
       else if (
         name &&
         name[0] === name[0].toLowerCase() &&
-        !["div", "span"].includes(name)
+        // SVG JSX may be serialized into an img data URI by user code. Host SVG
+        // nodes still fail explicitly in the painter; only SVG images are supported.
+        !["div", "span", "img", "svg", "g", "defs", "path", "rect", "circle",
+          "ellipse", "text", "radialGradient", "linearGradient", "stop", "pattern"].includes(name)
       )
         fail("ms/unsupported-element", `${name} is not implemented`);
       for (const attr of node.attributes || [])

@@ -116,7 +116,7 @@ public final class Renderer {
     if node.type == "#text" {
       throw MotionError("Paragraph text layout is not implemented in this Phase 0 painter")
     }
-    guard ["div", "span"].contains(node.type) else {
+    guard ["div", "span", "img"].contains(node.type) else {
       throw MotionError("Unsupported element: \(node.type)")
     }
     let style = try Style(node.style)
@@ -132,6 +132,22 @@ public final class Renderer {
     let radius = try style.length("borderRadius", relativeTo: min(width, height))
     canvas.rectangle(
       width: width, height: height, radius: radius, color: try Style.color(background))
+    if node.type == "img" {
+      guard style.string("objectFit") == "contain", let src = node.src,
+        let comma = src.firstIndex(of: ",")
+      else { throw MotionError("SVG images require a data URI and objectFit: contain") }
+      let header = String(src[..<comma]).lowercased()
+      let body = String(src[src.index(after: comma)...])
+      let data: Data?
+      switch header {
+      case "data:image/svg+xml", "data:image/svg+xml;charset=utf-8":
+        data = body.removingPercentEncoding?.data(using: .utf8)
+      case "data:image/svg+xml;base64": data = Data(base64Encoded: body)
+      default: throw MotionError("Only SVG data URI images are implemented")
+      }
+      guard let data else { throw MotionError("Invalid SVG data URI") }
+      try canvas.svg(data, width: width, height: height)
+    }
     for (index, child) in layout.children.enumerated() {
       canvas.save()
       canvas.translate(child.x, child.y)

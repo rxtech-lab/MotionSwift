@@ -124,10 +124,11 @@ function check() {
     const categories={};
     for(const d of diagnostics){const c=category(d.message);categories[c]=(categories[c]||0)+1;}
     for(const c of Object.keys(categories))totals[c]=(totals[c]||0)+1;
+    const still=stillProbe(bin,dir,id,out);
     fixtures.push({id,sourceSha256:info.sourceSha256,...probe(dir),
       native:{exitCode:r.status,failedAt:stageName,diagnostics:diagnostics.length,categories:Object.fromEntries(Object.entries(categories).sort((a,b)=>b[1]-a[1]))},
-      supported:r.status===0});
-    console.log(id,`exit=${r.status}`,stageName,`${diagnostics.length} diagnostics`);
+      still,supported:r.status===0});
+    console.log(id,`exit=${r.status}`,stageName,`${diagnostics.length} diagnostics`,`still=${still.exitCode} ${still.failedAt}`);
   }
   const commit=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).stdout.trim();
   writeJSON(manifestFile,{
@@ -135,10 +136,25 @@ function check() {
     generatedAt:new Date().toISOString(),commit,nativeBinarySha256:sha256(fs.readFileSync(bin)),
     command:'node tests/tools/real-fixtures.mjs check',
     supported:fixtures.filter(f=>f.supported).map(f=>f.id),
+    stillPassed:fixtures.filter(f=>f.still.exitCode===0).map(f=>f.id),
     blockersByFixtureCount:Object.fromEntries(Object.entries(totals).sort((a,b)=>b[1]-a[1])),
     fixtures,
   });
   console.log(`supported ${fixtures.filter(f=>f.supported).length}/${fixtures.length} → ${path.relative(root,manifestFile)}`);
+}
+
+// Bypasses the type checker: renders frame 30 so runtime/compiler blockers show up even when `check` fails.
+function stillProbe(bin,dir,id,out) {
+  const r=spawnSync(bin,['still','--project',dir,'--entry','src/index.ts','Main',path.join(out,`${id}-f30.png`),'--frame=30'],
+    {cwd:root,encoding:'utf8',maxBuffer:64*1024*1024,timeout:300000,env:{...process.env,MOTIONSWIFT_HOME:root}});
+  fs.writeFileSync(path.join(out,`${id}-still.stdout`),r.stdout||'');fs.writeFileSync(path.join(out,`${id}-still.stderr`),r.stderr||'');
+  if(r.status===0)return {exitCode:0,failedAt:'passed',reasons:{}};
+  const reasons={};
+  const text=`${r.stdout||''}${r.stderr||''}`, json=text.slice(text.indexOf('['),text.lastIndexOf(']')+1);
+  try{for(const d of JSON.parse(json)){const k=`${d.rule}: ${d.message}`;reasons[k]=(reasons[k]||0)+1;}}
+  catch{const line=`${r.stdout}${r.stderr}`.split('\n').find(l=>/Error|error:/.test(l))||'unknown failure';reasons[`runtime: ${line.trim().slice(0,160)}`]=1;}
+  const runtime=Object.keys(reasons).every(k=>k.startsWith('runtime:'));
+  return {exitCode:r.status,failedAt:runtime?'runtime':'diagnostics',reasons:Object.fromEntries(Object.entries(reasons).sort((a,b)=>b[1]-a[1]))};
 }
 
 function parseRemotionLog(text) {
@@ -165,6 +181,7 @@ function baseline(argv) {
   for(const id of ids) {
     if(!map.fixtures[id])throw Error(`Unknown fixture ${id}`);
     const dir=path.join(localDir,id);
+    if(sourceHash(dir)!==map.fixtures[id].sourceSha256)throw Error(`${id} changed since staging; re-run stage`);
     for(let i=0;i<warmup+runs;i++) {
       const tag=i<warmup?`${id}-rw${i||''}`:`${id}-r${i-warmup+1}`;
       const start=performance.now();
@@ -203,7 +220,7 @@ function summarize() {
     note:'Remotion baselines for anonymized real Film Studio compositions. Wall time includes CLI startup, bundling, browser launch, frame capture, encoding, and stitching.',
     generatedAt:new Date().toISOString(),
     command:`node tests/tools/real-fixtures.mjs baseline --frames ${settings.frames} --runs ${settings.runs} --warmup ${settings.warmup} --concurrency ${settings.concurrency}`,
-    settings,
+    settings:{...settings,invocation:`npx --no-install remotion render src/index.ts Main <out>.mp4 --frames=${settings.frames} --concurrency=${settings.concurrency} --log=verbose (run from tests/compositions/real/local/<id>, whose node_modules links to the Film Studio runtime's pinned dependencies)`},
     machine:{platform:`${os.platform()} ${os.release()} (${os.arch()})`,cpu:os.cpus()[0]?.model,cores:os.cpus().length,memoryGB:Math.round(os.totalmem()/1024**3),node:process.version,ffmpeg},
     fixtures,
   });

@@ -2,7 +2,7 @@
 
 A native, Remotion-compatible video rendering engine built with **Swift + Skia**.
 
-The first runnable package compiles Remotion-style TSX with SWC, executes React in JavaScriptCore, lays out boxes with Yoga, draws with native Skia, and writes PNG stills or silent H.264 video on macOS. Retained incremental rendering and zero-copy hardware encoding are planned. The same engine is meant to power:
+The first runnable package compiles Remotion-style TSX with SWC, executes React in JavaScriptCore, lays out boxes with Yoga, draws with native Skia, and writes PNG stills or silent H.264 video on macOS. Metal GPU rendering and shared IOSurface hardware H.264 encoding are available on macOS; retained incremental rendering is planned. The same engine is meant to power:
 
 - a **pure SwiftUI visual editor** on macOS/iOS: select a rendered element, drag/resize/rotate it, adjust its timing and duration, and edit animation keyframes on a timeline. Every change is written back to the TSX.
 - a **headless cloud render worker** on Linux, replacing Remotion Lambda.
@@ -33,6 +33,83 @@ for composition in Boxes Flex Layers Timed; do
     "$composition" "docs/images/rendering/$composition.png" --frame=15 --backend=cpu --scale=2
 done
 ```
+
+## SDK setup (macOS)
+
+The current Swift package targets **macOS 14+**. Add this checkout as a local package dependency in Xcode and link its **MotionSwift** library product; import the individual modules shown below (there is no umbrella `import MotionSwift`). iOS support and the full visual editor remain planned.
+
+First follow the [build prerequisites](docs/current-implementation.md#build-and-commands), then run:
+
+```sh
+make bootstrap
+make build
+export PKG_CONFIG_PATH="$PWD/native/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+```
+
+The consuming build must also see this `PKG_CONFIG_PATH` so it can link the native Skia archive. The current compiler needs this checkout, its installed `tests/node_modules`, and Node on the app process's `PATH`. The example below is for a local macOS development app with access to the checkout; a standalone sandboxed app needs its own toolchain/resource packaging and file-access setup.
+
+## GPU-accelerated rendering with the SDK
+
+Acceleration uses **Skia Ganesh on Metal** for drawing and **VideoToolbox** for hardware H.264 encoding on a compatible Mac. Select `.gpu` explicitly; the default renderer backend is `.cpu`. There is no GPT/AI accelerator setting.
+
+The following function compiles the animated `Motion` fixture and exports every frame as a silent MP4. Call it on a background worker: compilation, the ordered pipeline consumer, and encoder finalization are synchronous. The output's parent directory must exist; an existing regular output file is replaced.
+
+```swift
+import Foundation
+import MotionCompiler
+import MotionRuntime
+import MotionRender
+import MotionEncode
+
+func renderGPUVideo(repository: URL, output: URL) throws {
+    let bundle = try Compiler(repository: repository).compile(
+        project: repository.appendingPathComponent("tests/compositions"),
+        entry: "src/index.ts")
+    let runtime = try Runtime(bundle: bundle)
+    guard let composition = try runtime.compositions().first(where: {
+        $0.id == "Motion"
+    }) else { throw CocoaError(.fileReadCorruptFile) }
+
+    let options = PipelineOptions(workers: 2, backend: .gpu, sharedVideoFrames: true)
+    let size = try Renderer.pixelSize(
+        width: composition.width, height: composition.height, scale: options.scale)
+    let stream = try SharedVideoStream(
+        output: output, width: size.width, height: size.height, fps: composition.fps)
+    do {
+        try FramePipeline.run(
+            bundle: bundle, composition: composition,
+            frames: Array(0..<composition.durationInFrames), props: "{}", options: options
+        ) { frame in
+            guard let videoFrame = frame.videoFrame else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            try stream.write(videoFrame.pixelBuffer)
+        }
+        try stream.finish()
+    } catch {
+        stream.cancel()
+        throw error
+    }
+}
+
+// From a background worker, using your checkout path:
+// try renderGPUVideo(repository: URL(fileURLWithPath: "/path/to/MotionSwift"),
+//                    output: URL(fileURLWithPath: "/tmp/motion-sdk.mp4"))
+```
+
+`FramePipeline` creates a runtime and Metal renderer per worker and delivers frames in presentation order with bounded buffering. `sharedVideoFrames: true` supplies IOSurface-backed buffers to `SharedVideoStream` without application CPU pixel readback or an ffmpeg pipe. A GPU conversion pass still occurs; this does not guarantee that the encoder makes no internal copies. H.264 requires even output pixel dimensions. Metal or hardware-encoder unavailability throws an error; these paths do not silently fall back.
+
+For comparison, `.gpu` with `sharedVideoFrames: false` returns `frame.pixels`. Feed those to `VideoStream(..., encoder: .videotoolbox)` for ffmpeg hardware encoding, or `.software` for libx264; both require ffmpeg and CPU pixel readback. Changing the drawing backend alone does not enable hardware video encoding.
+
+The equivalent CLI command, after the build above, is:
+
+```sh
+.build/release/motionswift render --project tests/compositions --entry src/index.ts \
+  Motion /tmp/motion-gpu.mp4 --backend=gpu --encoder=videotoolbox-shared \
+  --concurrency=2 --report-json=/tmp/motion-gpu.json
+```
+
+Use `--backend=cpu --encoder=software` for the CPU/software path. The report records the selected backend, encoder, worker count, and timings. Rendering currently supports the [Phase 0 subset](docs/current-implementation.md#what-runs), including SVG data-URI images with `objectFit: contain`; paragraph text, general image/video decoding, and audio remain planned.
 
 ## Documentation
 

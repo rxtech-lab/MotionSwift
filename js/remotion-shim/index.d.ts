@@ -18,6 +18,7 @@ export interface MotionCSSProperties {
   backgroundColor?: string; background?: string; color?: string;
   opacity?: number; borderRadius?: number | string; overflow?: 'hidden' | 'visible';
   transform?: string; transformOrigin?: 'center'; fontSize?: number; fontFamily?: string;
+  objectFit?: 'contain';
 }
 export interface BoxProps {key?: Key | null; style?: MotionCSSProperties; children?: ReactNode; id?: string; 'data-ms-src'?: string}
 export declare const AbsoluteFill: ComponentType<BoxProps>;

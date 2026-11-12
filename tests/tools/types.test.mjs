@@ -19,7 +19,7 @@ function check(file) {
   return ts.getPreEmitDiagnostics(program);
 }
 test('supported TSX and all visual fixtures type check against the subset',()=>{
-  for(const file of [path.join(testRoot,'type-fixtures/valid/core.tsx'),path.join(testRoot,'compositions/src/index.ts')]) {
+  for(const file of [path.join(testRoot,'type-fixtures/valid/core.tsx'),path.join(testRoot,'compositions/src/index.ts'),path.join(testRoot,'compiler-fixtures/svg-image/input.tsx')]) {
     const diagnostics=check(file);
     assert.equal(diagnostics.length,0,ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCanonicalFileName:x=>x,getCurrentDirectory:()=>root,getNewLine:()=> '\n'}));
   }

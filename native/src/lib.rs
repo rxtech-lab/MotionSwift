@@ -135,6 +135,24 @@ pub unsafe extern "C" fn msk_rect(s: *mut Target, x: f32, y: f32, w: f32, h: f32
     (*s).surface.canvas().draw_round_rect(Rect::from_xywh(x,y,w,h), radius, radius, &paint);
 }
 #[no_mangle]
+pub unsafe extern "C" fn msk_svg(s: *mut Target, bytes: *const u8, len: usize, w: f32, h: f32) -> bool {
+    if s.is_null() || bytes.is_null() || len == 0 || !w.is_finite() || !h.is_finite() || w <= 0. || h <= 0. { return false; }
+    let Ok(mut dom) = skia_safe::svg::Dom::from_bytes(std::slice::from_raw_parts(bytes, len), FontMgr::default()) else { return false; };
+    dom.set_container_size((w, h));
+    let canvas = (*s).surface.canvas();
+    canvas.save();
+    canvas.clip_rect(Rect::from_xywh(0., 0., w, h), None, true);
+    let intrinsic = dom.root().intrinsic_size();
+    if intrinsic.width > 0. && intrinsic.height > 0. {
+        let scale = (w / intrinsic.width).min(h / intrinsic.height);
+        canvas.translate(((w - intrinsic.width * scale) / 2., (h - intrinsic.height * scale) / 2.));
+        canvas.scale((scale, scale));
+    }
+    dom.render(canvas);
+    canvas.restore();
+    true
+}
+#[no_mangle]
 pub unsafe extern "C" fn msk_text(s: *mut Target, text: *const c_char, family: *const c_char, size: f32, color: u32, x: f32, y: f32) -> bool {
     let Ok(text) = CStr::from_ptr(text).to_str() else { return false; };
     let Ok(family) = CStr::from_ptr(family).to_str() else { return false; };

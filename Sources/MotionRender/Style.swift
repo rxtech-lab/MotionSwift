@@ -12,6 +12,7 @@ struct Style {
     "paddingLeft", "paddingRight", "paddingTop", "paddingBottom", "marginLeft", "marginRight",
     "marginTop", "marginBottom", "backgroundColor", "background", "opacity",
     "borderRadius", "overflow", "transform", "transformOrigin", "color", "fontSize", "fontFamily",
+    "objectFit",
   ]
 
   init(_ values: [String: JSONValue]) throws {
@@ -24,7 +25,7 @@ struct Style {
     let strings: Set<String> = [
       "position", "display", "flexDirection", "justifyContent", "alignItems", "alignSelf",
       "flexWrap", "overflow", "transform", "transformOrigin", "color", "background",
-      "backgroundColor", "fontFamily",
+      "backgroundColor", "fontFamily", "objectFit",
     ]
     let numbers: Set<String> = ["opacity", "fontSize", "flexGrow", "flexShrink", "aspectRatio"]
     for (key, value) in values {
@@ -53,6 +54,7 @@ struct Style {
     try require("alignSelf", among: ["flex-start", "center", "flex-end", "stretch"])
     try require("flexWrap", among: ["wrap", "nowrap"])
     try require("overflow", among: ["hidden", "visible"])
+    try require("objectFit", among: ["contain"])
     if let origin = values["transformOrigin"], origin.string != "center" {
       throw MotionError("Only transformOrigin: center is implemented")
     }
