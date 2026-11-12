@@ -4,15 +4,17 @@ import path from 'node:path';
 import {testRoot,project} from './common.mjs';
 
 export const sha256 = data=>crypto.createHash('sha256').update(data).digest('hex');
-export function fixtureSourceHash() {
+export function fixtureSourceHash(sourceProject=project) {
   const hash=crypto.createHash('sha256');
   const walk=directory=>fs.readdirSync(directory,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name,'en')).forEach(entry=>{
     if(entry.name==='node_modules'||entry.name.startsWith('.'))return;
     const file=path.join(directory,entry.name);
+    // The separate real-content census/private staging area is not a visual fixture dependency.
+    if(file===path.join(sourceProject,'real'))return;
     if(entry.isDirectory())walk(file);
-    else if(entry.isFile()){hash.update(path.relative(project,file));hash.update(fs.readFileSync(file));}
+    else if(entry.isFile()){hash.update(path.relative(sourceProject,file));hash.update(fs.readFileSync(file));}
   });
-  walk(project);
+  walk(sourceProject);
   return hash.digest('hex');
 }
 export function assertProvenance(metadata) {

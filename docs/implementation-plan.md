@@ -35,12 +35,12 @@ Tasks:
 5. Write the pixel-diff comparer (`compare` tool) and run it on the spike output against the goldens.
 6. Build the benchmark script and the `benchmark.yml` workflow ([benchmark.md](benchmark.md)), so every PR from now on gets a Remotion-vs-native comment. Until the engine exists, the comment records only the Remotion baseline.
 
-**Exit criteria (go/no-go):**
+**Exit criteria (go/no-go):** evaluated on 2026-11-12 in [phase0-validation.md](phase0-validation.md). Result: **no-go**. 0 of 15 real Film Studio compositions are in the supported subset.
 
-- [ ] ≥ 5× faster wall time than Remotion on the real fixtures for the supported subset, excluding startup, as reported by the benchmark comment.
-- [ ] Non-text regions pass the default pixel thresholds.
-- [ ] Text regions are within the text threshold, or the failures are understood and have a fix plan (for example SkParagraph line-height or font-hinting settings).
-- [ ] A written decision on C shim versus Swift C++ interop for `CSkia`.
+- [ ] ≥ 5× faster wall time than Remotion on the real fixtures for the supported subset, excluding startup, as reported by the benchmark comment. *Not measurable: empty supported subset. Remotion baselines are recorded.*
+- [ ] Non-text regions pass the default pixel thresholds. *Not measurable: no real fixture renders natively.*
+- [ ] Text regions are within the text threshold, or the failures are understood and have a fix plan (for example SkParagraph line-height or font-hinting settings). *Failed: text paint is not implemented. The fix plan is [remaining blockers](phase0-validation.md#remaining-blockers).*
+- [x] A written decision on C shim versus Swift C++ interop for `CSkia`. *[C ABI shim](phase0-validation.md#cskia-decision-c-abi-shim).*
 
 If text parity fails badly, make SkParagraph tuning the next phase before anything else.
 

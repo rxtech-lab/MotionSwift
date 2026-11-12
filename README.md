@@ -15,6 +15,27 @@ make lint test visual
 make benchmark
 ```
 
+## Rendering examples
+
+These stills were rendered by MotionSwift's CPU Skia backend from the [TSX example compositions](tests/compositions/visuals/Boxes.tsx). Each shows frame 15 at 2× scale (640 × 360 pixels). They demonstrate the current Phase 0 shape-rendering subset.
+
+| Boxes and rounded corners | Flex layout |
+|---|---|
+| ![Orange rectangle and light gray rounded rectangle on a navy background](docs/images/rendering/Boxes.png) | ![Orange, light gray, and red boxes centered in a horizontal flex row](docs/images/rendering/Flex.png) |
+| **Opacity and overlapping layers** | **Sequence and spring animation** |
+| ![A translucent light gray square overlapping an orange square](docs/images/rendering/Layers.png) | ![An orange square scaled by a spring animation inside a timed sequence](docs/images/rendering/Timed.png) |
+
+Regenerate the screenshots after [building the CLI](docs/current-implementation.md#build-and-commands):
+
+```sh
+for composition in Boxes Flex Layers Timed; do
+  .build/release/motionswift still --project tests/compositions --entry src/index.ts \
+    "$composition" "docs/images/rendering/$composition.png" --frame=15 --backend=cpu --scale=2
+done
+```
+
+## Documentation
+
 | Document | What it covers |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Modules, data flow, threading, platform backends |

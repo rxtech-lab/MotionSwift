@@ -20,7 +20,7 @@ tests/
 │   ├── svg/                   # inline + external SVG, @remotion/paths/shapes
 │   ├── media/                 # Img, OffthreadVideo, Audio, fonts
 │   ├── motion/                # interpolate/spring/Easing/Sequence/Series/Loop stress
-│   └── real/                  # anonymized real Film Studio outputs
+│   └── real/                  # real Film Studio census (manifest.json); private sources in gitignored local/, see tools/real-fixtures.mjs
 ├── fixtures.json              # manifest: which compositions/frames/checks/thresholds
 ├── golden/                    # Remotion-rendered references (Git LFS)
 │   ├── stills/<comp>/<frame>.png

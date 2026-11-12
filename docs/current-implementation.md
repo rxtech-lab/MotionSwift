@@ -93,4 +93,6 @@ node tests/perf/bench.mjs --only core/solid --runs 5 --warmup 1
 node tests/perf/bench.mjs --engines cpu,gpu,gpu-hw,gpu-shared --tiers 4k --native-bin .build/release/motionswift
 ```
 
+Phase 0 gate status on real content: **no-go**. See [phase0-validation.md](phase0-validation.md). None of the 15 real Film Studio compositions pass `motionswift check`; text, inline SVG, borders, shadows, filters and gradients are the main blockers. Remotion baselines live in `tests/perf/baseline/film-studio.json`, and the anonymized census in `tests/compositions/real/manifest.json` (`node tests/tools/real-fixtures.mjs`).
+
 Not implemented yet: the portable swc C ABI/module cache/source maps, incremental retained bridge, full CSS/text/effects/SVG/media, motion/layout trace CLI, video audio checks, published binary/npm distributions, SwiftUI MotionStudio/editor operations, iOS compilation/runtime packaging, Linux JSC and non-Metal GPU backends, and production cloud worker. The existing design documents describe these next phases rather than current capabilities.
