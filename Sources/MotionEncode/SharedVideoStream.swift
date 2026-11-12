@@ -9,6 +9,7 @@ import VideoToolbox
 /// Call only on the ordered pipeline consumer thread. Readiness bounds encoder backlog.
 /// Submitted pixel buffers must stay immutable; the encoder retains them while in use.
 public final class SharedVideoStream {
+  private let output: URL
   private let writer: AVAssetWriter
   private let input: AVAssetWriterInput
   private let adaptor: AVAssetWriterInputPixelBufferAdaptor
@@ -17,7 +18,11 @@ public final class SharedVideoStream {
   private let height: Int
   public private(set) var framesWritten = 0
 
-  public init(output: URL, width: Int, height: Int, fps: Double) throws {
+  public init(output: URL, width: Int, height: Int, fps: Double, options: EncodingOptions? = nil) throws {
+    let settingsOptions = try options ?? EncodingOptions(encoder: .sharedSurface)
+    try settingsOptions.validate(width: width, height: height, fps: fps, output: output)
+    guard settingsOptions.encoder == .sharedSurface else { throw MotionError("SharedVideoStream requires shared encoder") }
+    self.output = output
     guard width > 0, height > 0, width <= 16384, height <= 16384,
       width.isMultiple(of: 2), height.isMultiple(of: 2), fps.isFinite, fps > 0
     else { throw MotionError("H.264 requires positive even dimensions up to 16384 and a positive finite fps") }
@@ -29,9 +34,9 @@ public final class SharedVideoStream {
       guard type == .typeRegular else { throw MotionError("Video output already exists and is not a regular file") }
       try FileManager.default.removeItem(at: output)
     }
-    writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
+    writer = try AVAssetWriter(outputURL: output, fileType: output.pathExtension.lowercased() == "mov" ? .mov : .mp4)
     var settings: [String: Any] = [
-      AVVideoCodecKey: AVVideoCodecType.h264,
+      AVVideoCodecKey: (settingsOptions.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264),
       AVVideoWidthKey: width, AVVideoHeightKey: height,
       // Match ffmpeg's existing untagged RGBA -> yuv420p conversion. Explicit
       // matrix metadata also prevents decoders assuming a different SD/HD matrix.
@@ -41,8 +46,9 @@ public final class SharedVideoStream {
         AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_601_4,
       ],
       AVVideoCompressionPropertiesKey: [
-        kVTCompressionPropertyKey_Quality as String: 0.65,
+        kVTCompressionPropertyKey_Quality as String: settingsOptions.quality / 100,
         AVVideoExpectedSourceFrameRateKey: fps,
+        AVVideoAllowFrameReorderingKey: false,
       ],
     ]
     #if os(macOS)
@@ -52,7 +58,7 @@ public final class SharedVideoStream {
     #endif
     // iOS and iPadOS AVAssetWriter H.264 always uses the hardware encoder; there is no switch.
     guard writer.canApply(outputSettings: settings, forMediaType: .video) else {
-      throw MotionError("Native hardware H.264 settings are unavailable")
+      throw MotionError("Native hardware \(settingsOptions.codec.rawValue) settings are unavailable; no software fallback allowed")
     }
     input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
     input.expectsMediaDataInRealTime = false
@@ -104,5 +110,33 @@ public final class SharedVideoStream {
     }
   }
 
-  public func cancel() { writer.cancelWriting() }
+  public func cancel() {
+    writer.cancelWriting()
+    try? FileManager.default.removeItem(at: output)
+  }
 }
+
+#if os(macOS)
+extension SharedVideoStream {
+  public static func checkAvailability(output: URL, width: Int, height: Int, fps: Double, options: EncodingOptions) throws {
+    let probe = try SharedVideoStream(output: output, width: width, height: height, fps: fps, options: options)
+    do {
+      var buffer: CVPixelBuffer?
+      let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
+        [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary, &buffer)
+      guard status == kCVReturnSuccess, let buffer else { throw MotionError("Cannot allocate availability probe") }
+      CVPixelBufferLockBaseAddress(buffer, [])
+      if let bytes = CVPixelBufferGetBaseAddress(buffer) {
+        memset(bytes, 0, CVPixelBufferGetBytesPerRow(buffer) * height)
+      }
+      CVPixelBufferUnlockBaseAddress(buffer, [])
+      try probe.write(buffer)
+      try probe.finish()
+      try? FileManager.default.removeItem(at: output)
+    } catch {
+      probe.cancel()
+      throw MotionError("Requested native hardware \(options.codec.rawValue) unavailable: \(error). No software fallback attempted.")
+    }
+  }
+}
+#endif

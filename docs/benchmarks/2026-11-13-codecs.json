@@ -1,0 +1,954 @@
+{
+  "machine": {
+    "cpu": "Apple M4 Max",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "measureOnly": true,
+  "results": [
+    {
+      "id": "h264/software/30",
+      "frames": 30,
+      "codec": "h264",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1037.3516249999998,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 601899008,
+            "samples": 10,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1024.5413750000002,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 608206848,
+            "samples": 10,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1018.1146659999999,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 634994688,
+            "samples": 10,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1024.5413750000002,
+      "fps": 29.28139432143479,
+      "peakRssBytes": 634994688,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 91.55404567718506,
+        "concatAndPublishMs": 0.19502639770507812,
+        "encodeFinishMs": 69.68796253204346,
+        "encodeWriteMs": 38.65945339202881,
+        "frameMs": {
+          "p50": 11.812334,
+          "p95": 16.517417
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 218.77193450927734,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/software/30",
+      "frames": 30,
+      "codec": "hevc",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1335.0283340000005,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 691109888,
+            "samples": 13,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1217.383291,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 699564032,
+            "samples": 12,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1306.0373750000008,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 693157888,
+            "samples": 13,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1306.0373750000008,
+      "fps": 22.970246161600073,
+      "peakRssBytes": 699564032,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 97.82695770263672,
+        "concatAndPublishMs": 0.2650022506713867,
+        "encodeFinishMs": 210.9299898147583,
+        "encodeWriteMs": 33.59115123748779,
+        "frameMs": {
+          "p50": 12.552167,
+          "p95": 15.858292
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 364.87698554992676,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "prores/software/30",
+      "frames": 30,
+      "codec": "prores",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1064.1664999999994,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 566575104,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1089.2023329999993,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 510181376,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1089.1914589999997,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 502628352,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1089.1914589999997,
+      "fps": 27.543366918744827,
+      "peakRssBytes": 566575104,
+      "metadata": {
+        "codec_name": "prores",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 101.87005996704102,
+        "concatAndPublishMs": 0.2650022506713867,
+        "encodeFinishMs": 71.52199745178223,
+        "encodeWriteMs": 39.0315055847168,
+        "frameMs": {
+          "p50": 12.363792,
+          "p95": 16.351208
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 231.20009899139404,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "prores4444/software/30",
+      "frames": 30,
+      "codec": "prores4444",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1066.9550419999996,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 589561856,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1180.719000000001,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 503169024,
+            "samples": 12,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1075.3214579999985,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 502628352,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1075.3214579999985,
+      "fps": 27.89863419613825,
+      "peakRssBytes": 589561856,
+      "metadata": {
+        "codec_name": "prores",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 98.95503520965576,
+        "concatAndPublishMs": 0.2899169921875,
+        "encodeFinishMs": 71.9149112701416,
+        "encodeWriteMs": 45.705199241638184,
+        "frameMs": {
+          "p50": 12.214792,
+          "p95": 19.465834
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 239.36104774475098,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "h264/videotoolbox/30",
+      "frames": 30,
+      "codec": "h264",
+      "encoder": "videotoolbox",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1472.0013340000005,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 333398016,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1366.7861669999984,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 330760192,
+            "samples": 14,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1270.0749590000014,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 334151680,
+            "samples": 13,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1366.7861669999984,
+      "fps": 21.949300281439005,
+      "peakRssBytes": 334151680,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 165.47298431396484,
+        "concatAndPublishMs": 0.21505355834960938,
+        "encodeFinishMs": 70.27602195739746,
+        "encodeWriteMs": 126.33037567138672,
+        "frameMs": {
+          "p50": 7.179917,
+          "p95": 23.704917
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 401.4979600906372,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/videotoolbox/30",
+      "frames": 30,
+      "codec": "hevc",
+      "encoder": "videotoolbox",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1268.481667,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 330727424,
+            "samples": 13,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1264.994333999999,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 331022336,
+            "samples": 13,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1369.0142080000005,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 330678272,
+            "samples": 14,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1268.481667,
+      "fps": 23.650322098033126,
+      "peakRssBytes": 331022336,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 234.65299606323242,
+        "concatAndPublishMs": 0.20694732666015625,
+        "encodeFinishMs": 70.14405727386475,
+        "encodeWriteMs": 138.31102848052979,
+        "frameMs": {
+          "p50": 8.323291,
+          "p95": 22.709625
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 483.2810163497925,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "h264/videotoolbox-shared/30",
+      "frames": 30,
+      "codec": "h264",
+      "encoder": "videotoolbox-shared",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1088.8332090000004,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 103120896,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1167.6946669999998,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 103038976,
+            "samples": 12,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1096.4365419999958,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 104333312,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1096.4365419999958,
+      "fps": 27.361364612380928,
+      "peakRssBytes": 104333312,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 122.1839189529419,
+        "concatAndPublishMs": 0.21708011627197266,
+        "encodeFinishMs": 45.22597789764404,
+        "encodeWriteMs": 30.63678741455078,
+        "frameMs": {
+          "p50": 6.717083,
+          "p95": 18.085334
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 230.42595386505127,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/videotoolbox-shared/30",
+      "frames": 30,
+      "codec": "hevc",
+      "encoder": "videotoolbox-shared",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1072.4415840000001,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 103088128,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1068.0981660000034,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 103170048,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1091.0002079999977,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 103088128,
+            "samples": 11,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1072.4415840000001,
+      "fps": 27.97355161118034,
+      "peakRssBytes": 103170048,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "30"
+      },
+      "stages": {
+        "availabilityMs": 122.03192710876465,
+        "concatAndPublishMs": 0.22292137145996094,
+        "encodeFinishMs": 57.202935218811035,
+        "encodeWriteMs": 36.67104244232178,
+        "frameMs": {
+          "p50": 7.437417,
+          "p95": 17.765167
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 249.36199188232422,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "h264/software/300",
+      "frames": 300,
+      "codec": "h264",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1572.4270000000033,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 963264512,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1523.3461249999964,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 960577536,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1574.1184169999979,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 965099520,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1572.4270000000033,
+      "fps": 190.78787123344955,
+      "peakRssBytes": 965099520,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 99.57599639892578,
+        "concatAndPublishMs": 0.2900362014770508,
+        "encodeFinishMs": 67.89195537567139,
+        "encodeWriteMs": 360.36550998687744,
+        "frameMs": {
+          "p50": 10.838041,
+          "p95": 13.634167
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 617.0749664306641,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/software/300",
+      "frames": 300,
+      "codec": "hevc",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 2706.4537500000006,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 775274496,
+            "samples": 27,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 2726.184666000001,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 753221632,
+            "samples": 27,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 2732.255999999994,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 752730112,
+            "samples": 27,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 2726.184666000001,
+      "fps": 110.0439026532181,
+      "peakRssBytes": 775274496,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 173.2330322265625,
+        "concatAndPublishMs": 0.24902820587158203,
+        "encodeFinishMs": 211.4499807357788,
+        "encodeWriteMs": 1462.5147581100464,
+        "frameMs": {
+          "p50": 9.969959,
+          "p95": 12.765875
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 1882.8240633010864,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "prores/software/300",
+      "frames": 300,
+      "codec": "prores",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1489.2720000000045,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 628736000,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1443.6497079999972,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 645513216,
+            "samples": 14,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1576.820375000003,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 635256832,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1489.2720000000045,
+      "fps": 201.44070391439513,
+      "peakRssBytes": 645513216,
+      "metadata": {
+        "codec_name": "prores",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 98.78504276275635,
+        "concatAndPublishMs": 0.2840757369995117,
+        "encodeFinishMs": 70.82104682922363,
+        "encodeWriteMs": 383.4419250488281,
+        "frameMs": {
+          "p50": 10.445125,
+          "p95": 13.355459
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 602.5959253311157,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "prores4444/software/300",
+      "frames": 300,
+      "codec": "prores4444",
+      "encoder": "software",
+      "backend": "cpu",
+      "runs": [
+        {
+          "ms": 1499.6979169999977,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 704217088,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1530.0131249999977,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 704757760,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1577.4203329999873,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 690798592,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1530.0131249999977,
+      "fps": 196.07674934161133,
+      "peakRssBytes": 704757760,
+      "metadata": {
+        "codec_name": "prores",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 94.9009656906128,
+        "concatAndPublishMs": 0.29599666595458984,
+        "encodeFinishMs": 71.10297679901123,
+        "encodeWriteMs": 468.51110458374023,
+        "frameMs": {
+          "p50": 10.29425,
+          "p95": 12.139459
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 669.9340343475342,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "h264/videotoolbox/300",
+      "frames": 300,
+      "codec": "h264",
+      "encoder": "videotoolbox",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1572.6215000000084,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 431423488,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1527.1919170000037,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 437125120,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 2230.2838750000083,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 371081216,
+            "samples": 22,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1572.6215000000084,
+      "fps": 190.764274811198,
+      "peakRssBytes": 437125120,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 471.89199924468994,
+        "concatAndPublishMs": 0.225067138671875,
+        "encodeFinishMs": 71.05898857116699,
+        "encodeWriteMs": 753.4223794937134,
+        "frameMs": {
+          "p50": 6.177792,
+          "p95": 12.998208
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 1373.1780052185059,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/videotoolbox/300",
+      "frames": 300,
+      "codec": "hevc",
+      "encoder": "videotoolbox",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1796.684666999994,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 434225152,
+            "samples": 18,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 2188.562082999997,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 353894400,
+            "samples": 22,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1546.9607499999984,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 427622400,
+            "samples": 15,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1796.684666999994,
+      "fps": 166.97420839068195,
+      "peakRssBytes": 434225152,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 163.47098350524902,
+        "concatAndPublishMs": 0.21195411682128906,
+        "encodeFinishMs": 70.80698013305664,
+        "encodeWriteMs": 462.7504348754883,
+        "frameMs": {
+          "p50": 5.6295,
+          "p95": 7.815333
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 754.135012626648,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "h264/videotoolbox-shared/300",
+      "frames": 300,
+      "codec": "h264",
+      "encoder": "videotoolbox-shared",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1678.8320839999942,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 112820224,
+            "samples": 17,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1621.7354999999952,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 119521280,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1594.0251669999998,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 112656384,
+            "samples": 16,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1621.7354999999952,
+      "fps": 184.98700928727334,
+      "peakRssBytes": 119521280,
+      "metadata": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 120.94497680664062,
+        "concatAndPublishMs": 0.22494792938232422,
+        "encodeFinishMs": 45.60494422912598,
+        "encodeWriteMs": 550.3770112991333,
+        "frameMs": {
+          "p50": 4.578833,
+          "p95": 7.095625
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 768.9820528030396,
+        "segments": 1
+      },
+      "regression": false
+    },
+    {
+      "id": "hevc/videotoolbox-shared/300",
+      "frames": 300,
+      "codec": "hevc",
+      "encoder": "videotoolbox-shared",
+      "backend": "gpu",
+      "runs": [
+        {
+          "ms": 1847.6268750000017,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 111935488,
+            "samples": 18,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1734.9775410000002,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 107905024,
+            "samples": 17,
+            "peakProcesses": 2
+          }
+        },
+        {
+          "ms": 1781.1317920000001,
+          "memory": {
+            "status": "ok",
+            "peakRssBytes": 108298240,
+            "samples": 18,
+            "peakProcesses": 2
+          }
+        }
+      ],
+      "medianMs": 1781.1317920000001,
+      "fps": 168.43223019624816,
+      "peakRssBytes": 111935488,
+      "metadata": {
+        "codec_name": "hevc",
+        "width": 1280,
+        "height": 720,
+        "nb_read_frames": "300"
+      },
+      "stages": {
+        "availabilityMs": 127.02798843383789,
+        "concatAndPublishMs": 0.24902820587158203,
+        "encodeFinishMs": 57.88099765777588,
+        "encodeWriteMs": 689.3393993377686,
+        "frameMs": {
+          "p50": 4.591917,
+          "p95": 7.398083
+        },
+        "outputFps": 30,
+        "renderAndEncodeMs": 928.2909631729126,
+        "segments": 1
+      },
+      "regression": false
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+name: Codec regression gate
+on: [push]
+permissions:
+  contents: read
+concurrency:
+  group: codecs-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  codecs:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make bootstrap build
+      - name: Real software and hardware codec fixtures
+        run: MOTIONSWIFT_TEST_HARDWARE=1 swift test --no-parallel --filter 'Encoder|codecCombinations|remainingSoftware|segmentConcatenation|sharedIOSurface|hevcHardware'
+      - name: Frame-step, alpha, concat and cancellation
+        run: node tests/tools/codec-cli.mjs
+      - name: Enforce measured codec time and memory budgets
+        run: node tests/perf/codecs.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: codec-results
+          path: tests/reports/codecs/
+          if-no-files-found: warn

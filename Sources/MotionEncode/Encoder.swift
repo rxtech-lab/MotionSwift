@@ -11,17 +11,6 @@ public enum VideoEncoder: String, Sendable {
     if self == .sharedSurface { return "videotoolbox-iosurface" }
     return "ffmpeg-\(self == .software ? "libx264" : "h264_videotoolbox")-rawvideo-pipe"
   }
-
-  var arguments: [String] {
-    switch self {
-    case .software: return ["-c:v", "libx264", "-crf", "18", "-preset", "medium"]
-    // Require the hardware encoder. Never silently benchmark a software fallback.
-    // VideoToolbox quality is 0...100; it is not equivalent to x264 CRF.
-    case .videotoolbox:
-      return ["-c:v", "h264_videotoolbox", "-allow_sw", "0", "-q:v", "65", "-realtime", "0"]
-    case .sharedSurface: return [] // SharedVideoStream owns native encoding, not ffmpeg.
-    }
-  }
 }
 
 #if os(macOS)
@@ -32,23 +21,24 @@ public final class VideoStream {
   private let process = Process()
   private let input = Pipe()
   private let frameBytes: Int
+  private let output: URL
   public private(set) var framesWritten = 0
 
   public init(
-    output: URL, width: Int, height: Int, fps: Double, encoder: VideoEncoder = .software
+    output: URL, width: Int, height: Int, fps: Double, encoder: VideoEncoder = .software, options: EncodingOptions? = nil
   ) throws {
-    guard encoder != .sharedSurface else { throw MotionError("Use SharedVideoStream for IOSurface encoding") }
-    guard width > 0, height > 0, width <= 16384, height <= 16384,
-      width.isMultiple(of: 2), height.isMultiple(of: 2), fps.isFinite, fps > 0
-    else { throw MotionError("H.264 requires positive even dimensions up to 16384 and a positive finite fps") }
+    let settings = try options ?? EncodingOptions(encoder: encoder)
+    guard settings.encoder != .sharedSurface else { throw MotionError("Use SharedVideoStream for IOSurface encoding") }
+    try settings.validate(width: width, height: height, fps: fps, output: output)
+    self.output = output
     frameBytes = width * height * 4
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = [
       "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
       "-f", "rawvideo", "-pix_fmt", "rgba", "-s", "\(width)x\(height)", "-framerate", String(fps),
       "-i", "pipe:0",
-    ] + encoder.arguments + [
-      "-pix_fmt", "yuv420p", output.path,
+    ] + settings.arguments + [
+      "-pix_fmt", settings.pixelFormat.rawValue, output.path,
     ]
     process.standardInput = input
     // Inherit stderr so encoder errors stay visible and cannot fill a pipe.
@@ -82,6 +72,28 @@ public final class VideoStream {
     try? input.fileHandleForWriting.close()
     if process.isRunning { process.terminate() }
     process.waitUntilExit()
+    try? FileManager.default.removeItem(at: output)
+  }
+}
+#endif
+
+#if os(macOS)
+extension VideoStream {
+  /// A real one-frame encode detects missing ffmpeg codecs and inaccessible hardware
+  /// before the renderer starts. The requested encoder is never substituted.
+  public static func checkAvailability(options: EncodingOptions, width: Int, height: Int, fps: Double) throws {
+    let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "." + options.fileExtension)
+    defer { try? FileManager.default.removeItem(at: output) }
+    do {
+      let stream = try VideoStream(output: output, width: width, height: height, fps: fps, options: options)
+      do {
+        try stream.write(Data(repeating: 0, count: width * height * 4))
+        try stream.finish()
+      } catch { stream.cancel(); throw error }
+    } catch {
+      throw MotionError("Requested \(options.codec.rawValue)/\(options.encoder.rawValue) unavailable at \(width)x\(height): "
+        + "\(error). No software fallback was attempted.")
+    }
   }
 }
 #endif

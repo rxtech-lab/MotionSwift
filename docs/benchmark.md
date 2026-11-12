@@ -1,5 +1,7 @@
 # Benchmark: Remotion vs native CPU vs native GPU (runs on every PR)
 
+The extended codec matrix now has an enabled time/RSS gate: see [encoding controls and verification](encoding.md) and [the measured codec snapshot](benchmarks/2026-11-13-codecs.md). The general Remotion comparison below retains its existing informational policy.
+
 > The Phase 0 benchmark is implemented. See [the current contract](current-implementation.md#benchmark-and-runner-setup) for the active fixtures, exact runner labels, browser pin, API worker, and limitations. The extended CLI/output schema below remains the target.
 
 ## Memory measurement

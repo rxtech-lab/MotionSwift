@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "measuredOn": "2026-11-13",
+  "machine": {
+    "cpu": "Apple M4 Max",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "policy": "Median wall time <= measured median * 1.5; sampled peak process-tree RSS <= measured peak * 1.5. Same host class only.",
+  "cells": {
+    "h264/software/30": {
+      "maxMs": 1537,
+      "maxRssBytes": 952492032
+    },
+    "hevc/software/30": {
+      "maxMs": 1960,
+      "maxRssBytes": 1049346048
+    },
+    "prores/software/30": {
+      "maxMs": 1634,
+      "maxRssBytes": 849862656
+    },
+    "prores4444/software/30": {
+      "maxMs": 1613,
+      "maxRssBytes": 884342784
+    },
+    "h264/videotoolbox/30": {
+      "maxMs": 2051,
+      "maxRssBytes": 501227520
+    },
+    "hevc/videotoolbox/30": {
+      "maxMs": 1903,
+      "maxRssBytes": 496533504
+    },
+    "h264/videotoolbox-shared/30": {
+      "maxMs": 1645,
+      "maxRssBytes": 156499968
+    },
+    "hevc/videotoolbox-shared/30": {
+      "maxMs": 1609,
+      "maxRssBytes": 154755072
+    },
+    "h264/software/300": {
+      "maxMs": 2359,
+      "maxRssBytes": 1447649280
+    },
+    "hevc/software/300": {
+      "maxMs": 4090,
+      "maxRssBytes": 1162911744
+    },
+    "prores/software/300": {
+      "maxMs": 2234,
+      "maxRssBytes": 968269824
+    },
+    "prores4444/software/300": {
+      "maxMs": 2296,
+      "maxRssBytes": 1057136640
+    },
+    "h264/videotoolbox/300": {
+      "maxMs": 2359,
+      "maxRssBytes": 655687680
+    },
+    "hevc/videotoolbox/300": {
+      "maxMs": 2696,
+      "maxRssBytes": 651337728
+    },
+    "h264/videotoolbox-shared/300": {
+      "maxMs": 2433,
+      "maxRssBytes": 179281920
+    },
+    "hevc/videotoolbox-shared/300": {
+      "maxMs": 2672,
+      "maxRssBytes": 167903232
+    }
+  }
+}
