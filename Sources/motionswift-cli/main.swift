@@ -12,7 +12,7 @@ struct Arguments {
   init(_ input: [String]) throws {
     let allowed: Set<String> = [
       "project", "entry", "frame", "frames", "props", "report-json", "dump-layout", "codec",
-      "concurrency", "backend", "scale",
+      "concurrency", "backend", "scale", "encoder",
     ]
     var index = 0
     while index < input.count {
@@ -42,6 +42,12 @@ struct Arguments {
     if let value = options["codec"], value != "h264" {
       throw MotionError("Only --codec=h264 is implemented")
     }
+    if let value = options["encoder"], VideoEncoder(rawValue: value) == nil {
+      throw MotionError("--encoder must be software, videotoolbox, or videotoolbox-shared")
+    }
+    if options["encoder"] == "videotoolbox-shared", backend != .gpu {
+      throw MotionError("--encoder=videotoolbox-shared requires --backend=gpu")
+    }
     if let value = options["concurrency"], value != "auto", (Int(value) ?? 0) < 1 {
       throw MotionError("--concurrency must be a positive integer or auto")
     }
@@ -51,6 +57,9 @@ struct Arguments {
   }
 
   var backend: RenderBackend { options["backend"].flatMap(RenderBackend.init) ?? .cpu }
+  var encoder: VideoEncoder {
+    options["encoder"].flatMap(VideoEncoder.init) ?? .software
+  }
   var scale: Double { options["scale"].flatMap(Double.init) ?? 1 }
   /// Render workers. `auto` (the default) uses half the cores, leaving the rest for
   /// ffmpeg/x264, which encodes concurrently.
@@ -101,6 +110,7 @@ func run() throws {
       motionswift render --project <dir> --entry <file> <composition> <out.mp4> --codec=h264
       Options: --frames=a-b --props=file.json --report-json=file --dump-layout=file
                --backend=cpu|gpu (Skia raster or Skia Metal) --concurrency=N|auto --scale=N
+               --encoder=software|videotoolbox|videotoolbox-shared (default: software)
       Phase 0: macOS, synchronous React, strict box subset, parallel frame workers, silent H.264.
       """)
     return
@@ -186,7 +196,8 @@ func render(
     frames = Array(0..<composition.durationInFrames)
   }
   let options = PipelineOptions(
-    workers: arguments.concurrency, backend: arguments.backend, scale: arguments.scale)
+    workers: arguments.concurrency, backend: arguments.backend, scale: arguments.scale,
+    sharedVideoFrames: arguments.encoder == .sharedSurface)
   let renderStart = Date()
   var timings: [Double] = []
   if command == "still" {
@@ -201,39 +212,54 @@ func render(
   } else {
     let size = try Renderer.pixelSize(
       width: composition.width, height: composition.height, scale: options.scale)
-    let stream = try VideoStream(
-      output: output, width: size.width, height: size.height, fps: composition.fps)
+    let shared = arguments.encoder == .sharedSurface
+      ? try SharedVideoStream(output: output, width: size.width, height: size.height, fps: composition.fps) : nil
+    let stream = arguments.encoder == .sharedSurface ? nil : try VideoStream(
+      output: output, width: size.width, height: size.height, fps: composition.fps,
+      encoder: arguments.encoder)
     do {
       try FramePipeline.run(
         bundle: bundle, composition: composition, frames: frames, props: props, options: options
       ) { frame in
-        try stream.write(frame.pixels)
+        if let shared, let videoFrame = frame.videoFrame {
+          try shared.write(videoFrame.pixelBuffer)
+        } else if let stream {
+          try stream.write(frame.pixels)
+        } else { throw MotionError("Missing shared video frame") }
         if let path = arguments.options["dump-layout"] { try writeJSON(frame.layout, to: path) }
         timings.append(frame.renderMs)
       }
     } catch {
-      stream.cancel()
+      stream?.cancel()
+      shared?.cancel()
       throw error
     }
-    try stream.finish()
+    do {
+      try stream?.finish()
+      try shared?.finish()
+    } catch {
+      stream?.cancel()
+      shared?.cancel()
+      throw error
+    }
   }
   if let path = arguments.options["report-json"] {
     try writeReport(
       to: path, timings: timings, startupMs: startupMs, totalMs: Date().timeIntervalSince(renderStart) * 1000,
-      options: options, streamed: command == "render")
+      options: options, encoder: command == "render" ? arguments.encoder.label : "png")
   }
 }
 
 func writeReport(
   to path: String, timings: [Double], startupMs: Double, totalMs: Double, options: PipelineOptions,
-  streamed: Bool
+  encoder: String
 ) throws {
   let sorted = timings.sorted()
   let report: [String: JSONValue] = [
     "startupMs": .number(startupMs), "frames": .number(Double(timings.count)),
     "backend": .string(options.backend.label), "workers": .number(Double(options.workers)),
     "scale": .number(options.scale),
-    "encoder": .string(streamed ? "ffmpeg-libx264-rawvideo-pipe" : "png"),
+    "encoder": .string(encoder),
     "stages": .object([
       "frameMs": .object([
         "p50": .number(sorted[sorted.count / 2]),

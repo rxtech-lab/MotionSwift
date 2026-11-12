@@ -10,8 +10,9 @@ public struct RenderedFrame: Sendable {
   public let index: Int
   public let frame: Int
   public let pixels: Data
+  public let videoFrame: MetalVideoFrame?
   public let layout: [LayoutBox]
-  /// Wall time spent evaluating, laying out, painting, and reading back this frame.
+  /// Evaluate + layout + paint + CPU readback or shared GPU resolve time.
   public let renderMs: Double
 }
 
@@ -19,13 +20,18 @@ public struct PipelineOptions: Sendable {
   public var workers: Int
   public var backend: RenderBackend
   public var scale: Double
+  public var sharedVideoFrames: Bool
   /// Frames that may be finished but not yet consumed; bounds memory for large surfaces.
   public var window: Int
 
-  public init(workers: Int, backend: RenderBackend = .cpu, scale: Double = 1, window: Int? = nil) {
+  public init(
+    workers: Int, backend: RenderBackend = .cpu, scale: Double = 1, window: Int? = nil,
+    sharedVideoFrames: Bool = false
+  ) {
     self.workers = max(1, workers)
     self.backend = backend
     self.scale = scale
+    self.sharedVideoFrames = sharedVideoFrames
     self.window = max(self.workers, window ?? self.workers * 2)
   }
 }
@@ -40,6 +46,9 @@ public enum FramePipeline {
     options: PipelineOptions, consume: (RenderedFrame) throws -> Void
   ) throws {
     guard !frames.isEmpty else { return }
+    guard !options.sharedVideoFrames || options.backend == .gpu else {
+      throw MotionError("Shared video frames require --backend=gpu")
+    }
     let state = PipelineState(count: frames.count, window: options.window)
     let workers = min(options.workers, frames.count)
     let group = DispatchGroup()
@@ -82,11 +91,13 @@ public enum FramePipeline {
         let begin = DispatchTime.now().uptimeNanoseconds
         let tree = try runtime.frame(composition: composition, number: frames[index], props: props)
         let layout = try renderer.draw(tree, composition: composition)
-        let pixels = try renderer.pixels()
+        let videoFrame = options.sharedVideoFrames ? try renderer.videoFrame() : nil
+        let pixels = options.sharedVideoFrames ? Data() : try renderer.pixels()
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
         state.complete(
           RenderedFrame(
-            index: index, frame: frames[index], pixels: pixels, layout: layout, renderMs: elapsed))
+            index: index, frame: frames[index], pixels: pixels, videoFrame: videoFrame,
+            layout: layout, renderMs: elapsed))
       }
     } catch {
       state.fail(error)

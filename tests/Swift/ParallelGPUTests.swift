@@ -1,3 +1,4 @@
+import CoreVideo
 import Foundation
 import Metal
 import MotionCompiler
@@ -51,6 +52,29 @@ private func composition(width: Int = 16, height: Int = 16) throws -> Compositio
   #expect(try cpu.pixels() == gpu.pixels())
 }
 
+@Test(.enabled(if: hasMetal)) func sharedGPUResolveMatchesReadbackRGBIncludingAlpha() throws {
+  let comp = try composition()
+  let renderer = try Renderer(width: 16, height: 16, backend: .gpu)
+  let transparent = RenderNode(type: "div", style: ["backgroundColor": .string("#ff800080")])
+  for tree in [layeredTree, transparent] {
+    try renderer.draw(tree, composition: comp)
+    let expected = try renderer.pixels()
+    let frame = try renderer.videoFrame()
+    let buffer = frame.pixelBuffer
+    #expect(CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess)
+    defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+    let bytes = try #require(CVPixelBufferGetBaseAddress(buffer)?.assumingMemoryBound(to: UInt8.self))
+    let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
+    for row in 0..<16 {
+      for column in 0..<16 {
+        for channel in 0..<3 {
+          #expect(bytes[row * rowBytes + column * 4 + 2 - channel] == expected[(row * 16 + column) * 4 + channel])
+        }
+      }
+    }
+  }
+}
+
 @Test func scaleMultipliesSurfaceButNotLayout() throws {
   let renderer = try Renderer(width: 16, height: 16, scale: 2.5)
   #expect(renderer.pixelWidth == 40 && renderer.pixelHeight == 40)
@@ -79,6 +103,22 @@ private func composition(width: Int = 16, height: Int = 16) throws -> Compositio
     ) { delivered.append($0) }
     #expect(delivered.map(\.frame) == frames)
     #expect(delivered.map(\.pixels) == expected)
+  }
+  if hasMetal {
+    // Hold frames beyond worker/renderer teardown. Their CVMetalTexture caches must
+    // outlive the wrappers, including final release on this consumer thread.
+    var shared: [RenderedFrame] = []
+    try FramePipeline.run(
+      bundle: bundle, composition: comp, frames: frames, props: "{}",
+      options: PipelineOptions(workers: 4, backend: .gpu, sharedVideoFrames: true)
+    ) { shared.append($0) }
+    #expect(shared.map(\.frame) == frames)
+    #expect(shared.allSatisfy { $0.pixels.isEmpty && $0.videoFrame != nil })
+    for frame in shared {
+      let buffer = try #require(frame.videoFrame?.pixelBuffer)
+      #expect(CVPixelBufferGetWidth(buffer) == comp.width)
+      #expect(CVPixelBufferGetIOSurface(buffer) != nil)
+    }
   }
 }
 

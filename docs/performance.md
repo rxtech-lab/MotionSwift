@@ -2,6 +2,8 @@
 
 The numbers in the [README](../README.md#speed-estimates) are **estimates**. This document explains where they come from and how we turn them into measurements.
 
+The model below describes the target architecture. The current implementation uses Skia Ganesh and defaults to x264. FFmpeg VideoToolbox is opt-in; a separate native IOSurface/VideoToolbox path removes application CPU pixel readback and pipe transport. GPU resolve, synchronization, and encoder color conversion remain. Retained-tree caching is not implemented. See [the current implementation](current-implementation.md) and [encoder benchmark comparison](benchmark.md#hardware-encoding-comparison).
+
 ## Why native is faster
 
 1. **No screenshot round trip.** Remotion asks Chrome for a screenshot (PNG/JPEG encode), copies it over the DevTools protocol, and decodes it again for ffmpeg. That costs 10–40 ms per frame and grows with pixel count. MotionSwift keeps the frame on the GPU from raster to encoder (IOSurface → CVPixelBuffer → VideoToolbox).
