@@ -21,9 +21,13 @@ jobs:
         run: node tests/tools/hardware-capabilities.mjs
       - run: make ci
       - name: Check real Test Film visual regressions
-        env:
-          TEST_FILM_PROJECT: ${{ vars.TEST_FILM_PROJECT }}
-        run: node tests/tools/test-film-ci.mjs check
+        shell: bash
+        run: |
+          fixture=$(mktemp -d "$RUNNER_TEMP/motionswift-test-film.XXXXXX")
+          trap 'rm -rf "$fixture"' EXIT
+          shasum -a 256 -c tests/fixtures/test-film/project.zip.sha256
+          unzip -q tests/fixtures/test-film/project.zip -d "$fixture"
+          TEST_FILM_PROJECT="$fixture" node tests/tools/test-film-ci.mjs check
       - name: Upload visual comparisons
         if: always()
         uses: actions/upload-artifact@v7

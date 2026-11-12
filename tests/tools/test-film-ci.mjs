@@ -1,4 +1,4 @@
-// Private source stays on the self-hosted runner; only reviewed WebP goldens and metadata are checked in.
+// CI extracts the checked-in project ZIP outside the uploaded reports; local runs can use TEST_FILM_PROJECT.
 // `baseline` is an explicit local operation after reviewing test-film.mjs output.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,7 +62,7 @@ function baseline() {
 
 function findSource() {
   const base = process.env.TEST_FILM_PROJECT || path.join(os.homedir(),'Desktop/test-film/music-translator.rxfilmstudio/Remotion');
-  if (!fs.existsSync(base)) throw Error('Private Test Film source is missing; set TEST_FILM_PROJECT on the self-hosted runner');
+  if (!fs.existsSync(base)) throw Error('Test Film source is missing; extract tests/fixtures/test-film/project.zip and set TEST_FILM_PROJECT');
   if (fs.existsSync(path.join(base,'src'))) return base;
   const projects = fs.readdirSync(base).map(name=>path.join(base,name)).filter(dir=>fs.existsSync(path.join(dir,'src')));
   if (projects.length !== 1) throw Error('Set TEST_FILM_PROJECT to the exact Remotion project directory');
