@@ -59,7 +59,16 @@ Media is not the main blocker: two fixtures use `<Audio>` (fs11, fs13), and none
 
 ## Remotion baselines
 
-BASELINE_TABLE
+Remotion 4.0.459, frames 0-119, concurrency 8, 3 measured runs after 1 warmup; medians shown. Machine: Apple M4 Max, 16 cores, 128 GB.
+
+| Fixture | Output | Wall | Bundle | Render frames | Stitch | All runs OK |
+|---|---|---|---|---|---|---|
+| fs01 | 1920×1080 @ 30 fps | 2.80 s | 0.40 s | 1.78 s | 0.04 s | yes |
+| fs02 | 3840×2160 @ 60 fps | 7.09 s | 0.40 s | 6.14 s | 0.05 s | yes |
+| fs03 | 3840×2160 @ 30 fps | 6.31 s | 0.41 s | 5.30 s | 0.05 s | yes |
+| fs08 | 3840×2160 @ 60 fps | 205.96 s | 0.41 s | 204.87 s | 0.06 s | yes |
+
+The planned run also covered fs09, fs11, fs13 and fs14. It was stopped early, so those four have no baseline yet. Rerun `baseline --ids fs09,fs11,fs13,fs14` and then `summarize` to add them.
 
 ## CSkia decision: C ABI shim
 
