@@ -1,4 +1,9 @@
 import {parse} from '@babel/parser';
+const THREE_ELEMENTS = new Set(['group', 'object3D', 'mesh', 'primitive', 'ambientLight', 'directionalLight', 'pointLight',
+  'spotLight', 'hemisphereLight', 'color', 'fog', 'fogExp2', 'boxGeometry', 'sphereGeometry', 'planeGeometry',
+  'cylinderGeometry', 'coneGeometry', 'torusGeometry', 'torusKnotGeometry', 'circleGeometry', 'ringGeometry',
+  'icosahedronGeometry', 'octahedronGeometry', 'tetrahedronGeometry', 'dodecahedronGeometry', 'meshBasicMaterial',
+  'meshLambertMaterial', 'meshPhongMaterial', 'meshStandardMaterial', 'meshPhysicalMaterial', 'meshNormalMaterial']);
 export function inspect(source, file, subset) {
   const diagnostics = [];
   function lint(ast, file) {
@@ -7,7 +12,12 @@ export function inspect(source, file, subset) {
       const fail = (rule, message) => diagnostics.push({ rule, file, message });
       if (node.type === "JSXOpeningElement") {
         const name = node.name.name;
-        if (["video", "audio"].includes(name))
+        if (["perspectiveCamera", "orthographicCamera"].includes(name))
+          fail(
+            "ms/unsupported-element",
+            `${name} is not supported; aim the ThreeCanvas camera with useThree(state => state.camera)`,
+          );
+        else if (["video", "audio"].includes(name))
           fail(
             "ms/no-raw-media",
             `Use native media components instead of ${name}`,
@@ -18,7 +28,9 @@ export function inspect(source, file, subset) {
           // SVG JSX may be serialized into an img data URI by user code. Host SVG
           // nodes still fail explicitly in the painter; only SVG images are supported.
           !["div", "span", "img", "svg", "g", "defs", "path", "rect", "circle",
-            "ellipse", "text", "radialGradient", "linearGradient", "stop", "pattern"].includes(name)
+            "ellipse", "text", "radialGradient", "linearGradient", "stop", "pattern"].includes(name) &&
+          // React Three Fiber elements; the native 3D renderer validates their props inside <ThreeCanvas>.
+          !THREE_ELEMENTS.has(name)
         )
           fail("ms/unsupported-element", `${name} is not implemented`);
         for (const attr of node.attributes || [])

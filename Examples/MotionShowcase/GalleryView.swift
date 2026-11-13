@@ -15,6 +15,8 @@ struct GalleryView: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
           destination("Media Composition", subtitle: "Nested clips, audio, video and timeline",
                       icon: "rectangle.stack.fill", color: .teal, item: .media)
+          destination("3D Scenes", subtitle: "three.js scenes, keyframed cameras, lights and USDZ",
+                      icon: "cube.transparent", color: .indigo, item: .scenes3D)
           destination("Test Film", subtitle: "90-second benchmark film and export",
                       icon: "film", color: .blue, item: .testFilm)
           destination("Visual Editor", subtitle: "Canvas, inspector, timeline and keyframes",

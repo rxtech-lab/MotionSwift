@@ -1,0 +1,219 @@
+{
+  "three": "187",
+  "geometries": [
+    {
+      "type": "box",
+      "args": [],
+      "vertices": 24,
+      "indices": 36,
+      "sha256": "adfa92686d3272fccd5517f95964866b6075776e6bf632b1feb63ef30e0b7427"
+    },
+    {
+      "type": "box",
+      "args": [
+        2,
+        1.5,
+        0.7,
+        3,
+        2,
+        4
+      ],
+      "vertices": 94,
+      "indices": 312,
+      "sha256": "b330885ce12bfd70800546b355cff09ab71105227b634c19a22d74fb545eae1c"
+    },
+    {
+      "type": "sphere",
+      "args": [],
+      "vertices": 561,
+      "indices": 2880,
+      "sha256": "74e95c086534e8e644e2d8eb66832008f3319acfdacbbf578331f8d9f62d0783"
+    },
+    {
+      "type": "sphere",
+      "args": [
+        0.6,
+        24,
+        12,
+        0.3,
+        4,
+        0.2,
+        2
+      ],
+      "vertices": 325,
+      "indices": 1728,
+      "sha256": "5adb178e250ebd25a87e9cbcae5c8434e12dd4d443f33da41c75132d0ae40c43"
+    },
+    {
+      "type": "plane",
+      "args": [
+        3,
+        2,
+        4,
+        3
+      ],
+      "vertices": 20,
+      "indices": 72,
+      "sha256": "d72423a54e734ae81431280b7861022d7acb5b3737d4fa883b1d8b5872a7ce64"
+    },
+    {
+      "type": "cylinder",
+      "args": [],
+      "vertices": 196,
+      "indices": 384,
+      "sha256": "3571c4e857b03e4a0ca133a15dc55ea6251a7a3246be980a11f33040a0b16856"
+    },
+    {
+      "type": "cylinder",
+      "args": [
+        0.4,
+        0.6,
+        1.1,
+        24,
+        3,
+        0,
+        0.5,
+        4
+      ],
+      "vertices": 198,
+      "indices": 576,
+      "sha256": "02953294f195e89cab3a56c87d9e44076064ff46e24ac2631a0b10914736cf13"
+    },
+    {
+      "type": "cylinder",
+      "args": [
+        1,
+        1,
+        2,
+        8,
+        1,
+        1
+      ],
+      "vertices": 18,
+      "indices": 48,
+      "sha256": "e75adeb8e70bd4ba843a0a29d91ccd6ef1ea20c22bde38bd3752af9d77f3899e"
+    },
+    {
+      "type": "cone",
+      "args": [
+        0.6,
+        1.1,
+        24
+      ],
+      "vertices": 99,
+      "indices": 144,
+      "sha256": "1b6fe74a3a6ca2bb96b18b89d4fd9a8a6312c1bf22d506cd5955023d23888218"
+    },
+    {
+      "type": "torus",
+      "args": [],
+      "vertices": 637,
+      "indices": 3456,
+      "sha256": "13a9fbe0e35f268cd5a579cb75211849568b9c10b54be6e0f3e36c0200f34599"
+    },
+    {
+      "type": "torus",
+      "args": [
+        0.45,
+        0.18,
+        16,
+        48,
+        5
+      ],
+      "vertices": 833,
+      "indices": 4608,
+      "sha256": "e216a2099936e69b7c2e39384cf64d718e891df9609d430b2dfab26f0054a300"
+    },
+    {
+      "type": "torusKnot",
+      "args": [],
+      "vertices": 585,
+      "indices": 3072,
+      "sha256": "03b9144a4c06779db4c4ae56c576d394b35c3bc2f2a335d530ec6718a5693a73"
+    },
+    {
+      "type": "torusKnot",
+      "args": [
+        1.2,
+        0.38,
+        220,
+        28,
+        2,
+        3
+      ],
+      "vertices": 6409,
+      "indices": 36960,
+      "sha256": "433293b6dc8b1e293c7852b0261d37da480384fad5942bb51c987552efe3dfdb"
+    },
+    {
+      "type": "circle",
+      "args": [
+        0.6,
+        6
+      ],
+      "vertices": 8,
+      "indices": 18,
+      "sha256": "a5de3c9a33c274903a487199ef9c71ccb0a7849997a0dfac92c3b850eea522d8"
+    },
+    {
+      "type": "ring",
+      "args": [
+        0.3,
+        0.6,
+        32,
+        2
+      ],
+      "vertices": 99,
+      "indices": 384,
+      "sha256": "1593c91409ed2edf67ce26903cbb29a0451cb6eeddc7702d8de43afd94e8ed8f"
+    },
+    {
+      "type": "icosahedron",
+      "args": [
+        1,
+        0
+      ],
+      "vertices": 60,
+      "indices": null,
+      "sha256": "d766b02392b8430136b21008546b56c791ef76f69847250501356934e987fca0"
+    },
+    {
+      "type": "icosahedron",
+      "args": [
+        0.6,
+        2
+      ],
+      "vertices": 540,
+      "indices": null,
+      "sha256": "bf61fdcdd4535d5088df8c5fd1f040b66449d33b75c998e37212c6c6c500da4b"
+    },
+    {
+      "type": "octahedron",
+      "args": [
+        0.6
+      ],
+      "vertices": 24,
+      "indices": null,
+      "sha256": "c76d3be7cd8b094e1d91bb22cde697dde4389bed28cd30bfde0fca51ace8d3fb"
+    },
+    {
+      "type": "tetrahedron",
+      "args": [
+        0.65,
+        1
+      ],
+      "vertices": 48,
+      "indices": null,
+      "sha256": "b6c14e47787bb8897152e5e3cc8ef7440889a0a7be89f51df488e68c86ac3f46"
+    },
+    {
+      "type": "dodecahedron",
+      "args": [
+        0.6
+      ],
+      "vertices": 108,
+      "indices": null,
+      "sha256": "9eb17f4b2dbb22d9f5c16bcb8b3f238a33b8875cfa6a0b807365af53a715e760"
+    }
+  ]
+}

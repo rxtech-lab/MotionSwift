@@ -1,0 +1,11 @@
+{
+  "frames": 100,
+  "retainedMs": 23.302666668314487,
+  "freshWorkerMs": 512.2384166461416,
+  "speedup": 21.98196558090287,
+  "mutations": 853,
+  "platform": "darwin",
+  "arch": "arm64",
+  "measuredAt": "2026-11-13T04:18:40.608Z",
+  "scope": "Same current runtime: one retained worker versus a new worker per sample; not a historical end-to-end baseline."
+}

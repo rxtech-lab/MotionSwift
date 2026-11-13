@@ -76,6 +76,13 @@ function media(type, {src, style, trimBefore, startFrom, trimAfter, endAt,
 }
 const Audio = props => media('ms-audio', props);
 const OffthreadVideo = props => media('ms-video', props);
+// Files in the project's public/ folder. Native renderers resolve `static:` against that folder.
+function staticFile(name) {
+  if (typeof name !== 'string' || !name || /^[a-z]+:/i.test(name) || name.split('/').includes('..')) {
+    throw Error('staticFile() requires a relative path inside public/: ' + String(name));
+  }
+  return 'static:' + name.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+}
 const Img = props => React.createElement('img', {...props, style: {objectFit: 'contain', ...props.style}});
 const Easing = {
   linear: x => x, quad: x => x*x, cubic: x => x*x*x,
@@ -86,7 +93,7 @@ const Easing = {
 };
 module.exports = {AbsoluteFill, Composition, Still: props => Composition({...props, durationInFrames: 1, fps: 1}),
   Folder: ({children}) => children, registerRoot, useCurrentFrame, useVideoConfig, interpolate, spring,
-  Sequence, Freeze, Loop, Audio, OffthreadVideo, Video: OffthreadVideo, Img, Easing, __Frame: Frame, __Config: Config};
+  Sequence, Freeze, Loop, Audio, OffthreadVideo, Video: OffthreadVideo, Img, Easing, staticFile, __Frame: Frame, __Config: Config};
 
 // The lifecycle belongs to the worker, rather than the module cache.
 module.exports.delayRender = (label, options) => globalThis.__ms_delayRender(label, options);

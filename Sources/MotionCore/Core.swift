@@ -90,11 +90,13 @@ public struct RenderNode: Codable, Sendable {
   public let media: MediaSample?
   /// Editor source stamp (`file:line:column`) from the portable compiler, if stamped.
   public let source: String?
+  /// The committed scene of a `ms-three` (`<ThreeCanvas>`) node.
+  public let scene: Scene3D?
   public let children: [RenderNode]
 
   public init(
     type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil, source: String? = nil,
-    media: MediaSample? = nil, children: [RenderNode] = []
+    media: MediaSample? = nil, scene: Scene3D? = nil, children: [RenderNode] = []
   ) {
     self.type = type
     self.style = style
@@ -102,6 +104,7 @@ public struct RenderNode: Codable, Sendable {
     self.src = src
     self.media = media
     self.source = source
+    self.scene = scene
     self.children = children
   }
 
@@ -114,7 +117,7 @@ public struct RenderNode: Codable, Sendable {
       for (key, value) in patch { style[key] = value == .null ? nil : value }
     }
     return RenderNode(
-      type: type, style: style, text: text, src: src, source: source, media: media,
+      type: type, style: style, text: text, src: src, source: source, media: media, scene: scene,
       children: children.map { $0.applying(overrides) })
   }
 

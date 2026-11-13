@@ -44,7 +44,9 @@ fs.writeFileSync(path.join(output, 'vendor.json'), JSON.stringify({
   identity: Object.entries(packages).map(([name, value]) => `${name}@${value}`).join(' '),
   sha256: crypto.createHash('sha256').update(vendor).digest('hex'),
   specifiers: ['react', 'react/jsx-runtime', 'react-reconciler', 'scheduler', '@motionswift/remotion',
-    '@motionswift/remotion/jsx-runtime', 'remotion', 'remotion/jsx-runtime'],
+    '@motionswift/remotion/jsx-runtime', 'remotion', 'remotion/jsx-runtime', 'three',
+    'three/addons/loaders/USDLoader.js', 'three/examples/jsm/loaders/USDLoader.js', 'three/addons/loaders/USDZLoader.js',
+    'three/examples/jsm/loaders/USDZLoader.js', '@react-three/fiber', '@remotion/three'],
   compiler: {sucrase: version('sucrase'), '@babel/parser': version('@babel/parser')},
 }, null, 2) + '\n');
 const licenses = [['react', 'LICENSE'], ['react-reconciler', 'LICENSE'], ['scheduler', 'LICENSE'], ['sucrase', 'LICENSE'],

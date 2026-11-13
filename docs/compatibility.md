@@ -29,7 +29,8 @@ Each row below has a status that the implementation must keep up to date:
 | `@remotion/google-fonts`, `@remotion/fonts` `loadFont` | 🟡 | 4 | Fonts are registered in the Skia font collection. |
 | `@remotion/paths`, `@remotion/shapes`, `@remotion/noise` | ✅ | 3 | Pure JS output → SVG paths. |
 | `@remotion/transitions` | 🟡 | 3 | Built on the supported subset (opacity, transforms, clip). |
-| `@remotion/three`, `@remotion/lottie`, `@remotion/gif` | ⛔ → 🟡 later | – | Out of scope for v1. `lottie` can come later via Skottie, which is part of Skia. |
+| `@remotion/three` (`ThreeCanvas`) + React Three Fiber elements, `three` math subset, USD/USDZ models | 🟡 | 4 | Native Metal port of three.js r187 shading; keyframed cameras via `useThree`, meshes, 13 geometries, 6 material types, ambient/hemisphere/directional/point/spot lights, fog, transparency, USDZ via `useLoader(USDLoader)`. No textures, shadows or `useFrame`. See [3D support](three-d.md). |
+| `@remotion/lottie`, `@remotion/gif` | ⛔ → 🟡 later | – | `lottie` can come later via Skottie, which is part of Skia. |
 | `<IFrame>`, arbitrary HTML via `dangerouslySetInnerHTML` | ⛔ / 🌐 | – | |
 | `getRemotionEnvironment`, `useRemotionEnvironment` | ✅ | 2 | Reports `isRendering` / `isStudio` equivalents. |
 
@@ -44,6 +45,7 @@ Each row below has a status that the implementation must keep up to date:
 | `svg` + `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `g`, `defs`, `linearGradient`, `radialGradient`, `stop`, `clipPath`, `mask`, `text` | 🟡 3 | Built directly as Skia draw ops. Inline SVG goes through our own SVG node mapping (so it stays editable), not SkSVG. |
 | External `.svg` via `<Img src>` | 🟡 3 | Rendered with SkSVG. |
 | `canvas` | ⛔ | |
+| R3F elements inside `<ThreeCanvas>` (`mesh`, `group`, `primitive`, `*Geometry`, `mesh*Material`, lights, `color`/`fog` attachments) | 🟡 | Drawn by the native 3D renderer; see [3D support](three-d.md). |
 | `video`, `audio` (raw HTML) | ⛔ | Use `OffthreadVideo` / `Audio` instead. |
 | Form elements, `table`, `iframe` | ⛔ / 🌐 | |
 

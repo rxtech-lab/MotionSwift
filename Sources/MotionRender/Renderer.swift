@@ -27,6 +27,7 @@ public struct LayoutBox: Codable, Sendable, Equatable {
 /// A renderer owns one Skia surface and is not thread-safe; parallel renders use one per worker.
 public final class Renderer {
   private let mediaDecoder = MediaDecoder()
+  private var scene3D: SceneRenderer3D?
   private let canvas: Canvas
   private let size: (Int, Int)
   private let pixelScale: Double
@@ -130,7 +131,7 @@ public final class Renderer {
     if node.type == "#text" {
       throw MotionError("Paragraph text layout is not implemented in this Phase 0 painter")
     }
-    guard ["div", "span", "img", "ms-video"].contains(node.type) else {
+    guard ["div", "span", "img", "ms-video", "ms-three"].contains(node.type) else {
       throw MotionError("Unsupported element: \(node.type)")
     }
     let style = try Style(node.style)
@@ -146,6 +147,14 @@ public final class Renderer {
     let radius = try style.length("borderRadius", relativeTo: min(width, height))
     canvas.rectangle(
       width: width, height: height, radius: radius, color: try Style.color(background))
+    if node.type == "ms-three" {
+      guard let scene = node.scene else { throw MotionError("<ThreeCanvas> did not commit a scene") }
+      if scene3D == nil { scene3D = try SceneRenderer3D() }
+      // R3F sizes the WebGL canvas in CSS pixels times the clamped device pixel ratio (Remotion's scale).
+      let image = try scene3D!.render(scene, devicePixelRatio: pixelScale)
+      try canvas.image(image.pixels, pixelWidth: image.width, pixelHeight: image.height,
+                       width: width, height: height, fit: "fill")
+    }
     if node.type == "img" || node.type == "ms-video" {
       guard let src = node.src else { throw MotionError("Missing media source") }
       if src.hasPrefix("data:image/svg+xml") {

@@ -1,9 +1,29 @@
 import Foundation
 
 public enum MediaSource {
+  private static let lock = NSLock()
+  nonisolated(unsafe) private static var publicFolder: URL?
+
+  /// The project's `public/` folder, used for `staticFile()` (`static:` sources). Hosts set it
+  /// when they open a project; it is process-wide like Remotion's single public directory.
+  public static var publicDirectory: URL? {
+    get { lock.withLock { publicFolder } }
+    set { lock.withLock { publicFolder = newValue } }
+  }
+
   /// Absolute paths/file URLs are portable when the caller stages assets on the device.
   public static func url(_ source: String) throws -> URL {
     if source.hasPrefix("/") { return URL(fileURLWithPath: source) }
+    if source.hasPrefix("static:") {
+      let relative = String(source.dropFirst(7))
+      guard let decoded = relative.removingPercentEncoding, !decoded.isEmpty,
+        !decoded.split(separator: "/").contains("..")
+      else { throw MotionError("Invalid staticFile() path: \(source)") }
+      guard let folder = publicDirectory else {
+        throw MotionError("staticFile(\"\(decoded)\") needs a public/ folder; render from a project directory")
+      }
+      return folder.appendingPathComponent(decoded)
+    }
     guard let url = URL(string: source), ["file", "https", "http"].contains(url.scheme?.lowercased() ?? "") else {
       throw MotionError("Media requires an absolute file path or file/HTTPS URL: \(source.prefix(160))")
     }
