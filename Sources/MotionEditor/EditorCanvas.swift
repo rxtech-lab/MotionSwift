@@ -36,15 +36,19 @@ public struct EditorCanvas: View {
     GeometryReader { geometry in
       let fitted = fit(ratio: ratio, in: geometry.size)
       let scale = composition.map { fitted.width / Double($0.width) } ?? 1
-      content(scale: scale)
-        .frame(width: fitted.width, height: fitted.height)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Editor canvas")
-        .accessibilityIdentifier("editor-canvas")
-        .scaleEffect(zoom)
-        .frame(width: geometry.size.width, height: geometry.size.height)
-        .contentShape(Rectangle())
-        .simultaneousGesture(magnify)
+      ZStack {
+        Color.clear
+          .contentShape(Rectangle())
+          .onTapGesture { model.clearSelection() }
+        content(scale: scale)
+          .frame(width: fitted.width, height: fitted.height)
+          .accessibilityElement(children: .contain)
+          .accessibilityLabel("Editor canvas")
+          .accessibilityIdentifier("editor-canvas")
+          .scaleEffect(zoom)
+          .frame(width: geometry.size.width, height: geometry.size.height)
+      }
+      .simultaneousGesture(magnify)
     }
     .clipped()
     .background(Color.black.opacity(0.92))

@@ -17,7 +17,7 @@ enum Showcase3D {
   static var project: URL { ShowcaseDefaults.repository.appendingPathComponent("tests/three") }
 
   static var source: MotionSource {
-    .project(repository: ShowcaseDefaults.repository, project: project, entry: ShowcaseDefaults.entry)
+    ShowcaseDefaults.source(project: project, entry: ShowcaseDefaults.entry)
   }
 
   static let scenes = [

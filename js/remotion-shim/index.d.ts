@@ -25,6 +25,8 @@ export interface MotionObjectTiming {
   from: number; duration: number | null; keyframes: Record<string, MotionKeyframe[]>;
 }
 export interface BoxProps {
+  /** Optional inspector labels/groups for CSS properties authored in style. Does not affect rendering. */
+  'data-ms-properties'?: Record<string, {label?: string; group?: string}>;
   key?: Key | null; style?: MotionCSSProperties; children?: ReactNode; id?: string;
   'data-ms-src'?: string; 'data-ms-timeline'?: MotionObjectTiming;
 }

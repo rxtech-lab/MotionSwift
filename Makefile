@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 export PKG_CONFIG_PATH := $(CURDIR)/native/pkgconfig:$(PKG_CONFIG_PATH)
-.PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark runtime-benchmark showcase ci three-visual three-goldens three-benchmark
+.PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark runtime-benchmark showcase ci three-visual three-goldens three-benchmark maps-visual
 .NOTPARALLEL:
 
 lint:
@@ -66,4 +66,13 @@ runtime-benchmark: compiler native
 showcase: compiler native
 	swift run -c release motionswift-showcase
 
-ci: test visual three-visual
+# Standalone Apple Silicon .app, with local ad-hoc signing. Release CI replaces the signature.
+.PHONY: showcase-app
+showcase-app: compiler native
+	bash scripts/package-showcase.sh "$${VERSION:-0.0.0}" "$${BUILD_NUMBER:-1}"
+
+maps-visual: build
+	node tests/tools/maps-visual.mjs
+	node tests/tools/maps-visual.mjs --railway
+
+ci: test visual three-visual maps-visual

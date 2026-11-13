@@ -7,6 +7,8 @@ enum SidebarItem: Hashable {
   case media
   case scenes3D
   case gallery
+  case maps
+  case study(String)
   case testFilm
   case editor
   case composition(String)
@@ -18,6 +20,7 @@ extension SidebarItem {
     case "editor": .editor
     case "media": .media
     case "3d": .scenes3D
+    case "maps": .maps
     default: .gallery
     }
   }
@@ -36,7 +39,6 @@ struct ProjectLocation: Equatable {
 
 struct ContentView: View {
   @State private var player = MotionPlayer()
-  @State private var testFilmPlayer = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
   /// `MOTIONSWIFT_SHOWCASE_START=editor|media|3d` opens that destination first (demos and screenshots).
   @State private var selection: SidebarItem? = SidebarItem.launch
   @State private var settings = ShowcaseSettings()
@@ -52,6 +54,11 @@ struct ContentView: View {
   @State private var pendingEditLocation: ProjectLocation?
   @State private var resettingSample = false
 
+  private var viewingStudy: Bool {
+    if case .study = selection { return true }
+    return false
+  }
+
   var body: some View {
     NavigationSplitView {
       sidebar
@@ -62,14 +69,17 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
+                    || selection == .maps || viewingStudy)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
           .keyboardShortcut("r")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
+                    || selection == .maps || viewingStudy)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
+                    || selection == .maps || viewingStudy)
       }
     }
     .sheet(isPresented: $showsSettings) {
@@ -112,8 +122,11 @@ struct ContentView: View {
 
   private var sidebar: some View {
     List(selection: $selection) {
+      Section("Motion Studies") {
+        Label("All Studies", systemImage: "square.grid.2x2").tag(SidebarItem.gallery)
+      }
       Section("Showcase") {
-        Label("Gallery", systemImage: "square.grid.2x2").tag(SidebarItem.gallery)
+        Label("Maps", systemImage: "map").tag(SidebarItem.maps)
         Label("Media Composition", systemImage: "rectangle.stack.fill").tag(SidebarItem.media)
         VStack(alignment: .leading, spacing: 2) {
           Label("3D Scenes", systemImage: "cube.transparent")
@@ -122,7 +135,7 @@ struct ContentView: View {
         .tag(SidebarItem.scenes3D)
         VStack(alignment: .leading, spacing: 2) {
           Label("Test Film", systemImage: "film")
-          Text("1920×1080 · \(liveRate(testFilmPlayer))")
+          Text("Visual editor · 90 seconds")
             .font(.caption)
             .foregroundStyle(.secondary)
         }
@@ -155,12 +168,24 @@ struct ContentView: View {
 
   @ViewBuilder private var detail: some View {
     switch selection {
+    case .study(let id):
+      if let study = MotionStudy.study(id) {
+        ExampleEditorSheet(example: study.example, compositionID: study.compositionID, isSheet: false)
+          .id(id)
+          .toolbar {
+            ToolbarItem(placement: .navigation) {
+              Button("Motion Studies", systemImage: "chevron.left") { selection = .gallery }
+            }
+          }
+      }
     case .media:
       MediaDemoView()
+    case .maps:
+      MapsStudyEditor()
     case .scenes3D:
       Scenes3DView()
     case .testFilm:
-      TestFilmView(player: testFilmPlayer)
+      ExampleEditorSheet(example: .film, compositionID: "Main", isSheet: false)
     case .editor:
       if let editor {
         MotionEditorView(model: editor)
@@ -185,10 +210,8 @@ struct ContentView: View {
         ProgressView()
       }
     case .composition(let id):
-      MotionPlayerView(player: player, showsLayoutBounds: settings.showsLayoutBounds)
-        .padding(20)
-        .navigationTitle(id)
-        .navigationSubtitle(player.composition?.summary ?? "")
+      ExampleEditorSheet(example: .project(location.project, entry: location.entry), compositionID: id, isSheet: false)
+        .id("\(location.project.path)#\(id)")
     default:
       GalleryView(player: player, settings: settings) { selection = $0 }
         .navigationTitle("Gallery")
@@ -220,8 +243,7 @@ struct ContentView: View {
   private func load() async {
     let selected: String? = if case .composition(let id) = selection { id } else { nil }
     await player.load(
-      .project(
-        repository: ShowcaseDefaults.repository, project: location.project, entry: location.entry),
+      ShowcaseDefaults.source(project: location.project, entry: location.entry),
       compositionID: selected)
     if case .ready = player.status {
       if let selected, player.composition?.id != selected { selection = .gallery }

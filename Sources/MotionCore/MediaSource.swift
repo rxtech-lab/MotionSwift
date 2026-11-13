@@ -3,12 +3,22 @@ import Foundation
 public enum MediaSource {
   private static let lock = NSLock()
   nonisolated(unsafe) private static var publicFolder: URL?
+  private struct DirectoryContext: Sendable { let url: URL? }
+  @TaskLocal private static var directoryContext: DirectoryContext?
 
   /// The project's `public/` folder, used for `staticFile()` (`static:` sources). Hosts set it
   /// when they open a project; it is process-wide like Remotion's single public directory.
   public static var publicDirectory: URL? {
-    get { lock.withLock { publicFolder } }
+    get {
+      if let directoryContext { return directoryContext.url }
+      return lock.withLock { publicFolder }
+    }
     set { lock.withLock { publicFolder = newValue } }
+  }
+
+  /// Scopes asset resolution to one player or rendering worker without changing other projects.
+  public static func withPublicDirectory<T>(_ directory: URL?, operation: () throws -> T) rethrows -> T {
+    try $directoryContext.withValue(DirectoryContext(url: directory), operation: operation)
   }
 
   /// Absolute paths/file URLs are portable when the caller stages assets on the device.

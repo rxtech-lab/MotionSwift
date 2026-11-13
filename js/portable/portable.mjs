@@ -11,7 +11,7 @@ import {inspect} from '../compiler/inspect.mjs';
 
 const SOURCE = /\.(tsx|ts|jsx|js|mts|mjs|cts|cjs)$/;
 const DECLARATION = /\.d\.(ts|mts|cts)$/;
-const STAMPED_COMPONENTS = new Set(['AbsoluteFill']);
+const STAMPED_COMPONENTS = new Set(['AbsoluteFill', 'Img', 'Video', 'OffthreadVideo']);
 
 function parseSource(source, file) {
   try {
@@ -32,14 +32,15 @@ function walk(node, visit) {
 }
 
 const elementName = node => node.name?.type === 'JSXIdentifier' ? node.name.name : null;
-const isStamped = name => !!name && (name[0] === name[0].toLowerCase() || STAMPED_COMPONENTS.has(name));
+const isStamped = (name, node) => !!name && (name[0] === name[0].toLowerCase() || STAMPED_COMPONENTS.has(name) ||
+  node?.attributes.some(a => a.name?.name === 'data-ms-editable'));
 const stampOf = (file, node) => `${file}:${node.loc.start.line}:${node.loc.start.column + 1}`;
 
 /** Adds `data-ms-src="file:line:col"` to host elements; columns refer to the original source. */
 export function stamp(source, file) {
   const inserts = [];
   walk(parseSource(source, file), node => {
-    if (node.type !== 'JSXOpeningElement' || !isStamped(elementName(node))) return;
+    if (node.type !== 'JSXOpeningElement' || !isStamped(elementName(node), node)) return;
     if (node.attributes.some(attr => attr.name?.name === 'data-ms-src')) return;
     inserts.push([node.name.end, ` data-ms-src=${JSON.stringify(stampOf(file, node))}`]);
   });
@@ -220,11 +221,11 @@ export function timeline(source, file) {
       } else if (['Loop', 'Freeze'].includes(name) || opening.name.type === 'JSXMemberExpression') {
         reason = 'Loop, Freeze or compound component timing; edit in code';
       }
-      if (isStamped(name)) {
+      if (isStamped(name, opening)) {
         let data, error = reason;
         try { data = timelineData(source, opening); } catch (e) { error = e.message; data = {from: 0, duration: null, keyframes: {}}; }
         if (parentTimed) error = 'Timing is controlled by an ancestor object; edit the ancestor first';
-        tracks.push({src: stampOf(file, opening), label: name, owner, offset, limit, reason: error, ...data});
+        tracks.push({src: stampOf(file, opening), label: opening.attributes.find(a => a.name?.name === 'data-ms-label')?.value?.value ?? name, owner, offset, limit, reason: error, ...data});
         parentTimed ||= !!timelineAttribute(opening);
       }
       node.children.forEach(n => visit(n, offset, limit, reason, parentTimed, owner));
@@ -266,16 +267,37 @@ function editTimeline(source, request) {
 
 /** Inline style properties of the element at `src`, classified for editing. */
 export function styles(source, src) {
-  const object = styleObject(findElement(source, src));
-  if (object === null) return JSON.stringify({editable: true, properties: []});
-  if (object === undefined) return JSON.stringify({editable: false, properties: []});
-  const properties = object.properties.map(property => {
+  const element = findElement(source, src);
+  const object = styleObject(element);
+  // Declarations are editor metadata, never evaluated as code or applied as styles.
+  const attribute = element.attributes.find(attr => attr.name?.name === 'data-ms-properties');
+  const declarations = [];
+  const definition = attribute?.value?.expression;
+  if (definition?.type === 'ObjectExpression') {
+    for (const property of definition.properties) {
+      const key = keyOf(property);
+      if (!key || property.value?.type !== 'ObjectExpression') continue;
+      const descriptor = {key};
+      for (const field of property.value.properties) {
+        if (['label', 'group'].includes(keyOf(field)) && field.value?.type === 'StringLiteral')
+          descriptor[keyOf(field)] = field.value.value;
+      }
+      declarations.push(descriptor);
+    }
+  }
+  if (!object) return JSON.stringify({editable: object === null, properties: [], declarations});
+  const properties = object.properties.map((property, index) => {
     const key = keyOf(property);
     if (key === null) return {key: source.slice(property.start, property.end), kind: 'computed'};
+    if (object.properties.slice(index + 1).some(p => keyOf(p) === null) ||
+        object.properties.slice(0, index).some(p => keyOf(p) === key))
+      return {key, kind: 'computed', raw: source.slice(property.value.start, property.value.end)};
     if (property.shorthand) return {key, kind: 'bound', raw: key};
     return {key, ...classify(property.value, source)};
   });
-  return JSON.stringify({editable: true, properties});
+  // A duplicate key has the value of its final occurrence.
+  return JSON.stringify({editable: true, properties: properties.filter((p, i) =>
+    !properties.slice(i + 1).some(next => next.key === p.key)), declarations});
 }
 
 function literal(value, source, previous) {
@@ -329,6 +351,10 @@ export function edit(source, requestJSON) {
   }
   const index = object.properties.findIndex(property => keyOf(property) === key);
   const property = object.properties[index];
+  if (property && object.properties.slice(index + 1).some(p => keyOf(p) === key || keyOf(p) === null))
+    throw Error(`refused: ${key} may be overridden by a later style property; edit it in code`);
+  if (!property && object.properties.some(p => keyOf(p) === null) && op === 'setStyle')
+    throw Error(`refused: ${key} may be supplied by a spread or computed property; edit it in code`);
   if (op === 'setStyle') {
     if (property) {
       if (property.shorthand) throw Error(`refused: ${key} is bound to a variable; edit its definition`);

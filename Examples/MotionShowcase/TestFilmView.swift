@@ -15,6 +15,7 @@ struct TestFilmView: View {
   var body: some View {
     MotionPlayerView(player: player)
       .padding(20)
+      .editableExample(.film, compositionID: "Main") { player.pause() }
       .navigationTitle("Test Film")
       .navigationSubtitle("Benchmark project · 1920×1080 · 30 fps · 90 s")
       .safeAreaInset(edge: .bottom) {
@@ -75,7 +76,7 @@ struct TestFilmView: View {
       let project = try await Task.detached { try TestFilmFixture.prepare(repository: repository) }.value
       defer { try? FileManager.default.removeItem(at: project) }
       guard !Task.isCancelled else { return }
-      await player.load(.project(repository: repository, project: project, entry: "src/index.ts"), compositionID: "Main")
+      await player.load(ShowcaseDefaults.source(project: project, entry: "src/index.ts"), compositionID: "Main")
       if case .failed(let error) = player.status { failure = error }
     } catch {
       failure = String(describing: error)

@@ -1,0 +1,10 @@
+{
+  "engine": "Remotion",
+  "files": {
+    "basemap.ts": "e5140735a675899cf8f7e91578868b32d5848c8435ea61fae5970a2a379e64a3",
+    "map-data.ts": "e9945d0391d5bb14ce0c401c16cbe8f41e1f1583a5abf9a330cf79a54f7ec875",
+    "route.ts": "08b7febcf180e7b5f3ef8bbb87fc75e80cf49cf36f43a19d2116699eeb553447",
+    "artwork.ts": "f15e4af92abac3ec6608502743db2de9f0bbe03d093f745cdf77a5aff9a703b0",
+    "public/map.png": "917acc585cbda83d481770be83b47c78e34af7a87e233191e0ff9a1ab8464f34"
+  }
+}

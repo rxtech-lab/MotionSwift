@@ -114,6 +114,7 @@ public final class MotionPlayer {
 
   @ObservationIgnored private let mediaPlayback = MediaPlayback()
   @ObservationIgnored private var worker: FrameRenderWorker?
+  @ObservationIgnored private var publicDirectory: URL?
   @ObservationIgnored private var loadGeneration = 0
   @ObservationIgnored private var renderGeneration = 0
   @ObservationIgnored private var playback: Task<Void, Never>?
@@ -154,6 +155,7 @@ public final class MotionPlayer {
       }
       guard generation == loadGeneration else { return }
       self.bundle = bundle
+      publicDirectory = source.publicDirectory
       compositions = catalog
       status = .ready
       let selected = catalog.first { $0.id == compositionID } ?? catalog[0]
@@ -216,7 +218,7 @@ public final class MotionPlayer {
     guard let composition else { return }
     let resume = isPlaying
     if resume { pause() }
-    show(min(max(frame, 0), composition.durationInFrames - 1))
+    show(min(max(frame, 0), composition.durationInFrames - 1), discontinuity: true)
     if resume { play() }
   }
 
@@ -232,7 +234,7 @@ public final class MotionPlayer {
   public func play() {
     guard let composition, !isPlaying, renderError == nil else { return }
     let duration = composition.durationInFrames
-    if currentFrame >= duration - 1 { show(0) }
+    if currentFrame >= duration - 1 { show(0, discontinuity: true) }
     isPlaying = true
     synchronizeAudio()
     guard isPlaying else { return }
@@ -242,6 +244,7 @@ public final class MotionPlayer {
     let startFrame = currentFrame
     let start = ContinuousClock.now
     playback = Task { [weak self] in
+      var previousCycle = 0
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(1 / fps))
         guard let self, !Task.isCancelled else { return }
@@ -249,6 +252,7 @@ public final class MotionPlayer {
         let seconds = Double(elapsed.components.seconds)
           + Double(elapsed.components.attoseconds) / 1e18
         var next = startFrame + Int(seconds * fps)
+        let cycle = next / duration
         if next >= duration {
           guard loops else {
             show(duration - 1)
@@ -257,7 +261,10 @@ public final class MotionPlayer {
           }
           next %= duration
         }
-        if next != currentFrame { show(next) }
+        if next != currentFrame || cycle != previousCycle {
+          show(next, discontinuity: cycle != previousCycle)
+        }
+        previousCycle = cycle
         refreshLiveFPS()
       }
     }
@@ -298,14 +305,20 @@ public final class MotionPlayer {
     }
     worker = FrameRenderWorker(
       bundle: bundle, composition: composition, props: props, scale: configuration.scale,
-      backend: configuration.backend)
+      backend: configuration.backend, publicDirectory: publicDirectory)
     show(currentFrame)
   }
 
-  private func show(_ frame: Int) {
+  private func show(_ frame: Int, discontinuity: Bool = false) {
+    // A seek or loop starts a new delivery epoch. Renders still in flight belong
+    // to the old playhead position, even if the new target is not cached yet.
+    if discontinuity { renderGeneration += 1 }
     currentFrame = frame
     let overrides = previewOverrides
     if overrides.isEmpty, let cached = cache.object(forKey: frame as NSNumber) {
+      // Cache hits bypass the serial worker; its older queued deliveries must
+      // not overwrite a picture that has already advanced past them.
+      renderGeneration += 1
       present(cached.frame)
       return
     }
@@ -325,7 +338,8 @@ public final class MotionPlayer {
       } else {
         cache.setObject(CachedFrame(frame), forKey: frame.frame as NSNumber, cost: frame.byteCount)
       }
-      // Frames finish in request order, so the newest delivery is the best available picture.
+      // Within this epoch uncached frames finish in request order, so keep
+      // accepting lagging frames during playback without starving the preview.
       renderError = nil
       present(frame)
     case .failure(let error):
@@ -348,6 +362,9 @@ public final class MotionPlayer {
     liveFPS = playbackRate.value(at: ProcessInfo.processInfo.systemUptime)
   }
 
+}
+
+extension MotionPlayer {
   /// Runs `body` on a thread with an 8 MiB stack; bundle evaluation recurses deeply.
   private static func onLargeStack<T: Sendable>(
     _ body: @escaping @Sendable () throws -> T
@@ -370,7 +387,9 @@ private final class CachedFrame {
 extension MotionPlayer {
   private func synchronizeAudio() {
     do {
-      try mediaPlayback.synchronize(displayedFrame?.tree.activeMedia ?? [], playing: isPlaying, muted: isMuted)
+      try MediaSource.withPublicDirectory(publicDirectory) {
+        try mediaPlayback.synchronize(displayedFrame?.tree.activeMedia ?? [], playing: isPlaying, muted: isMuted)
+      }
     } catch {
       renderError = String(describing: error)
       pause()

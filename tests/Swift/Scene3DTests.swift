@@ -124,7 +124,17 @@ func threeCanvasCommitsResolvedSceneOnPortableCompiler() async throws {
     try renderer.draw(node, composition: composition)
     let first = try renderer.pixels()
     try renderer.draw(node, composition: composition)
-    #expect(try renderer.pixels() == first, "\(backend) repeat render differs")
+    let second = try renderer.pixels()
+    if second != first {
+      let changed = first.indices.filter { first[$0] != second[$0] }
+      let examples = changed.prefix(20).map { "\($0):\(first[$0])->\(second[$0])" }
+      print("3D \(backend): \(changed.count) changed bytes; first differences: \(examples)")
+      let directory = repository.appendingPathComponent("tests/reports/three-test")
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try first.write(to: directory.appendingPathComponent("\(backend)-first.rgba"))
+      try second.write(to: directory.appendingPathComponent("\(backend)-repeat.rgba"))
+    }
+    #expect(second == first, "\(backend) repeat render differs")
     outputs.append(first)
   }
   #expect(outputs[0] == outputs[1], "CPU and GPU compositing of the 3D canvas differ")

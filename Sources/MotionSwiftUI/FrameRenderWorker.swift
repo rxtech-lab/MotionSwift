@@ -30,12 +30,15 @@ final class FrameRenderWorker: Sendable {
 
   private let queue = JobQueue()
 
-  init(bundle: String, composition: Composition, props: String, scale: Double, backend: RenderBackend) {
+  init(bundle: String, composition: Composition, props: String, scale: Double, backend: RenderBackend,
+       publicDirectory: URL? = nil) {
     let queue = queue
     let thread = Thread {
-      Self.run(
-        queue: queue, bundle: bundle, composition: composition, props: props, scale: scale,
-        backend: backend)
+      MediaSource.withPublicDirectory(publicDirectory) {
+        Self.run(
+          queue: queue, bundle: bundle, composition: composition, props: props, scale: scale,
+          backend: backend)
+      }
     }
     thread.name = "motionswift.preview"
     // React and the reconciler recurse deeply; match the render pipeline's worker stack.

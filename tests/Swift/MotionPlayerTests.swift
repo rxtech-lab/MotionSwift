@@ -82,3 +82,56 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(player.composition == nil)
   await #expect(throws: MotionError.self) { _ = try await player.render(frame: 0) }
 }
+
+@MainActor
+@Test(arguments: [0, 20])
+func playerKeepsCachedSeekAheadOfPendingRenders(target: Int) async throws {
+  let player = MotionPlayer(configuration: .init(scale: 1))
+  await player.load(source, compositionID: "Motion")
+  player.seek(to: target)
+  try await waitUntil { player.displayedFrame?.frame == target }
+
+  // Both seeks run in one main-actor turn: the worker's old delivery cannot be
+  // processed until after the cached picture has already been presented.
+  player.seek(to: 10)
+  player.seek(to: target)
+  #expect(player.displayedFrame?.frame == target)
+  _ = try await player.render(frame: 21) // Drain the render worker.
+  try await Task.sleep(for: .milliseconds(100))
+  #expect(player.displayedFrame?.frame == target)
+  #expect(player.currentFrame == target)
+}
+
+@MainActor
+@Test func playerKeepsRestartAheadOfPendingEndFrame() async throws {
+  let player = MotionPlayer(configuration: .init(scale: 1))
+  await player.load(source, compositionID: "Motion")
+  try await waitUntil { player.displayedFrame?.frame == 0 }
+
+  player.seek(to: 29)
+  player.play() // Restart at the cached first frame while frame 29 is pending.
+  player.pause()
+  #expect(player.displayedFrame?.frame == 0)
+  _ = try await player.render(frame: 1)
+  try await Task.sleep(for: .milliseconds(100))
+  #expect(player.displayedFrame?.frame == 0)
+  #expect(player.currentFrame == 0)
+}
+
+@MainActor
+@Test func playerLoopsAcrossRepeatedEndBoundaries() async throws {
+  let player = MotionPlayer(configuration: .init(scale: 1))
+  await player.load(source, compositionID: "Timed")
+  try await waitUntil { player.displayedFrame?.frame == 0 }
+  player.seek(to: 27)
+  try await waitUntil { player.displayedFrame?.frame == 27 }
+  player.play()
+  for _ in 0..<2 {
+    try await waitUntil { player.currentFrame < 5 }
+    #expect(player.isPlaying)
+    #expect(player.renderError == nil)
+    try await waitUntil { (player.displayedFrame?.frame ?? 29) < 10 }
+    try await waitUntil { player.currentFrame >= 27 }
+  }
+  player.pause()
+}

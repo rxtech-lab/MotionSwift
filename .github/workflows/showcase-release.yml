@@ -1,0 +1,118 @@
+name: Showcase signed DMG
+
+on:
+  release:
+    types: [published]
+  # semantic-release uses GITHUB_TOKEN, whose release event cannot start another workflow.
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: showcase-release-${{ inputs.release_tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  dmg:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 120
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_ID_PWD: ${{ secrets.APPLE_ID_PWD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.event.release.tag_name }}
+          lfs: true
+          persist-credentials: false
+      - name: Validate release and credentials
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for name in BUILD_CERTIFICATE_BASE64 P12_PASSWORD SIGNING_CERTIFICATE_NAME APPLE_ID APPLE_ID_PWD APPLE_TEAM_ID; do
+            [[ -n "${!name}" ]] || { echo "::error::Missing Actions secret: $name"; exit 1; }
+          done
+          [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
+          [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == false ]]
+          echo "VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_OUTPUT=$RUNNER_TEMP/showcase-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup
+      - name: Build compiler and native renderer
+        run: make compiler native
+      - name: Package standalone Apple Silicon app
+        run: bash scripts/package-showcase.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+      - name: Verify release version, build number, payload and audio helper
+        run: |
+          python3 scripts/verify-showcase-package.py \
+            ".build/showcase/MotionSwift-Showcase-$VERSION-$GITHUB_RUN_NUMBER.app" \
+            --version "$VERSION" --build "$GITHUB_RUN_NUMBER"
+      - name: Import signing identity into temporary keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/showcase-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.keychain-db"
+          certificate="$RUNNER_TEMP/showcase-$GITHUB_RUN_ID.p12"
+          password=$(openssl rand -hex 32)
+          echo "::add-mask::$password"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "SIGNING_P12=$certificate" >> "$GITHUB_ENV"
+          security list-keychains -d user > "$RUNNER_TEMP/showcase-keychains-$GITHUB_RUN_ID.txt"
+          printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          python3 - "$keychain" "$RUNNER_TEMP/showcase-keychains-$GITHUB_RUN_ID.txt" <<'PY'
+          import shlex, subprocess, sys
+          previous = shlex.split(open(sys.argv[2]).read())
+          subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', sys.argv[1], *previous], check=True)
+          PY
+      - name: Sign, notarize, staple and assess app and DMG
+        run: |
+          bash scripts/notarize-showcase.sh \
+            ".build/showcase/MotionSwift-Showcase-$VERSION-$GITHUB_RUN_NUMBER.app" \
+            "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg"
+      - name: Upload verified release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg" \
+            "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg.sha256" --clobber
+      - name: Preserve notarization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: showcase-notarization-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RELEASE_OUTPUT }}/*.json
+          if-no-files-found: ignore
+      - name: Remove signing credentials and restore keychain search list
+        if: always()
+        shell: bash
+        run: |
+          cleanup() {
+            if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then security delete-keychain "$SIGNING_KEYCHAIN"; fi
+            if [[ -n "${SIGNING_P12:-}" ]]; then rm -f "$SIGNING_P12"; fi
+          }
+          trap cleanup EXIT
+          python3 - "$RUNNER_TEMP/showcase-keychains-$GITHUB_RUN_ID.txt" <<'PY'
+          from pathlib import Path
+          import shlex, subprocess, sys
+          record = Path(sys.argv[1])
+          if record.exists():
+              subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *shlex.split(record.read_text())], check=True)
+              record.unlink()
+          PY

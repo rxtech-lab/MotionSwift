@@ -11,8 +11,12 @@ struct GalleryView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("Showcase").font(.title2.bold())
+        MotionStudiesView { open(.study($0)) }
+        Divider().padding(.vertical, 12)
+        Text("Explore the toolkit").font(.title2.bold())
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
+          destination("Maps", subtitle: "Hong Kong railway · Real OpenStreetMap geography and station names",
+                      icon: "map", color: .green, item: .maps)
           destination("Media Composition", subtitle: "Nested clips, audio, video and timeline",
                       icon: "rectangle.stack.fill", color: .teal, item: .media)
           destination("3D Scenes", subtitle: "three.js scenes, keyframed cameras, lights and USDZ",
@@ -22,7 +26,7 @@ struct GalleryView: View {
           destination("Visual Editor", subtitle: "Canvas, inspector, timeline and keyframes",
                       icon: "cursorarrow.motionlines", color: .purple, item: .editor)
         }
-        Text("Compositions").font(.title2.bold())
+        Text("Rendering essentials").font(.title2.bold())
         if let bundle = player.bundle {
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
             ForEach(player.compositions, id: \.id) { composition in
@@ -39,7 +43,7 @@ struct GalleryView: View {
                 .contentShape(Rectangle())
               }
               .buttonStyle(.plain)
-              .help("Open \(composition.id) with transport controls")
+              .help("Open \(composition.id) to preview or edit its timeline")
             }
           }
         } else {

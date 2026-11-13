@@ -29,7 +29,6 @@ struct EditorInspector: View {
             if !styles.editable {
               Text("The style prop is an expression. Edit it in code.").foregroundStyle(.secondary)
             }
-            ForEach(styles.properties) { property in row(property) }
           } else {
             ProgressView()
           }
@@ -41,6 +40,13 @@ struct EditorInspector: View {
               .labelStyle(.iconOnly)
               .disabled(model.styles?.editable != true)
               .accessibilityIdentifier("add-property")
+          }
+        }
+        if let styles = model.styles {
+          ForEach(Array(Set(model.detectedStyleProperties.map { styles.group(for: $0.key) })).sorted(), id: \.self) { group in
+            Section(group) {
+              ForEach(model.detectedStyleProperties.filter { styles.group(for: $0.key) == group }) { property in row(property) }
+            }
           }
         }
       } else {
@@ -77,9 +83,9 @@ struct EditorInspector: View {
       if editable { editing = property }
     } label: {
       HStack {
-        Text(property.key)
+        Text(model.styles?.label(for: property.key) ?? property.key)
         Spacer()
-        Text(animated ? (model.currentStyleValue(property.key)?.number?.formatted() ?? property.raw ?? "") : property.raw ?? "")
+        Text(valueText(property))
           .font(.callout.monospaced()).lineLimit(1).foregroundStyle(.secondary)
         if !editable || animated {
           Text(animated ? "keyframes" : property.kind.rawValue)
@@ -112,82 +118,10 @@ struct EditorInspector: View {
     }
   }
 
+  private func valueText(_ property: StyleSummary.Property) -> String {
+    let value = model.currentStyleValue(property.key) ?? property.value
+    return value?.number?.formatted() ?? value?.string ?? property.raw ?? ""
+  }
+
   private func format(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) }
-}
-
-/// The dedicated sheet for creating or updating one style property.
-struct EditPropertySheet: View {
-  let key: String?
-  let onSave: (JSONValue) -> Void
-  var onSaveKey: ((String, JSONValue) -> Void)?
-  @Environment(\.dismiss) private var dismiss
-  @State private var name = ""
-  @State private var text: String
-  @State private var isNumber: Bool
-
-  init(key: String?, value: JSONValue, onSave: @escaping (JSONValue) -> Void,
-       onSaveKey: ((String, JSONValue) -> Void)? = nil) {
-    self.key = key
-    self.onSave = onSave
-    self.onSaveKey = onSaveKey
-    _isNumber = State(initialValue: value.number != nil)
-    _text = State(initialValue: value.number.map { $0.formatted(.number.grouping(.never)) } ?? value.string ?? "")
-  }
-
-  private var value: JSONValue? {
-    if isNumber { return Double(text.trimmingCharacters(in: .whitespaces)).map(JSONValue.number) }
-    return .string(text)
-  }
-
-  private var validName: Bool {
-    key != nil || name.range(of: "^[A-Za-z][A-Za-z0-9]*$", options: .regularExpression) != nil
-  }
-
-  var body: some View {
-    NavigationStack {
-      Form {
-        if key == nil {
-          TextField("Property (camelCase, e.g. borderRadius)", text: $name)
-            .autocorrectionDisabled()
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            #endif
-        }
-        Picker("Type", selection: $isNumber) {
-          Text("Number (px)").tag(true)
-          Text("Text").tag(false)
-        }
-        .pickerStyle(.segmented)
-        TextField(isNumber ? "Value" : "Value, e.g. #fca311 or 50%", text: $text)
-          .autocorrectionDisabled()
-          #if os(iOS)
-          .keyboardType(isNumber ? .decimalPad : .default)
-          .textInputAutocapitalization(.never)
-          #endif
-          .accessibilityIdentifier("property-value")
-        if isNumber, !text.isEmpty, value == nil { Text("Enter a number").foregroundStyle(.red) }
-      }
-      .formStyle(.grouped)
-      .navigationTitle(key.map { "Edit \($0)" } ?? "Add Property")
-      #if os(iOS)
-      .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            guard let value else { return }
-            if key != nil { onSave(value) } else { onSaveKey?(name, value) }
-            dismiss()
-          }
-          .disabled(value == nil || !validName)
-        }
-      }
-    }
-    #if os(macOS)
-    .frame(minWidth: 420, idealWidth: 460, maxWidth: .infinity, minHeight: 300, idealHeight: 340, maxHeight: .infinity)
-    #else
-    .presentationDetents([.medium, .large])
-    #endif
-  }
 }

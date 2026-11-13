@@ -1,0 +1,33 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "extended-srgb:0.03529,0.05882,0.17255,1.00000",
+      "extended-srgb:0.09412,0.18431,0.40000,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "PlayRibbon.png",
+          "name" : "Play Ribbon"
+        }
+      ],
+      "name" : "Motion Ribbon",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.35
+      },
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}
