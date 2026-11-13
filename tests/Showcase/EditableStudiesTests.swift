@@ -91,6 +91,13 @@ func allAdditionalStudiesOpenRenderEditAndUndo() async throws {
     #expect(model.player.composition?.id == study.compositionID)
     let before = try await model.player.render(frame: 10)
     #expect(before.image.width > 0)
+    // Snapshot renders do not publish displayedFrame. The view observes display delivery
+    // before updating source-backed timeline groups; reproduce that ordering here.
+    for _ in 0..<500 where model.player.displayedFrame == nil {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    _ = try #require(model.player.displayedFrame, "\(study.id) needs its first displayed frame")
+    model.observeTimelineFrame()
     let track = try #require(model.timelineTracks.first { $0.reason == nil }, "\(study.id) needs an editable layer")
     let file = try #require(SourceStamp(track.src)?.file)
     let url = location.project.appendingPathComponent(file)
