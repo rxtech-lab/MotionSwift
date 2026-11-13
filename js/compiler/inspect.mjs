@@ -25,10 +25,9 @@ export function inspect(source, file, subset) {
         else if (
           name &&
           name[0] === name[0].toLowerCase() &&
-          // SVG JSX may be serialized into an img data URI by user code. Host SVG
-          // nodes still fail explicitly in the painter; only SVG images are supported.
-          !["div", "span", "img", "svg", "g", "defs", "path", "rect", "circle",
-            "ellipse", "text", "radialGradient", "linearGradient", "stop", "pattern"].includes(name) &&
+          // SVG vector islands are validated when committed; text/pattern remain XML-only.
+          !["div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6", "br", "section", "header", "footer", "main", "strong", "b", "em", "i", "img", "svg", "g", "defs", "path", "rect", "circle",
+            "ellipse", "line", "polyline", "polygon", "clipPath", "mask", "text", "radialGradient", "linearGradient", "stop", "pattern"].includes(name) &&
           // React Three Fiber elements; the native 3D renderer validates their props inside <ThreeCanvas>.
           !THREE_ELEMENTS.has(name)
         )
@@ -41,9 +40,9 @@ export function inspect(source, file, subset) {
         node.type === "ObjectProperty" &&
         (node.key.value ?? node.key.name) === "display" &&
         node.value.type === "StringLiteral" &&
-        !["flex", "none"].includes(node.value.value)
+        !["flex", "inline-flex", "inline", "inline-block", "none"].includes(node.value.value)
       )
-        fail("ms/unsupported-css-value", "Only flex/none is supported");
+        fail("ms/unsupported-css-value", "Only flex/inline-flex, leaf inline/inline-block flex items, and none are supported");
       if (
         node.type === "ObjectProperty" &&
         (node.key.value ?? node.key.name) === "position" &&

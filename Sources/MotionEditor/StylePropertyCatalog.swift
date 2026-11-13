@@ -20,14 +20,23 @@ struct StylePropertyDefinition: Identifiable {
     add("gap rowGap columnGap padding margin paddingLeft paddingRight paddingTop paddingBottom", .length)
     add("marginLeft marginRight marginTop marginBottom borderRadius flexBasis", .length)
     add("fontSize flexGrow flexShrink aspectRatio", .number)
+    add("letterSpacing", .number)
+    add("borderWidth borderTopWidth borderRightWidth borderBottomWidth borderLeftWidth", .number)
     add("opacity", .opacity)
     add("color backgroundColor background", .color)
+    add("borderColor borderTopColor borderRightColor borderBottomColor borderLeftColor", .color)
     add("fontFamily transform content", .text)
+    add("fontWeight", .options(["normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"]))
+    add("fontStyle", .options(["normal", "italic"]))
+    add("textAlign", .options(["left", "center", "right", "start", "end", "justify"]))
+    add("whiteSpace", .options(["normal", "nowrap", "pre", "pre-wrap"]))
+    add("textTransform", .options(["none", "uppercase", "lowercase"]))
+    add("borderStyle borderTopStyle borderRightStyle borderBottomStyle borderLeftStyle", .options(["none", "solid", "hidden"]))
     add("position", .options(["relative", "absolute"]))
-    add("display", .options(["flex", "none"]))
+    add("display", .options(["flex", "inline-flex", "none"]))
     add("flexDirection", .options(["row", "column", "row-reverse", "column-reverse"]))
     add("justifyContent", .options(["flex-start", "center", "flex-end", "space-between", "space-around", "space-evenly"]))
-    add("alignItems alignSelf", .options(["stretch", "flex-start", "center", "flex-end"]))
+    add("alignItems alignSelf", .options(["stretch", "flex-start", "center", "flex-end", "baseline"]))
     add("flexWrap", .options(["nowrap", "wrap"]))
     add("overflow", .options(["visible", "hidden"]))
     add("objectFit", .options(["fill", "contain", "cover"]))
@@ -36,6 +45,17 @@ struct StylePropertyDefinition: Identifiable {
   }()
 
   static func find(_ key: String) -> Self? { all.first { $0.id == key } }
+
+  static func three(_ key: String) -> Self? {
+    if key == "color" { return Self(id: key, control: .color) }
+    let numeric = ["intensity", "distance", "decay", "angle", "penumbra", "opacity", "roughness",
+                   "metalness", "shininess", "ior", "cameraFov", "cameraZoom"]
+    let vector = "^(position|rotation|scale|cameraPosition|cameraRotation)[XYZ]$"
+    if numeric.contains(key) || key.range(of: vector, options: .regularExpression) != nil {
+      return Self(id: key, control: .number)
+    }
+    return nil
+  }
 
   static func matching(_ query: String) -> [Self] {
     all.filter { query.isEmpty || $0.id.localizedCaseInsensitiveContains(query) }
@@ -59,6 +79,7 @@ struct StylePropertyDefinition: Identifiable {
       if case .opacity = control, !(0...1).contains(number) { return nil }
       if id == "aspectRatio", number <= 0 { return nil }
       if ["fontSize", "flexGrow", "flexShrink"].contains(id), number < 0 { return nil }
+      if id.hasPrefix("border"), id.hasSuffix("Width"), number < 0 { return nil }
       if case .length = control, unit == "%" { return .string("\(text)%") }
       return .number(number)
     case .options(let choices): return choices.contains(text) ? .string(text) : nil

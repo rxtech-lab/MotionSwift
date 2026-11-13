@@ -4,6 +4,7 @@
   "codec": "h264",
   "runs": 3,
   "warmup": 1,
+  "minimumFrames": 2,
   "minSsim": 0.98,
   "concurrency": {"remotion": 8, "cpu": 8, "gpu": 8, "gpu-hw": 8, "gpu-shared": 8},
   "tiers": [

@@ -9,3 +9,6 @@ crate-type = ["staticlib"]
 
 [dependencies]
 skia-safe = { version = "=0.99.0", features = ["metal", "textlayout", "svg", "webp"] }
+
+[build-dependencies]
+cc = "1"

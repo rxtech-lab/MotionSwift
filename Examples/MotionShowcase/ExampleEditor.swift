@@ -33,7 +33,8 @@ enum ShowcaseExample: Hashable, Sendable {
         }
       }
     case .film:
-      return try stage(name: "TestFilm-Layers-v1", entry: "src/index.ts", root: root) { destination in
+      // Keep prior working copies intact while installing the source-backed appearance timings.
+      return try stage(name: "TestFilm-Layers-v2", entry: "src/index.ts", root: root) { destination in
         let source = try TestFilmFixture.prepare(repository: ShowcaseDefaults.repository)
         defer { try? FileManager.default.removeItem(at: source) }
         for item in try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
@@ -78,6 +79,8 @@ struct ExampleEditorSheet: View {
   let example: ShowcaseExample
   let compositionID: String?
   var isSheet = true
+  var title: String?
+  var subtitle = "Working copy · Select an element for properties · Drag clips to move or trim"
   @Environment(\.dismiss) private var dismiss
   @State private var model: EditorModel?
   @State private var failure: String?
@@ -100,8 +103,8 @@ struct ExampleEditorSheet: View {
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .navigationTitle(compositionID ?? "Edit Example")
-      .navigationSubtitle("Working copy · Select an element for properties · Drag clips to move or trim")
+      .navigationTitle(title ?? compositionID ?? "Edit Example")
+      .navigationSubtitle(subtitle)
       .toolbar {
         if isSheet {
           ToolbarItem(placement: .cancellationAction) {
@@ -151,12 +154,13 @@ struct ExampleEditing: ViewModifier {
   let example: ShowcaseExample
   let compositionID: String?
   let pause: () -> Void
+  var label = "Edit Timeline"
   @State private var editing = false
 
   func body(content: Content) -> some View {
     content
       .toolbar {
-        Button("Edit Timeline", systemImage: "timeline.selection") {
+        Button(label, systemImage: "timeline.selection") {
           pause()
           editing = true
         }
@@ -168,7 +172,8 @@ struct ExampleEditing: ViewModifier {
 }
 
 extension View {
-  func editableExample(_ example: ShowcaseExample, compositionID: String?, pause: @escaping () -> Void) -> some View {
-    modifier(ExampleEditing(example: example, compositionID: compositionID, pause: pause))
+  func editableExample(_ example: ShowcaseExample, compositionID: String?, label: String = "Edit Timeline",
+                       pause: @escaping () -> Void) -> some View {
+    modifier(ExampleEditing(example: example, compositionID: compositionID, pause: pause, label: label))
   }
 }

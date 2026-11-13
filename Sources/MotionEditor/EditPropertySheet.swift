@@ -9,14 +9,16 @@ import AppKit
 struct EditPropertySheet: View {
   let key: String?
   let initialValue: JSONValue
+  let isThree: Bool
   let onSave: (JSONValue) -> Void
   var onSaveKey: ((String, JSONValue) -> Void)?
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
 
-  init(key: String?, value: JSONValue, onSave: @escaping (JSONValue) -> Void,
+  init(key: String?, value: JSONValue, isThree: Bool = false, onSave: @escaping (JSONValue) -> Void,
        onSaveKey: ((String, JSONValue) -> Void)? = nil) {
     self.key = key
+    self.isThree = isThree
     initialValue = value
     self.onSave = onSave
     self.onSaveKey = onSaveKey
@@ -36,7 +38,7 @@ struct EditPropertySheet: View {
             .frame(height: 100)
           #endif
         }
-        if let definition = StylePropertyDefinition.find(key ?? name) {
+        if let definition = isThree ? StylePropertyDefinition.three(key ?? name) : StylePropertyDefinition.find(key ?? name) {
           PropertyValueForm(definition: definition, initialValue: key == nil ? definition.defaultValue : initialValue) { value in
             if key != nil { onSave(value) } else { onSaveKey?(definition.id, value) }
             dismiss()
@@ -76,6 +78,10 @@ private struct PropertyValueForm: View {
     self.definition = definition
     self.onSave = onSave
     var text = initialValue.number.map(String.init(describing:)) ?? initialValue.string ?? ""
+    if case .options(let choices) = definition.control, let number = initialValue.number,
+       let choice = choices.first(where: { Double($0) == number }) {
+      text = choice
+    }
     var unit = "px"
     if case .length = definition.control {
       if text.hasSuffix("%") { text.removeLast(); unit = "%" }

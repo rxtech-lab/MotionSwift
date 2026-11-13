@@ -21,6 +21,10 @@ const modules = name => path.join(deps, name);
 fs.mkdirSync(output, {recursive: true});
 
 const aliases = [
+  `--alias:remotion/no-react=${path.join(repo, 'js/packages/no-react.cjs')}`,
+  `--alias:@remotion/paths=${modules('@remotion/paths')}`,
+  `--alias:@remotion/shapes=${modules('@remotion/shapes')}`,
+  `--alias:remotion=${path.join(repo, 'js/remotion-shim')}`,
   ...['react', 'react-reconciler', 'scheduler'].map(name => `--alias:${name}=${modules(name)}`),
   `--alias:@motionswift/remotion=${path.join(repo, 'js/remotion-shim')}`,
 ];
@@ -29,7 +33,7 @@ execFileSync(esbuild, [path.join(repo, 'js/portable/vendor.cjs'), '--bundle', '-
   `--outfile=${path.join(output, 'vendor.js')}`]);
 execFileSync(esbuild, [path.join(repo, 'js/portable/portable.mjs'), '--bundle', '--platform=browser', '--format=iife',
   '--global-name=MotionPortable', '--target=es2022', '--minify', '--log-level=warning',
-  `--alias:@babel/parser=${require.resolve('@babel/parser')}`, `--alias:sucrase=${modules('sucrase')}`,
+  `--alias:@jridgewell/sourcemap-codec=${require.resolve('@jridgewell/sourcemap-codec')}`, `--alias:@babel/parser=${require.resolve('@babel/parser')}`, `--alias:sucrase=${modules('sucrase')}`,
   `--outfile=${path.join(output, 'portable.js')}`]);
 
 const version = name => JSON.parse(fs.readFileSync(path.join(name.startsWith('/') ? name : modules(name), 'package.json'), 'utf8')).version;
@@ -46,10 +50,13 @@ fs.writeFileSync(path.join(output, 'vendor.json'), JSON.stringify({
   specifiers: ['react', 'react/jsx-runtime', 'react-reconciler', 'scheduler', '@motionswift/remotion',
     '@motionswift/remotion/jsx-runtime', 'remotion', 'remotion/jsx-runtime', 'three',
     'three/addons/loaders/USDLoader.js', 'three/examples/jsm/loaders/USDLoader.js', 'three/addons/loaders/USDZLoader.js',
-    'three/examples/jsm/loaders/USDZLoader.js', '@react-three/fiber', '@remotion/three'],
+    'three/examples/jsm/loaders/USDZLoader.js', '@react-three/fiber', '@remotion/three', '@remotion/paths', '@remotion/shapes', '@remotion/transitions',
+    '@remotion/transitions/fade', '@remotion/transitions/slide', '@remotion/transitions/wipe'],
   compiler: {sucrase: version('sucrase'), '@babel/parser': version('@babel/parser')},
 }, null, 2) + '\n');
-const licenses = [['react', 'LICENSE'], ['react-reconciler', 'LICENSE'], ['scheduler', 'LICENSE'], ['sucrase', 'LICENSE'],
+const licenses = [['@jridgewell/sourcemap-codec', 'LICENSE'], ['@remotion/paths', 'LICENSE.md'], ['@remotion/shapes', 'LICENSE.md'], ['react', 'LICENSE'], ['react-reconciler', 'LICENSE'], ['scheduler', 'LICENSE'], ['sucrase', 'LICENSE'],
   ['@babel/parser', 'LICENSE']];
 fs.writeFileSync(path.join(output, 'THIRD-PARTY-LICENSES.txt'), licenses.map(([name, file]) =>
   `== ${name} ==\n${fs.readFileSync(path.join(modules(name), file), 'utf8')}`).join('\n'));
+
+fs.copyFileSync(path.join(repo, 'js/portable/map-stack.js'), path.join(output, 'map-stack.js'));

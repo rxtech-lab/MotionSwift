@@ -8,7 +8,14 @@ const fiber = require('@motionswift/remotion/fiber');
 const remotionThree = require('@motionswift/remotion/remotion-three');
 const usd = require('@motionswift/remotion/usd-loader');
 
+const transitions = require('@motionswift/remotion/transitions');
 globalThis.__ms_vendor = {
+  '@remotion/paths': require('../packages/paths.mjs'),
+  '@remotion/shapes': require('../packages/shapes.mjs'),
+  '@remotion/transitions': {TransitionSeries: transitions.TransitionSeries, linearTiming: transitions.linearTiming},
+  '@remotion/transitions/fade': {fade: transitions.fade},
+  '@remotion/transitions/slide': {slide: transitions.slide},
+  '@remotion/transitions/wipe': {wipe: transitions.wipe},
   react: require('react'),
   'react/jsx-runtime': runtime,
   'react-reconciler': require('react-reconciler'),

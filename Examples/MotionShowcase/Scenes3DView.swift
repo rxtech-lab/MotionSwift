@@ -58,7 +58,9 @@ enum Showcase3D {
 /// Live tiles for each 3D scene; selecting one navigates to its player.
 struct Scenes3DView: View {
   @State private var player = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
-  @State private var path: [String] = []
+  /// `MOTIONSWIFT_SHOWCASE_SCENE=<id>` opens that scene's editor first (demos and screenshots).
+  @State private var path: [String] = ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_SCENE"]
+    .flatMap { Showcase3D.scene($0)?.id }.map { [$0] } ?? []
   @State private var error: String?
 
   var body: some View {
@@ -107,58 +109,36 @@ struct Scenes3DView: View {
   }
 }
 
-/// One scene with transport controls, a details sheet and video export.
+/// One scene opened directly in the visual editor: canvas with the camera overlay, timeline with
+/// the camera and object tracks, and the inspector. Edits go to a saved working copy.
 struct Scene3DPlayerView: View {
   let player: MotionPlayer
   let sceneID: String
   @State private var showsDetails = false
-  @State private var showsExport = false
 
   var body: some View {
-    MotionPlayerView(player: player)
-      .padding(20)
-      .navigationTitle(Showcase3D.scene(sceneID)?.title ?? sceneID)
-      .navigationSubtitle(player.composition?.summary ?? "")
+    ExampleEditorSheet(
+      example: .project(Showcase3D.project, entry: ShowcaseDefaults.entry), compositionID: sceneID, isSheet: false,
+      title: Showcase3D.scene(sceneID)?.title ?? sceneID,
+      subtitle: "Working copy · Drag the scene to orbit the camera · Select objects on the timeline")
       .toolbar {
-        ToolbarItemGroup {
-          Picker("Resolution", selection: Binding(
-            get: { player.configuration.scale },
-            set: { player.update(configuration: .init(scale: $0, backend: .gpu)) })) {
-            Text("1×").tag(1.0)
-            Text("2×").tag(2.0)
-            Text("3×").tag(3.0)
-          }
-          .pickerStyle(.segmented)
-          .help("Output pixels per composition pixel; ThreeCanvas caps its WebGL-equivalent canvas at 2×, like R3F")
+        ToolbarItem {
           Button("Scene Details", systemImage: "info.circle") { showsDetails = true }
-            .help("What this scene exercises and how fast it renders")
-          Button("Export Scene", systemImage: "square.and.arrow.up") {
-            player.pause()
-            showsExport = true
-          }
-          .disabled(player.bundle == nil)
+            .help("What this scene exercises")
         }
       }
       .sheet(isPresented: $showsDetails) {
-        Scene3DDetailsSheet(scene: Showcase3D.scene(sceneID), player: player)
+        Scene3DDetailsSheet(scene: Showcase3D.scene(sceneID),
+                            summary: player.compositions.first { $0.id == sceneID }?.summary)
       }
-      .sheet(isPresented: $showsExport) {
-        if let bundle = player.bundle, let composition = player.composition {
-          FilmExportSheet(bundle: bundle, composition: composition)
-        }
-      }
-      .onAppear {
-        player.select(compositionID: sceneID)
-        player.play()
-      }
-      .onDisappear { player.pause() }
+      .onAppear { player.pause() }
   }
 }
 
 private struct Scene3DDetailsSheet: View {
   @Environment(\.dismiss) private var dismiss
   let scene: Showcase3D.Scene?
-  let player: MotionPlayer
+  let summary: String?
 
   var body: some View {
     NavigationStack {
@@ -169,8 +149,7 @@ private struct Scene3DDetailsSheet: View {
           }
         }
         Section {
-          LabeledContent("Composition", value: player.composition?.summary ?? "—")
-          LabeledContent("Preview", value: player.liveFPS.map { String(format: "%.1f fps", $0) } ?? "Play to measure")
+          LabeledContent("Composition", value: summary ?? "—")
           LabeledContent("Renderer", value: "Metal, MSAA 4×, three.js r187 shading")
         } header: {
           Text("Rendering")

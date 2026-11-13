@@ -114,10 +114,14 @@ public struct RenderNode: Codable, Sendable {
     if overrides.isEmpty { return self }
     var style = self.style
     if let source, let patch = overrides[source] {
-      for (key, value) in patch { style[key] = value == .null ? nil : value }
+      // A canvas's camera keys patch its 3D scene, never its CSS style.
+      for (key, value) in patch where scene == nil || !key.hasPrefix("camera") {
+        style[key] = value == .null ? nil : value
+      }
     }
     return RenderNode(
-      type: type, style: style, text: text, src: src, source: source, media: media, scene: scene,
+      type: type, style: style, text: text, src: src, source: source, media: media,
+      scene: scene?.applying(overrides, canvas: source),
       children: children.map { $0.applying(overrides) })
   }
 

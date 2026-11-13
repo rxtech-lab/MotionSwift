@@ -125,6 +125,10 @@ func threeCanvasCommitsResolvedSceneOnPortableCompiler() async throws {
     let first = try renderer.pixels()
     try renderer.draw(node, composition: composition)
     let second = try renderer.pixels()
+    for _ in 0..<3 {
+      try renderer.draw(node, composition: composition)
+      #expect(try renderer.pixels() == first, "\(backend) later repeat render differs")
+    }
     if second != first {
       let changed = first.indices.filter { first[$0] != second[$0] }
       let examples = changed.prefix(20).map { "\($0):\(first[$0])->\(second[$0])" }

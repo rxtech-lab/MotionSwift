@@ -8,6 +8,14 @@ struct EditorInspector: View {
   let model: EditorModel
   @State private var editing: StyleSummary.Property?
   @State private var adding = false
+  @State private var textDraft: TextDraft?
+
+  private struct TextDraft: Identifiable {
+    let id = UUID()
+    let selection: String
+    let source: String
+    let text: String
+  }
   @State private var removing: StyleSummary.Property?
 
   var body: some View {
@@ -20,8 +28,28 @@ struct EditorInspector: View {
           }
           if let box = model.selectedBox {
             LabeledContent("Box", value: "\(format(box.x)), \(format(box.y)) · \(format(box.width))×\(format(box.height))")
+          } else if model.styles?.isThree == true {
+            Text("Select 3D objects and materials in the timeline. Position uses scene units; rotation uses radians. "
+                 + "Repeated instances share source edits.")
+              .font(.caption).foregroundStyle(.secondary)
           } else {
             Text("Object is outside the playhead's visible range").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        if let content = model.textContent, model.canEditText || content.reason != nil {
+          Section("Text Content") {
+            if model.canEditText {
+              Text(model.selectedTextValue).lineLimit(4)
+              Button("Edit Text…", systemImage: "text.cursor") {
+                if let stamp = SourceStamp(selection), let source = model.files[stamp.file] {
+                  textDraft = TextDraft(selection: selection, source: source, text: model.selectedTextValue)
+                }
+              }
+                .disabled(model.status != .idle)
+                .accessibilityIdentifier("edit-text")
+            } else if let reason = content.reason {
+              Text(reason).font(.callout).foregroundStyle(.secondary)
+            }
           }
         }
         Section {
@@ -34,11 +62,11 @@ struct EditorInspector: View {
           }
         } header: {
           HStack {
-            Text("Style")
+            Text(model.styles?.isThree == true ? "3D Properties" : "Style")
             Spacer()
             Button("Add Property", systemImage: "plus") { adding = true }
               .labelStyle(.iconOnly)
-              .disabled(model.styles?.editable != true)
+              .disabled(model.styles?.editable != true || model.styles?.isThree == true)
               .accessibilityIdentifier("add-property")
           }
         }
@@ -52,12 +80,16 @@ struct EditorInspector: View {
       } else {
         ContentUnavailableView(
           "No Selection", systemImage: "cursorarrow.click",
-          description: Text("Tap an element on the canvas to inspect and edit it."))
+          description: Text("Select an object on the timeline or tap a canvas element to inspect and edit it."))
       }
     }
     .formStyle(.grouped)
+    .sheet(item: $textDraft) { draft in
+      EditTextSheet(model: model, source: draft.selection, expectedSource: draft.source, text: draft.text)
+    }
     .sheet(item: $editing) { property in
-      EditPropertySheet(key: property.key, value: model.currentStyleValue(property.key) ?? property.value ?? .string("")) { value in
+      EditPropertySheet(key: property.key, value: model.currentStyleValue(property.key) ?? property.value ?? .string(""),
+                        isThree: model.styles?.isThree == true) { value in
         Task { await model.setStyle(property.key, value) }
       }
     }
@@ -78,7 +110,9 @@ struct EditorInspector: View {
 
   @ViewBuilder private func row(_ property: StyleSummary.Property) -> some View {
     let animated = model.selectedTrack?.keyframes[property.key] != nil
-    let editable = property.kind == .static
+    let definition = model.styles?.isThree == true
+      ? StylePropertyDefinition.three(property.key) : StylePropertyDefinition.find(property.key)
+    let editable = property.kind == .static && definition != nil
     Button {
       if editable { editing = property }
     } label: {
@@ -88,7 +122,7 @@ struct EditorInspector: View {
         Text(valueText(property))
           .font(.callout.monospaced()).lineLimit(1).foregroundStyle(.secondary)
         if !editable || animated {
-          Text(animated ? "keyframes" : property.kind.rawValue)
+          Text(animated ? "keyframes" : property.kind == .static ? "code" : property.kind.rawValue)
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(.quaternary, in: Capsule())
@@ -97,19 +131,27 @@ struct EditorInspector: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .disabled(!editable)
     .help(help(property))
     .contextMenu {
       if editable {
         Button("Edit…", systemImage: "pencil") { editing = property }
-        if !animated { Button("Remove…", systemImage: "trash", role: .destructive) { removing = property } }
+        if !animated && model.styles?.isThree != true {
+          Button("Remove…", systemImage: "trash", role: .destructive) { removing = property }
+        }
       }
     }
     .swipeActions {
-      if editable && !animated { Button("Remove", systemImage: "trash", role: .destructive) { removing = property } }
+      if editable && !animated && model.styles?.isThree != true {
+        Button("Remove", systemImage: "trash", role: .destructive) { removing = property }
+      }
     }
   }
 
   private func help(_ property: StyleSummary.Property) -> String {
+    if property.kind == .static, StylePropertyDefinition.find(property.key) == nil {
+      return "This property has no visual control yet; edit its value in code"
+    }
     switch property.kind {
     case .static: return "Edit the literal in source"
     case .animated: return "Animated: edit keyframes on the timeline"

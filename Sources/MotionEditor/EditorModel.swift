@@ -28,7 +28,7 @@ public final class EditorModel {
     public let message: String
   }
 
-  public private(set) var isCapturingKeyframe = false
+  public internal(set) var isCapturingKeyframe = false
   public private(set) var keyframeDraft: [String: JSONValue] = [:]
   private var draftFrame: Int?
   private var draftSource: String?
@@ -46,8 +46,9 @@ public final class EditorModel {
   public private(set) var selection: String?
   public private(set) var selectedPath: String?
   public private(set) var styles: StyleSummary?
+  public private(set) var textContent: TextSummary?
   public private(set) var guides: [SnapGuide] = []
-  public private(set) var isGesturing = false
+  public internal(set) var isGesturing = false
   public var snapsToGuides = true
   public private(set) var canUndo = false
   public private(set) var canRedo = false
@@ -57,12 +58,15 @@ public final class EditorModel {
   public private(set) var commitFeedback = 0
   public private(set) var refusalFeedback = 0
 
-  @ObservationIgnored private let service = EditService()
+  @ObservationIgnored let service = EditService()
   @ObservationIgnored private var undoStack: [Change] = []
   @ObservationIgnored private var redoStack: [Change] = []
   @ObservationIgnored private var gestureTarget: GestureTarget?
   @ObservationIgnored private var gesturePatch: [String: JSONValue] = [:]
   @ObservationIgnored private var noticeTask: Task<Void, Never>?
+  /// 3D camera and drag state, see `EditorModel+Three.swift`.
+  var three = ThreeEditing()
+  @ObservationIgnored var threeWork = ThreeWork()
 
   private struct Change {
     let name: String
@@ -78,9 +82,9 @@ public final class EditorModel {
   deinit { service.stop() }
 
   // MARK: Loading
-
   /// Reads the project from disk and compiles it with editor stamps.
   public func open(compositionID: String? = nil) async {
+    if compositionID != player.composition?.id { resetTimelineSelection() }
     status = .compiling
     do {
       let project = project
@@ -109,21 +113,15 @@ public final class EditorModel {
   }
 
   // MARK: Selection
-
   /// The layout box of the selection in the displayed frame.
   public var selectedBox: LayoutBox? {
     guard let selection, let layout = player.displayedFrame?.layout else { return nil }
     return layout.first { $0.id == selectedPath && $0.source == selection } ?? layout.first { $0.source == selection }
   }
 
-  /// How many rendered instances share the selected source element (for example in a `map`).
-  public var selectionInstances: Int {
-    guard let selection else { return 0 }
-    return player.displayedFrame?.layout.filter { $0.source == selection }.count ?? 0
-  }
-
   /// The selected box after its static translate/scale transform, for handles and hit testing.
   public var selectedRect: CGRect? {
+    guard styles?.isThree != true else { return nil }
     guard let box = selectedBox else { return nil }
     return visualRect(box)
   }
@@ -133,6 +131,7 @@ public final class EditorModel {
     let hit = hitTest(point)
     if hit?.source != selection || hit?.id != selectedPath {
       discardKeyframeDraft()
+      textContent = nil
       selection = hit?.source
       selectedPath = hit?.id
       selectionFeedback += 1
@@ -146,6 +145,7 @@ public final class EditorModel {
     selection = nil
     selectedPath = nil
     styles = nil
+    textContent = nil
     selectionFeedback += 1
   }
 
@@ -180,25 +180,31 @@ public final class EditorModel {
     return result
   }
 
-  private func refreshStyles() async {
+  func refreshStyles() async {
     guard let selection, let stamp = SourceStamp(selection), let source = files[stamp.file] else {
       styles = nil
+      textContent = nil
       return
     }
+    let content = try? await service.perform { try $0.text(source: source, src: selection) }
     let summary = try? await service.perform { try $0.styles(source: source, src: selection) }
     guard self.selection == selection, files[stamp.file] == source else { return }
     styles = summary
+    textContent = content
   }
 
 }
 
 extension EditorModel {
   // MARK: Gestures
-
   /// Starts a gesture on the selection. Returns false (with a refusal overlay and haptic) when the
   /// properties it would write are animated, bound or computed.
   @discardableResult
   public func beginGesture(_ gesture: CanvasGesture) -> Bool {
+    if isThreeSelection {
+      refuse("Drag on the canvas to orbit the camera or rotate the selected 3D object")
+      return false
+    }
     guard status == .idle, !isGesturing, let selection, let box = selectedBox, let frame = player.displayedFrame,
       let node = frame.tree.node(at: box.id)
     else { return false }
@@ -291,6 +297,50 @@ extension EditorModel {
   }
 
   // MARK: Inspector edits
+  func textEditTarget(at point: CGPoint) async -> TextEditTarget? {
+    guard status == .idle, !isGesturing, let hit = hitTest(point), let source = hit.source else { return nil }
+    player.pause()
+    select(at: point)
+    let frame = player.currentFrame
+    await refreshStyles()
+    guard selection == source, selectedPath == hit.id, player.currentFrame == frame else { return nil }
+    guard canEditText else {
+      refuse(textContent?.reason ?? "This element does not contain editable text.")
+      return nil
+    }
+    guard let stamp = SourceStamp(source), let expectedSource = files[stamp.file], let rect = selectedRect else { return nil }
+    let node = player.displayedFrame?.tree.node(at: hit.id)
+    let fontSize = node?.style["fontSize"]?.number ?? node.flatMap { SelectedFilmText.fontSize(in: $0) } ?? 28
+    return TextEditTarget(source: source, expectedSource: expectedSource, text: selectedTextValue, rect: rect, fontSize: fontSize)
+  }
+
+  public var canEditText: Bool {
+    guard let content = textContent, content.editable else { return false }
+    if content.styleContent != true || content.value != nil { return true }
+    guard let path = selectedPath, let node = player.displayedFrame?.tree.node(at: path) else { return false }
+    return SelectedFilmText.content(in: node) != nil
+  }
+
+  /// SVG-backed film layers expose their visible text through the rendered image.
+  public var selectedTextValue: String {
+    if let value = textContent?.value, !value.isEmpty { return value }
+    guard let path = selectedPath, let node = player.displayedFrame?.tree.node(at: path) else {
+      return textContent?.value ?? ""
+    }
+    return SelectedFilmText.content(in: node) ?? textContent?.value ?? ""
+  }
+
+  /// Saves the sheet's original target, refusing changes made since the sheet opened.
+  @discardableResult
+  public func setText(_ text: String, source: String, expectedSource: String, requiresSelection: Bool = true) async -> Bool {
+    guard !requiresSelection || selection == source, let stamp = SourceStamp(source), files[stamp.file] == expectedSource else {
+      show(.conflict, "The selection or source changed. Close and reopen Edit Text.")
+      return false
+    }
+    if selection == source, text == selectedTextValue { return true }
+    return await apply([EditOperation(op: .setText, src: source, key: "children", value: .string(text))],
+                       name: "Text", from: .user)
+  }
 
   public func setStyle(_ key: String, _ value: JSONValue) async {
     guard let selection else { return }
@@ -298,6 +348,13 @@ extension EditorModel {
       guard status == .idle else { return }
       guard value.number?.isFinite == true else { refuse("Keyframed attributes must have numeric values"); return }
       player.pause()
+      if styles?.isThree == true, let track = selectedTrack, let number = value.number {
+        let local = player.currentFrame - track.start
+        let point = track.keyframes[key]?.first { $0.frame == local }
+        await setKeyframe(of: selection, key: key, frame: player.currentFrame, value: number,
+                          easing: point?.easing ?? "linear", replacing: point?.frame)
+        return
+      }
       stageKeyframeStyle([key: value])
       return
     }
@@ -330,7 +387,7 @@ extension EditorModel {
     await apply(change.operations, name: change.name, from: .redo)
   }
 
-  private enum Origin { case user, undo, redo }
+  enum Origin { case user, undo, redo }
 
   private func updateUndoState() {
     canUndo = !undoStack.isEmpty
@@ -338,10 +395,9 @@ extension EditorModel {
   }
 
   // MARK: Write-back
-
   /// Applies operations in order, writes the touched files, records the inverse and hot-reloads.
   @discardableResult
-  private func apply(_ operations: [EditOperation], name: String, from origin: Origin) async -> Bool {
+  func apply(_ operations: [EditOperation], name: String, from origin: Origin) async -> Bool {
     guard status == .idle else { return false }
     player.pause()
     status = .saving
@@ -411,12 +467,12 @@ extension EditorModel {
     }
   }
 
-  private func refuse(_ reason: String) {
+  func refuse(_ reason: String) {
     refusalFeedback += 1
     show(.refusal, reason)
   }
 
-  private func show(_ kind: EditorNoticeKind, _ message: String) {
+  func show(_ kind: EditorNoticeKind, _ message: String) {
     let notice = Notice(kind: kind, message: message)
     self.notice = notice
     noticeTask?.cancel()
@@ -440,6 +496,11 @@ extension EditorModel {
 
   /// Remember source files as they appear; timed-out objects remain on the timeline.
   public func observeTimelineFrame() {
+    for element in player.displayedFrame?.tree.threeEditorElements ?? [] {
+      if let track = objectTracks.first(where: { $0.src == element.source }) {
+        timelineSources.insert(trackGroup(track))
+      }
+    }
     for box in player.displayedFrame?.layout ?? [] {
       if let source = box.source, let track = objectTracks.first(where: { $0.src == source }) {
         timelineSources.insert(trackGroup(track))
@@ -465,6 +526,7 @@ extension EditorModel {
       }
       observeTimelineFrame()
     } catch { show(.failure, "Cannot read timeline: \(error)") }
+    await refreshCameraRigs()
   }
 
   public func selectTrack(_ track: ObjectTrack) {
@@ -474,6 +536,7 @@ extension EditorModel {
     selection = track.src
     selectedPath = player.displayedFrame?.layout.first { $0.source == track.src }?.id
     styles = nil
+    textContent = nil
     selectionFeedback += 1
     Task { await refreshStyles() }
   }
@@ -556,12 +619,16 @@ extension EditorModel {
       let rendered = try await player.render(frame: frame)
       guard selection == source, player.currentFrame == frame, files[stamp.file] == text,
         keyframeDraft == draft, player.composition?.id == composition.id, status == .idle else { return }
-      let box = rendered.layout.first { $0.id == path && $0.source == source }
-        ?? rendered.layout.first { $0.source == source }
-      guard let box, let node = rendered.tree.node(at: box.id) else {
-        refuse("The selected object is not visible at this frame"); return
+      let evaluated: [String: JSONValue]?
+      if summary.isThree {
+        evaluated = rendered.tree.threeEditorElements.first { $0.source == source }?.properties
+      } else {
+        let box = rendered.layout.first { $0.id == path && $0.source == source }
+          ?? rendered.layout.first { $0.source == source }
+        evaluated = box.flatMap { rendered.tree.node(at: $0.id)?.style }
       }
-      let current = node.style.merging(draft) { _, new in new }
+      guard let evaluated else { refuse("The selected object is not visible at this frame"); return }
+      let current = evaluated.merging(draft) { _, new in new }
       var timing = track.timing
       var captured = 0
       var operations: [EditOperation] = []
@@ -586,12 +653,15 @@ extension EditorModel {
   /// Current inspector value, including unsaved canvas/inspector adjustments at this frame.
   public var detectedStyleProperties: [StyleSummary.Property] {
     guard let styles else { return [] }
+    if styles.isThree { return styles.properties }
     let resolved = selectedBox.flatMap { player.displayedFrame?.tree.node(at: $0.id)?.style } ?? [:]
     return styles.detectedProperties(resolved: resolved)
   }
 
   public func currentStyleValue(_ key: String) -> JSONValue? {
     if let draft = keyframeDraft[key] { return draft }
+    if styles?.isThree == true, let value = player.displayedFrame?.tree.threeEditorElements
+      .first(where: { $0.source == selection })?.properties[key] { return value }
     if let box = selectedBox, let value = player.displayedFrame?.tree.node(at: box.id)?.style[key] { return value }
     return styles?.property(key)?.value
   }

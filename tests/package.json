@@ -10,8 +10,11 @@
   "dependencies": {
     "@react-three/fiber": "8.18.0",
     "@remotion/bundler": "4.0.542",
+    "@remotion/paths": "4.0.542",
     "@remotion/renderer": "4.0.542",
+    "@remotion/shapes": "4.0.542",
     "@remotion/three": "4.0.542",
+    "@remotion/transitions": "4.0.542",
     "pngjs": "7.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@babel/parser": "7.24.1",
+    "@jridgewell/sourcemap-codec": "1.6.0",
     "@types/react": "18.3.27",
     "esbuild": "0.28.1",
     "sucrase": "3.35.1",

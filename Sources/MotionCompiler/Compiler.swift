@@ -8,9 +8,17 @@ import MotionPortable
 public struct Compiler {
   /// Retained for source compatibility; compiler assets come from the package bundle.
   public let repository: URL
+  private let cache = NativeGraphCache()
+  private var cacheEnabled = true
+  public var cacheStatistics: CompilerCacheStatistics { cache.statistics }
+  public func clearCache() { cache.clear() }
 
   public init(repository: URL) { self.repository = repository }
-  public init() { repository = Bundle.module.bundleURL }
+  /// Disable retained-graph bookkeeping for one-shot callers such as the CLI.
+  public init(cacheEnabled: Bool = true) {
+    repository = Bundle.module.bundleURL
+    self.cacheEnabled = cacheEnabled
+  }
 
   /// Emits the project with tsgo after subset inspection; returns the emitted entry module.
   private func emit(project: URL, entry: String, toolchain: URL, temporary: URL, vendor: URL) throws -> URL {
@@ -30,25 +38,64 @@ public struct Compiler {
   /// precompiled vendor graph. Packages are resolved from the project's `node_modules` and still
   /// pass the dynamic import/require inspection.
   public func graph(project: URL, entry: String) throws -> ModuleGraph {
-    try withToolchain { toolchain, temporary in
+    let manifest = cacheEnabled ? try NativeGraphCache.manifest(project) : [:]
+    let identity = try CompilerContent.key([
+      "project": project.standardizedFileURL.path, "entry": entry,
+      "manifest": try CompilerContent.key(manifest), "vendor": Vendor.sha256,
+      "versions": try String(contentsOf: resource("versions.json"), encoding: .utf8),
+      "inspector": CompilerContent.hash(try Data(contentsOf: resource("inspect.js"))),
+      "contract": "native-graph-v2-es2022-browser-import",
+    ])
+    if cacheEnabled, let graph = cache.lookup(identity) { return graph }
+    var tracked: [URL] = []
+    let graph = try withToolchain { toolchain, temporary in
       let vendor = try resource("Vendor")
       let compiledEntry = try emit(project: project, entry: entry, toolchain: toolchain, temporary: temporary,
         vendor: vendor)
       let output = temporary.appendingPathComponent("graph.js")
       let metadata = temporary.appendingPathComponent("meta.json")
+      let aliases = try resolutionOptions(project: project)
+      let emitted = temporary.appendingPathComponent("emitted")
+      var linkOptions: [String: Any] = ["baseUrl": emitted.path]
+      if let paths = aliases["paths"] as? [String: [String]] {
+        linkOptions["paths"] = paths.mapValues { targets in targets.map { target in
+          var url = emitted.appendingPathComponent(target)
+          if let ext = ["ts": "js", "tsx": "js", "jsx": "js", "mts": "mjs", "cts": "cjs"][url.pathExtension] {
+            url = url.deletingPathExtension().appendingPathExtension(ext)
+          }
+          return url.path
+        } }
+      }
+      if let base = aliases["baseUrl"] as? String { linkOptions["baseUrl"] = emitted.appendingPathComponent(base).path }
+      let linkConfig = temporary.appendingPathComponent("link-tsconfig.json")
+      try JSONSerialization.data(withJSONObject: ["compilerOptions": linkOptions], options: [.sortedKeys]).write(to: linkConfig)
       var arguments = [compiledEntry.path, "--bundle", "--platform=browser", "--format=cjs", "--target=es2022",
         "--define:process.env.NODE_ENV=\"production\"", "--log-level=warning",
-        "--outfile=\(output.path)", "--metafile=\(metadata.path)"]
+        "--outfile=\(output.path)", "--metafile=\(metadata.path)",
+        "--tsconfig=\(linkConfig.path)", "--conditions=browser,import", "--main-fields=browser,module,main",
+        "--sourcemap=external", "--sources-content=true", "--minify-whitespace", "--legal-comments=none"]
       arguments.append("--external:node:*")
       arguments += Vendor.specifiers.map { "--external:\($0)" }
       let modules = project.appendingPathComponent("node_modules").path
       let result = try run(toolchain.appendingPathComponent("esbuild/bin/esbuild"), arguments, directory: project,
         environment: ["NODE_PATH": modules])
-      guard result.status == 0 else { throw MotionError("esbuild: \(result.output)") }
+      guard result.status == 0 else {
+        throw MotionError("esbuild: \(result.output)\n\(try importHints(project: project, output: result.output))")
+      }
       let graph = try JSONDecoder().decode(CompilerGraph.self, from: Data(contentsOf: metadata))
       var packages = Set<String>()
       var packageFiles: [String] = []
       for input in graph.inputs.keys {
+        let url = (input.hasPrefix("/") ? URL(fileURLWithPath: input) : project.appendingPathComponent(input)).standardizedFileURL
+        if !url.path.hasPrefix(temporary.path + "/") { tracked.append(url) }
+        var directory = url.standardizedFileURL.deletingLastPathComponent()
+        while !directory.path.isEmpty && directory.path != "/" {
+          let manifest = directory.appendingPathComponent("package.json")
+          if FileManager.default.fileExists(atPath: manifest.path) { tracked.append(manifest) }
+          let parent = directory.deletingLastPathComponent().standardizedFileURL
+          guard parent.path != directory.path else { break }
+          directory = parent
+        }
         guard let range = input.range(of: "node_modules/", options: .backwards) else { continue }
         let parts = input[range.upperBound...].split(separator: "/")
         guard let first = parts.first else { continue }
@@ -58,20 +105,35 @@ public struct Compiler {
       try inspect(files: packageFiles, vendor: vendor, subset: false)
       let code = try String(contentsOf: output, encoding: .utf8)
       var dependencies: [String: String] = [:]
-      let requires = try NSRegularExpression(pattern: #"\brequire\((["'])([^"']+)\1\)"#)
-      for match in requires.matches(in: code, range: NSRange(code.startIndex..., in: code)) {
-        guard let range = Range(match.range(at: 2), in: code) else { continue }
-        let specifier = String(code[range])
+      let imports = try PortableCompiler().importLocations(files: ["bundle.js": code])
+      for location in imports {
+        let specifier = location.specifier
         guard Vendor.specifiers.contains(specifier) else {
-          throw MotionError("ms/unsupported-package: \(specifier) could not be bundled from \(modules)")
+          let hints = try importHints(project: project, output: "\"\(specifier)\"")
+          throw MotionError("ms/unsupported-package: \(specifier) could not be bundled from \(modules)\n\(hints)")
         }
         dependencies[specifier] = "vendor:\(specifier)"
       }
+      var map = try JSONSerialization.jsonObject(with: Data(contentsOf: output.appendingPathExtension("map"))) as? [String: Any] ?? [:]
+      map["sources"] = (map["sources"] as? [String] ?? []).map { source in
+        let url = temporary.appendingPathComponent(source).standardizedFileURL
+        let root = project.standardizedFileURL.path + "/"
+        if url.path.hasPrefix(root) { return String(url.path.dropFirst(root.count)) }
+        if let range = url.path.range(of: "node_modules/") { return String(url.path[range.lowerBound...]) }
+        return url.lastPathComponent
+      }
+      map["file"] = "\(entry).bundle.js"
+      let sourceMap = String(bytes: try JSONSerialization.data(withJSONObject: map, options: [.sortedKeys]), encoding: .utf8)
       let name = "\(entry).bundle.js"
       return ModuleGraph(
-        entry: name, modules: [name: .init(code: code, dependencies: dependencies)], packages: packages.sorted(),
+        entry: name, modules: [name: .init(code: code, dependencies: dependencies, sourceMap: sourceMap)], packages: packages.sorted(),
         producer: "tsgo 7.0.2 + esbuild 0.28.1 (macOS)", stamped: false)
     }
+    // A project edited during compilation must not poison the identity captured before emission.
+    if cacheEnabled, try NativeGraphCache.manifest(project) == manifest {
+      try cache.store(identity, graph: graph, dependencies: tracked)
+    }
+    return graph
   }
 
   public func compile(project: URL, entry: String) throws -> String {
@@ -106,11 +168,31 @@ public struct Compiler {
         "three/addons/loaders/USDZLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
         "three/examples/jsm/loaders/USDZLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
         "@react-three/fiber": [shim.appendingPathComponent("fiber.d.ts").path],
+        "@remotion/paths": [shim.appendingPathComponent("remotion-paths.d.ts").path],
+        "@remotion/shapes": [shim.appendingPathComponent("remotion-shapes.d.ts").path],
+        "@remotion/transitions": [shim.appendingPathComponent("transitions.d.ts").path],
+        "@remotion/transitions/fade": [shim.appendingPathComponent("transition-fade.d.ts").path],
+        "@remotion/transitions/slide": [shim.appendingPathComponent("transition-slide.d.ts").path],
+        "@remotion/transitions/wipe": [shim.appendingPathComponent("transition-wipe.d.ts").path],
         "@remotion/three": [shim.appendingPathComponent("remotion-three.d.ts").path],
         "react": [modules.appendingPathComponent("@types/react/index.d.ts").path],
         "react/jsx-runtime": [modules.appendingPathComponent("@types/react/jsx-runtime.d.ts").path]],
     ]
+    let aliases = try resolutionOptions(project: project)
+    if let paths = aliases["paths"] as? [String: [String]], var builtins = options["paths"] as? [String: [String]] {
+      for (key, targets) in paths where builtins[key] == nil {
+        builtins[key] = targets.map { project.appendingPathComponent($0).path }
+      }
+      options["paths"] = builtins
+    }
+    // TypeScript 7 removed baseUrl; equivalent absolute paths preserve legacy projects.
+    if let base = aliases["baseUrl"] as? String, var paths = options["paths"] as? [String: [String]], paths["*"] == nil {
+      paths["*"] = [project.appendingPathComponent(base).appendingPathComponent("*").path]
+      options["paths"] = paths
+    }
     if let emit {
+      options["sourceMap"] = true
+      options["inlineSources"] = true
       // Rendering remains independent of semantic type errors; checkTypes reports them separately.
       options["noCheck"] = true
       options["rootDir"] = project.standardizedFileURL.path
@@ -122,17 +204,6 @@ public struct Compiler {
     try JSONSerialization.data(withJSONObject: ["compilerOptions": options,
       "files": [project.appendingPathComponent(entry).standardizedFileURL.path]]).write(to: config)
     return config
-  }
-
-  private func resource(_ path: String) throws -> URL {
-    guard let root = Bundle.module.resourceURL?.appendingPathComponent("Resources") else {
-      throw MotionError("Missing embedded compiler resources")
-    }
-    let url = root.appendingPathComponent(path)
-    guard FileManager.default.fileExists(atPath: url.path) else {
-      throw MotionError("Missing embedded compiler resource: \(path). Run make compiler before building.")
-    }
-    return url
   }
 
   private func withToolchain<T>(_ body: (URL, URL) throws -> T) throws -> T {
@@ -179,10 +250,6 @@ public struct Compiler {
     return (process.terminationStatus, String(bytes: data, encoding: .utf8) ?? "Invalid UTF-8 output")
   }
 
-  private func quoted(_ string: String) throws -> String {
-    String(bytes: try JSONEncoder().encode(string), encoding: .utf8) ?? "\"\""
-  }
-
   private func inspect(metadata: URL) throws {
     let graph = try JSONDecoder().decode(CompilerGraph.self, from: Data(contentsOf: metadata))
     for output in graph.outputs.values {
@@ -207,8 +274,36 @@ public struct Compiler {
       guard result?.toString() == "[]" else { throw MotionError(result?.toString() ?? "Compiler inspection failed") }
     }
   }
+}
 
-  private func diagnostics(_ output: String, status: Int32) throws -> [Diagnostic] {
+extension Compiler {
+  fileprivate func resource(_ path: String) throws -> URL {
+    guard let root = Bundle.module.resourceURL?.appendingPathComponent("Resources") else {
+      throw MotionError("Missing embedded compiler resources")
+    }
+    let url = root.appendingPathComponent(path)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+      throw MotionError("Missing embedded compiler resource: \(path). Run make compiler before building.")
+    }
+    return url
+  }
+
+  fileprivate func quoted(_ string: String) throws -> String {
+    String(bytes: try JSONEncoder().encode(string), encoding: .utf8) ?? "\"\""
+  }
+
+  /// Maps esbuild resolution failures back to the original import locations.
+  fileprivate func importHints(project: URL, output: String) throws -> String {
+    let locations = try PortableCompiler().importLocations(files: PortableCompiler.sources(in: project))
+    return locations.filter { output.contains("\"" + $0.specifier + "\"") }.map {
+      "\($0.file):\($0.line):\($0.col): cannot resolve import '\($0.specifier)'; "
+        + "check paths, package exports and installed dependencies"
+    }.joined(separator: "\n")
+  }
+}
+
+private extension Compiler {
+  func diagnostics(_ output: String, status: Int32) throws -> [Diagnostic] {
     if status == 0 { return [] }
     let located = try NSRegularExpression(pattern: #"^(.*)\((\d+),(\d+)\): error TS(\d+): (.*)$"#)
     let global = try NSRegularExpression(pattern: #"^error TS(\d+): (.*)$"#)
@@ -231,6 +326,16 @@ public struct Compiler {
   }
 }
 
+private extension Compiler {
+  func resolutionOptions(project: URL) throws -> [String: Any] {
+    // Without a root tsconfig there are no aliases or inherited options to resolve.
+    // Avoid loading the portable JS compiler and reading every project source just for this check.
+    guard FileManager.default.fileExists(atPath: project.appendingPathComponent("tsconfig.json").path) else { return [:] }
+    return try PortableCompiler().resolutionOptions(files: PortableCompiler.sources(in: project))
+  }
+
+}
+
 private struct CompilerGraph: Decodable {
   let inputs: [String: CompilerInput]
   let outputs: [String: CompilerOutput]
@@ -245,5 +350,48 @@ private struct CompilerOutput: Decodable {
 private struct CompilerImport: Decodable {
   let path: String
   let external: Bool?
+}
+#endif
+
+#if os(macOS)
+/// Bounded process-local graph cache. All project source/config/package bytes participate in the
+/// identity; external inputs reported by esbuild are checked again before returning a hit.
+private final class NativeGraphCache {
+  private let lock = NSLock()
+  private var entries: [String: (ModuleGraph, [URL: String])] = [:]
+  private var counts = CompilerCacheStatistics()
+  var statistics: CompilerCacheStatistics { lock.lock(); defer { lock.unlock() }; return counts }
+  func clear() { lock.lock(); defer { lock.unlock() }; entries.removeAll(); counts = .init() }
+
+  static func manifest(_ root: URL) throws -> [String: String] {
+    var result: [String: String] = [:]
+    guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey],
+      options: [.skipsHiddenFiles]) else { throw MotionError("Cannot read project: \(root.path)") }
+    let extensions: Set<String> = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "json"]
+    for case let url as URL in enumerator {
+      guard extensions.contains(url.pathExtension),
+        try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+      else { continue }
+      result[String(url.path.dropFirst(root.path.count))] = CompilerContent.hash(try Data(contentsOf: url))
+    }
+    return result
+  }
+
+  func lookup(_ key: String) -> ModuleGraph? {
+    lock.lock(); defer { lock.unlock() }
+    if let (graph, dependencies) = entries[key], dependencies.allSatisfy({ url, hash in
+      (try? CompilerContent.hash(Data(contentsOf: url))) == hash
+    }) { counts.hits += 1; return graph }
+    counts.misses += 1
+    return nil
+  }
+
+  func store(_ key: String, graph: ModuleGraph, dependencies: [URL]) throws {
+    var hashes: [URL: String] = [:]
+    for url in dependencies { hashes[url] = CompilerContent.hash(try Data(contentsOf: url)) }
+    lock.lock(); defer { lock.unlock() }
+    if entries.count >= 8 { entries.removeAll() }
+    entries[key] = (graph, hashes)
+  }
 }
 #endif

@@ -24,14 +24,21 @@ public struct EditorTimeline: View {
         ContentUnavailableView("Object Timeline", systemImage: "film.stack",
                                description: Text("Object tracks appear when the composition renders."))
       } else {
-        ScrollView([.horizontal, .vertical]) {
-          VStack(spacing: 1) {
+        ScrollView(.horizontal) {
+          VStack(spacing: 0) {
             ruler
-            ForEach(model.timelineTracks) { track in
-              trackRow(track)
-              if model.selection == track.src {
-                ForEach(track.keyframes.keys.sorted(), id: \.self) { key in
-                  keyframeLane(track, key: key)
+            ScrollView(.vertical) {
+              VStack(spacing: 1) {
+                ForEach(model.timelineTracks) { track in
+                  trackRow(track)
+                  if model.selection == track.src {
+                    if track.label == "ThreeCanvas", model.cameraMode == .rig, let rig = model.cameraRig {
+                      CameraRigLane(model: model, rig: rig, labelWidth: labelWidth, scale: pixelsPerFrame, width: trackWidth)
+                    }
+                    ForEach(track.keyframes.keys.sorted(), id: \.self) { key in
+                      keyframeLane(track, key: key)
+                    }
+                  }
                 }
               }
             }
@@ -54,6 +61,15 @@ public struct EditorTimeline: View {
     HStack {
       Label("Timeline", systemImage: "film.stack").font(.headline)
       Spacer()
+      if model.cameraTrack != nil, !model.hasCameraKeyframes {
+        Button(model.isAddingCamera ? "Adding Camera…" : model.cameraMode == .rig ? "Rig to Keyframes" : "Add Camera",
+               systemImage: "video.badge.plus") {
+          Task { await model.addCamera() }
+        }
+        .help("Keyframe the 3D camera on the timeline, baking any camera animation from code")
+        .disabled(model.status != .idle || model.isAddingCamera || model.isGesturing)
+        .accessibilityIdentifier("add-camera")
+      }
       Button("Timing…", systemImage: "clock") { editingTiming = model.selectedTrack }
         .disabled(model.selectedTrack == nil || model.selectedTrack?.reason != nil || model.status != .idle)
         .accessibilityIdentifier("edit-object-timing")
@@ -102,7 +118,11 @@ public struct EditorTimeline: View {
     HStack(spacing: 0) {
       Button { model.selectTrack(track) } label: {
         VStack(alignment: .leading, spacing: 2) {
-          Label(track.label, systemImage: track.reason == nil ? "rectangle" : "lock")
+          if track.label == "ThreeCanvas" {
+            Label("Camera", systemImage: track.reason == nil ? "video" : "lock")
+          } else {
+            Label(track.label, systemImage: track.reason == nil ? "rectangle" : "lock")
+          }
           Text(track.src).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
         }
         .frame(width: labelWidth - 16, height: 46, alignment: .leading)
@@ -384,5 +404,52 @@ private struct EditorSheetSize: ViewModifier {
     #else
     content.presentationDetents([.large])
     #endif
+  }
+}
+
+/// Keys of a code camera rig on the Camera track: click to jump, context menu to delete.
+private struct CameraRigLane: View {
+  let model: EditorModel
+  let rig: CameraRig
+  let labelWidth: Double
+  let scale: Double
+  let width: Double
+  @State private var deleting: Int?
+
+  var body: some View {
+    HStack(spacing: 0) {
+      Label(rig.name ?? "Camera rig", systemImage: "chevron.left.forwardslash.chevron.right")
+        .font(.caption).padding(.leading, 24)
+        .frame(width: labelWidth, height: 30, alignment: .leading)
+        .help("Keys written in code; drag the canvas at a frame to edit or add one")
+      ZStack(alignment: .leading) {
+        Rectangle().fill(.secondary.opacity(0.15)).frame(height: 1)
+        ForEach(rig.keys, id: \.frame) { key in
+          Button { model.scrub(to: key.frame) } label: {
+            Image(systemName: "diamond.fill").font(.caption).foregroundStyle(.cyan)
+              .frame(width: 24, height: 30).contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .offset(x: Double(key.frame) * scale - 12)
+          .contextMenu {
+            Button("Go to Frame \(key.frame)") { model.scrub(to: key.frame) }
+            Button("Delete Key…", role: .destructive) { deleting = key.frame }
+              .disabled(rig.keys.count <= 2)
+          }
+          .disabled(model.status != .idle)
+          .help("Camera key at frame \(key.frame), fov \(key.fov.formatted())")
+          .accessibilityLabel("Camera rig key at frame \(key.frame)")
+        }
+      }
+      .frame(width: width, height: 30)
+    }
+    .confirmationDialog("Delete the camera key at frame \(deleting ?? 0)?", isPresented: Binding(
+      get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+      Button("Delete Key", role: .destructive) {
+        if let frame = deleting { Task { await model.deleteCameraRigKey(at: frame) } }
+      }
+    } message: {
+      Text("Removes the key from the rig's keys in code. Undo restores it.")
+    }
   }
 }

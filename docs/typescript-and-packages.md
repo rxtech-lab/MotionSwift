@@ -1,6 +1,6 @@
 # TypeScript compatibility, compilation, and packages
 
-> Current executable behavior and remaining work: [runnable implementation](current-implementation.md). The macOS package currently bundles native TypeScript 7 (tsgo) for compilation and type checking, with esbuild linking emitted JavaScript, with no runtime Node dependency. The cross-platform module cache, editor transforms, and distribution sections below remain roadmap items.
+> Current executable behavior and remaining work: [runnable implementation](current-implementation.md). The macOS package currently bundles native TypeScript 7 (tsgo) for compilation and type checking, with esbuild linking emitted JavaScript, with no runtime Node dependency. Caching, source maps and resolution contracts are documented in [compiler contract](compiler-contract.md); distribution sections below still include roadmap items.
 
 This doc covers how a Remotion TSX project becomes JavaScript that JavaScriptCore can run, how TypeScript users get type-level compatibility checks, and which npm packages MotionSwift publishes.
 
@@ -23,11 +23,11 @@ project TS/TSX/JS + JSON
 
 The bundled native compiler is TypeScript 7.0.2, the released tsgo compiler, whose executable is now named `tsc`. It handles both compilation and type checking. No Node process or npm installation is needed at runtime.
 
-**Type checking is separate from rendering.** Compilation uses `noCheck` to emit without semantic type checking. `checkTypes` uses the same subset declarations and compiler settings with `noEmit`, and returns structured diagnostics. Both operations use a generated configuration rather than the project's tsconfig. JavaScript and JSON imports are included in the emitted project tree, and JSX is transformed by tsgo before bundling. Syntax inspection operates on original sources so unsupported JSX and dynamic imports/requires are still rejected.
+**Type checking is separate from rendering.** Compilation uses `noCheck` to emit without semantic type checking. `checkTypes` uses the same subset declarations and compiler settings with `noEmit`, and returns structured diagnostics. Both operations use a generated configuration with fixed MotionSwift settings and the project's `baseUrl`/`paths` (including relative config inheritance). JavaScript and JSON imports are included in the emitted project tree, and JSX is transformed by tsgo before bundling. Syntax inspection operates on original sources so unsupported JSX and dynamic imports/requires are still rejected.
 
 ### Platform integration
 
-The current macOS implementation launches bundled native TypeScript and esbuild executables for Apple Silicon and Intel. esbuild only links JavaScript; it does not compile project TypeScript. iOS cannot launch these subprocesses, so iOS needs precompiled bundles or a future in-process integration. Module caching, hot reload, source maps, and editor source stamping remain planned.
+The current macOS implementation launches bundled native TypeScript and esbuild executables for Apple Silicon and Intel. esbuild only links JavaScript; it does not compile project TypeScript. iOS compiles with the shipped Sucrase/Babel integration inside JavaScriptCore, or consumes a synced Mac graph for additional packages. Content caching, original-source maps and editor stamps are implemented; see the [compiler contract](compiler-contract.md) for limits and the explicit decision to supersede the unimplemented Rust SWC C ABI requirement.
 
 ## TypeScript feature support
 
@@ -40,9 +40,9 @@ The current macOS implementation launches bundled native TypeScript and esbuild 
 | Legacy `experimentalDecorators` / `emitDecoratorMetadata` | ⛔ | |
 | `paths` aliases in `tsconfig.json` | ✅ | Read by the resolver. |
 | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.json` | ✅ | CommonJS dependencies are wrapped. |
-| `import x from './image.png'` (and other assets) | ✅ | Resolves to an asset URL served by `MotionMedia`, like `staticFile()`. |
+| `import x from './image.png'` (and other assets) | Planned | Use `staticFile()` for current media assets. |
 | `import './styles.css'` and CSS modules | ⛔ | Inline styles only ([compatibility.md](compatibility.md#css-subset)). |
-| Dynamic `import()` | ✅ | Resolved from the precomputed graph. Only static string specifiers are allowed. |
+| Dynamic `import()` | ⛔ | Current subset inspection rejects dynamic imports; use static imports. |
 | Top-level `await` | ⛔ in v1 | |
 
 **JS target:** output is downleveled to the lowest JSC version we support. That is ES2022 for macOS 14+ and iOS 17+, and for the pinned `libjavascriptcoregtk` on Linux. Pinning one target keeps output identical across hosts.
@@ -65,7 +65,7 @@ The current macOS implementation launches bundled native TypeScript and esbuild 
 
 | Host | Strategy |
 |---|---|
-| macOS editor, Linux worker, CI | A normal `bun install` / `npm install` in the project. The resolver reads `node_modules` with Node's resolution algorithm, including the `exports` field and its conditions (`"browser"` → `"import"` → `"default"`). |
+| macOS editor, Linux worker, CI | A normal `bun install` / `npm install` in the project. The resolver reads `node_modules` with Node's resolution algorithm, including the `exports` field with active `browser`, `import` and `default` conditions, evaluated in package declaration order. |
 | iOS | No package manager on the device. The app ships a **vendor bundle**: React, the shim, and the allowlisted `@remotion/*` packages plus common pure-JS libraries (`zod`, `date-fns`, ...), precompiled in CI. Projects whose imports aren't all in the vendor bundle are compiled on a Mac or in the cloud, and the resulting module graph is synced to the device. |
 
 **Package allowlist:** an import outside the vendor bundle is allowed on macOS and Linux if the package is pure JS. Packages that touch the DOM, Node built-ins (`fs`, `path`, `child_process`), or `window` are reported by lint (`ms/unsupported-package`) and fail at resolve time with the import chain.

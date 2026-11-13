@@ -95,6 +95,6 @@ export const MyComposition: React.FC = () => {
     <img data-ms-label="Rust backdrop circle" src={image(4)}
       style={{position: 'absolute', left: 0, top: 0, width: 1920, height: 1080, opacity: 1, objectFit: 'contain'}} />
     {compose(A, B, u).filter(Boolean).map(({n, key}: any) =>
-      <React.Fragment key={key}>{editableObject(n, key)}</React.Fragment>)}
+      <React.Fragment key={key}>{editableObject(n, key, frame)}</React.Fragment>)}
   </AbsoluteFill>;
 };

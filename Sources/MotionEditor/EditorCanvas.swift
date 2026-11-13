@@ -9,7 +9,7 @@ import AppKit
 /// The preview canvas: the rendered frame plus a SwiftUI overlay with the selection, resize
 /// handles and snapping guides. Overlay shapes stay sharp at any zoom; the engine draws no UI.
 ///
-/// Gestures: tap selects, drag moves (or resizes from a corner handle), two-finger rotate rotates
+/// Gestures: double-click edits text inline, tap selects, drag moves (or resizes from a corner handle), two-finger rotate rotates
 /// the selection, pinch zooms the canvas. Every gesture writes back once, when it ends.
 public struct EditorCanvas: View {
   @Bindable var model: EditorModel
@@ -20,6 +20,11 @@ public struct EditorCanvas: View {
   @State private var rotationSnap: Int?
   @State private var hoveredCorner: ResizeHandle?
   @State private var cornerRotation: CornerRotationDrag?
+  @State private var textTarget: EditorModel.TextEditTarget?
+  @State private var textCommit = 0
+  @State private var cameraTool: ThreeDragKind = .orbit
+  @State private var objectTool: ThreeDragKind = .rotate
+  @FocusState private var canvasFocused: Bool
 
   public init(model: EditorModel, zoom: Binding<Double>) {
     self.model = model
@@ -27,7 +32,7 @@ public struct EditorCanvas: View {
   }
 
   private enum DragState: Equatable {
-    case move, resize(ResizeHandle), refused
+    case move, resize(ResizeHandle), three, refused
   }
 
   public var body: some View {
@@ -39,7 +44,10 @@ public struct EditorCanvas: View {
       ZStack {
         Color.clear
           .contentShape(Rectangle())
-          .onTapGesture { model.clearSelection() }
+          .onTapGesture {
+            if textTarget != nil { textCommit += 1; return }
+            model.clearSelection()
+          }
         content(scale: scale)
           .frame(width: fitted.width, height: fitted.height)
           .accessibilityElement(children: .contain)
@@ -49,15 +57,26 @@ public struct EditorCanvas: View {
           .frame(width: geometry.size.width, height: geometry.size.height)
       }
       .simultaneousGesture(magnify)
+      .overlay(alignment: .topTrailing) {
+        if model.cameraState != nil {
+          CameraOverlay(model: model, cameraTool: $cameraTool, objectTool: $objectTool).padding(10)
+        }
+      }
     }
     .clipped()
     .background(Color.black.opacity(0.92))
+    // The canvas takes keyboard focus so camera keys never reach the sidebar list.
+    .focusable()
+    .focused($canvasFocused)
+    .focusEffectDisabled()
+    .onKeyPress(phases: [.down, .repeat]) { press in flyKey(press) }
+    .simultaneousGesture(TapGesture().onEnded { if textTarget == nil { canvasFocused = true } })
+    .onAppear { canvasFocused = true }
+    .onChange(of: model.selection) { _, selection in
+      if let target = textTarget, target.source != selection { textCommit += 1 }
+    }
+    .onChange(of: model.player.currentFrame) { _, _ in if textTarget != nil { textCommit += 1 } }
     .sensoryFeedback(.alignment, trigger: rotationSnap) { _, new in new != nil }
-  }
-
-  private func fit(ratio: Double, in size: CGSize) -> CGSize {
-    let width = min(size.width, size.height * ratio)
-    return CGSize(width: max(width, 1), height: max(width / ratio, 1))
   }
 
   private func content(scale: Double) -> some View {
@@ -70,11 +89,19 @@ public struct EditorCanvas: View {
         Color.black
       }
       SelectionOverlay(model: model, scale: scale, zoom: zoom)
-      handles(scale: scale)
+      if textTarget == nil { handles(scale: scale) }
+      if let target = textTarget {
+        Color.clear.contentShape(Rectangle()).onTapGesture { textCommit += 1 }
+        InlineTextEditor(model: model, target: target, scale: scale, zoom: zoom, commit: textCommit) { textTarget = nil }
+          .id(target.id)
+          .frame(width: max(target.rect.width * scale, 180 / zoom),
+                 height: max(target.rect.height * scale, 32 / zoom))
+          .offset(x: target.rect.minX * scale, y: target.rect.minY * scale)
+      }
     }
     .coordinateSpace(.named(Self.space))
-    .gesture(tap(scale: scale))
-    .gesture(move(scale: scale))
+    .gesture(taps(scale: scale), including: textTarget == nil ? .all : .subviews)
+    .gesture(move(scale: scale), including: textTarget == nil ? .all : .subviews)
     .simultaneousGesture(rotate)
   }
 
@@ -92,9 +119,18 @@ public struct EditorCanvas: View {
   private func move(scale: Double) -> some Gesture {
     DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
       .onChanged { value in
-        guard cornerRotation == nil else { return }
+        guard cornerRotation == nil, textTarget == nil else { return }
         if drag == nil {
           let start = CGPoint(x: value.startLocation.x / scale, y: value.startLocation.y / scale)
+          // Inside a ThreeCanvas, drags orbit the camera or rotate the selected 3D object.
+          if !model.isThreeSelection, let hit = model.hitTest(start),
+            model.player.displayedFrame?.tree.node(at: hit.id)?.scene != nil {
+            model.select(at: start)
+          }
+          if model.isThreeSelection {
+            drag = model.beginThreeDrag(threeDragKind) ? .three : .refused
+            return
+          }
           // Dragging an unselected element selects it first, like a tap.
           if model.selectedRect?.contains(start) != true {
             guard model.hitTest(start) != nil else {
@@ -105,6 +141,10 @@ public struct EditorCanvas: View {
           }
           drag = model.beginGesture(.move(dx: 0, dy: 0)) ? .move : .refused
         }
+        if drag == .three {
+          model.updateThreeDrag(dx: value.translation.width / scale, dy: value.translation.height / scale)
+          return
+        }
         guard drag == .move else { return }
         model.updateGesture(
           .move(dx: value.translation.width / scale, dy: value.translation.height / scale),
@@ -114,13 +154,14 @@ public struct EditorCanvas: View {
         let state = drag
         drag = nil
         if state == .move { Task { await model.endGesture(named: "Move") } }
+        if state == .three { Task { await model.endThreeDrag() } }
       }
   }
 
   private var rotate: some Gesture {
     RotateGesture(minimumAngleDelta: .degrees(2))
       .onChanged { value in
-        guard model.selection != nil, cornerRotation == nil else { return }
+        guard model.selection != nil, !model.isThreeSelection, cornerRotation == nil, textTarget == nil else { return }
         if !rotationActive {
           rotationActive = true
           if !model.beginGesture(.rotate(degrees: 0)) {
@@ -146,16 +187,6 @@ public struct EditorCanvas: View {
         rotationSnap = nil
         if refused { drag = nil } else { Task { await model.endGesture(named: "Rotate") } }
       }
-  }
-
-  private var magnify: some Gesture {
-    MagnifyGesture()
-      .onChanged { value in
-        let start = zoomAtGestureStart ?? zoom
-        zoomAtGestureStart = start
-        zoom = min(max(start * value.magnification, 0.25), 6)
-      }
-      .onEnded { _ in zoomAtGestureStart = nil }
   }
 
   @ViewBuilder private func handles(scale: Double) -> some View {
@@ -247,23 +278,6 @@ public struct EditorCanvas: View {
     false
     #endif
   }
-
-  private func resize(_ handle: ResizeHandle, scale: Double) -> some Gesture {
-    DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
-      .onChanged { value in
-        if drag == nil { drag = model.beginGesture(.resize(handle: handle, dx: 0, dy: 0, keepsAspectRatio: false))
-          ? .resize(handle) : .refused }
-        guard drag == .resize(handle) else { return }
-        model.updateGesture(.resize(
-          handle: handle, dx: value.translation.width / scale, dy: value.translation.height / scale,
-          keepsAspectRatio: Self.shiftPressed))
-      }
-      .onEnded { _ in
-        let state = drag
-        drag = nil
-        if state == .resize(handle) { Task { await model.endGesture(named: "Resize") } }
-      }
-  }
 }
 
 /// Selection outline and snapping guides, positioned from layout boxes.
@@ -320,5 +334,96 @@ struct CornerRotationDrag {
     degrees += delta
     previousAngle = angle
     return degrees
+  }
+}
+
+extension EditorCanvas {
+  private func taps(scale: Double) -> some Gesture {
+    let doubleTap = SpatialTapGesture(count: 2, coordinateSpace: .named(Self.space)).onEnded { value in
+      let point = CGPoint(x: value.location.x / scale, y: value.location.y / scale)
+      Task { textTarget = await model.textEditTarget(at: point) }
+    }
+    return doubleTap.exclusively(before: tap(scale: scale))
+  }
+
+}
+
+extension EditorCanvas {
+  /// ⇧ pans the camera or moves an object, ⌥ dollies the camera; otherwise the overlay's tool.
+  private var threeDragKind: ThreeDragKind {
+    let camera = model.isCameraSelected
+    #if os(macOS)
+    let flags = NSEvent.modifierFlags
+    if flags.contains(.shift) { return camera ? .pan : .move }
+    if flags.contains(.option), camera { return .dolly }
+    #endif
+    return camera ? cameraTool : objectTool
+  }
+}
+
+extension EditorCanvas {
+  private func resize(_ handle: ResizeHandle, scale: Double) -> some Gesture {
+    DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
+      .onChanged { value in
+        if drag == nil { drag = model.beginGesture(.resize(handle: handle, dx: 0, dy: 0, keepsAspectRatio: false))
+          ? .resize(handle) : .refused }
+        guard drag == .resize(handle) else { return }
+        model.updateGesture(.resize(
+          handle: handle, dx: value.translation.width / scale, dy: value.translation.height / scale,
+          keepsAspectRatio: Self.shiftPressed))
+      }
+      .onEnded { _ in
+        let state = drag
+        drag = nil
+        if state == .resize(handle) { Task { await model.endGesture(named: "Resize") } }
+      }
+  }
+}
+
+extension EditorCanvas {
+  private var magnify: some Gesture {
+    MagnifyGesture()
+      .onChanged { value in
+        let start = zoomAtGestureStart ?? zoom
+        zoomAtGestureStart = start
+        zoom = min(max(start * value.magnification, 0.25), 6)
+      }
+      .onEnded { _ in zoomAtGestureStart = nil }
+  }
+}
+
+extension EditorCanvas {
+  /// W/S forward and back, A/D strafe, Q/E down and up, arrow keys orbit; ⇧ moves faster.
+  private func flyKey(_ press: KeyPress) -> KeyPress.Result {
+    guard model.cameraState != nil, textTarget == nil, !press.modifiers.contains(.command),
+      !press.modifiers.contains(.control) else { return .ignored }
+    let speed = press.modifiers.contains(.shift) ? 3.0 : 1.0
+    let turn = 0.04 * speed
+    switch press.key {
+    case .upArrow: model.flyCamera(pitch: turn)
+    case .downArrow: model.flyCamera(pitch: -turn)
+    case .leftArrow: model.flyCamera(yaw: turn)
+    case .rightArrow: model.flyCamera(yaw: -turn)
+    default:
+      let move: SIMD3<Double>? = switch press.characters.lowercased() {
+      case "w": SIMD3(0, 0, 1)
+      case "s": SIMD3(0, 0, -1)
+      case "a": SIMD3(-1, 0, 0)
+      case "d": SIMD3(1, 0, 0)
+      case "q": SIMD3(0, -1, 0)
+      case "e": SIMD3(0, 1, 0)
+      default: nil
+      }
+      guard let move else { return .ignored }
+      model.flyCamera(move: move * speed)
+    }
+    return .handled
+  }
+}
+
+extension EditorCanvas {
+  private func fit(ratio: Double, in size: CGSize) -> CGSize {
+    let width = min(size.width, size.height * ratio)
+    return CGSize(width: max(width, 1), height: max(width / ratio, 1))
   }
 }

@@ -7,11 +7,20 @@
 The showcase's **Visual Editor** and the MotionStudio example both use `MotionEditorView`. On macOS a resizable split places the timeline below the canvas and transport; iPhone/iPad use a vertically divided workspace. `EditorCanvas` and `EditorTimeline` are separate public SwiftUI components taking the same `EditorModel`. That controller owns source selection, the `MotionPlayer` playhead, source write-back, notices, haptics and undo/redo.
 
 - Select an object on either surface. On macOS, hover near any corner to reveal its outside rotation control; drag to rotate, or hold Shift for 15° snapping. The inner corner handle still resizes. Drag the timeline ruler to scrub; use its zoom menu to change frame spacing.
+- Double-click (or double-tap) editable text on the canvas to type in place. The native text editor focuses with all text selected and pauses playback. Return inserts a new line; **⌘Return** or clicking away commits one undo step. Leaving the text unchanged closes the editor without writing or adding undo history. **Escape** discards the draft. The inline editor has no action buttons. Selection handles and object dragging are suspended while typing. Changing selection or the playhead commits the draft; external source changes are protected from overwrite. The inspector's text sheet remains available.
+- To change film text, select its text element on the canvas or timeline, then choose **Text Content → Edit Text…** in the inspector. The dedicated sheet supports Unicode and multiple lines; Cancel discards the draft, and Save writes the JSX source, reloads the preview and adds one undo step. Literal text, string expressions, and the literal first argument of `src={lettering("Title", …)}` on `Img`/`img` are editable; the showcase SVG film uses its layer’s content override and prefills the sheet from visible SVG text (replacement text must be nonempty). Variable/generated text and nested markup show a source-editing explanation instead of replacing code or deleting child elements. Reused source elements update all instances. Changes made outside the editor are protected from overwrite.
 - Move an object by dragging its bar. Drag either edge to trim it, or open **Timing…** for exact composition-frame start and duration values. End frames are exclusive. Moving preserves local keyframe positions; trimming refuses to discard keyframes.
 - **Add Keyframe** immediately captures every editable numeric style attribute at the current playhead. Move to another frame, adjust the object on the canvas or in the inspector, and click again to save that pose. Adjustments to keyed attributes preview locally until capture; moving the playhead or changing selection discards uncaptured adjustments. Capturing again at an existing frame updates its values. All captured attributes share one undo step. Drag a diamond to move it in time, or select it to edit its frame/value or delete it with native confirmation. Values hold outside the keyed range; deleting the final keyframe restores the underlying static style.
 - Saves, refusals, conflicts and deletes use transient overlays. Canvas and timeline changes share one undo history and hot reload the source. Timed-out objects stay selectable in the timeline and inspector.
 
 Timing/animation edits write a `data-ms-timeline` object literal on the original JSX opening tag, keeping its source location stable. It contains `from`, nullable `duration`, and per-property `keyframes` with object-local `frame`, numeric `value` and `easing` (`linear` or `hold`). The MotionSwift JSX runtime evaluates it for both preview and native exports without adding a layout node. This is a MotionSwift extension; unmodified browser Remotion does not evaluate this metadata.
+
+The Test Film editor copy generates these timings from every frame of the 90-second fixture,
+including incoming/outgoing transitions. Separate appearances of a reused object have separate
+clips, and objects outside the excerpt are omitted. Backgrounds span the full composition.
+Regenerate with `node tests/tools/generate-editable-film.mjs` after changing the fixture.
+The timed example uses the `TestFilm-Layers-v2` working copy; earlier `TestFilm-Layers-v1`
+copies and their edits remain on disk. The timeline ruler stays fixed above the scrolling layers.
 
 Literal enclosing `Sequence` offsets/durations are respected. Computed Sequence timing, Loop/Freeze contexts, and descendants controlled by another object timeline are protected. Existing code-authored `interpolate`/`spring`, bound values, computed styles and spread styles are not converted to editable keyframes. Rewriting those expressions, arbitrary easing curves, media trimming, sequence reordering and composition settings remain roadmap work. Tracks are indexed from source and grouped by their owning function; reusable component definitions share timing across their rendered instances.
 
@@ -106,6 +115,60 @@ Rules:
 - **Live feedback:** while a gesture is in progress, the editor doesn't write files. It sends a **preview override** (`nodeId → style patch`) straight to the render worker, which applies it on top of the reconciled tree. That keeps updates under a frame.
 - **Commit:** on gesture end, one edit operation is written (step 5), the module recompiles, the override is dropped, and the re-rendered frame must match the override frame. If it doesn't match, a mismatch overlay appears.
 - **Animated properties:** dragging an element whose `left` is animated updates the keyframe at the current frame, or inserts one if the playhead is between keyframes, instead of overwriting the animation.
+
+### 3D scene editing
+
+Selecting a 3D showcase scene opens the visual editor in place (canvas, timeline and
+inspector, no sheet). It uses a persistent working copy, including USDZ assets, with the same
+undo, status overlays and export flow as the other examples. Select meshes, groups, models,
+lights, materials or the **Camera** (the `<ThreeCanvas>` track) from the object timeline;
+clicking the scene also selects the camera. Repeated procedural instances share one source
+row; edits affect every instance of that source element.
+
+The **3D Properties** inspector edits position and scale in scene units, rotation in radians,
+material color/opacity/roughness/metalness, light color/intensity/falloff, and explicitly
+authored canvas camera position, rotation, field of view and zoom. Each property opens a
+dedicated sheet. Code expressions, spreads and constructor arguments remain protected.
+Geometry and fog attachments belong to their mesh/scene and are not independently trimmed.
+
+**Camera overlay.** Over every `<ThreeCanvas>`, a floating panel shows the evaluated camera at
+the playhead (position, rotation in degrees, field of view), whether the timeline or code
+drives it, and a top view of the camera path sampled across the composition, with scene
+objects, keyframes and the current view direction.
+
+**Canvas drags.** With the camera selected, dragging the canvas orbits it around the point it
+looks at (⇧ pans, ⌥ dollies; the overlay's tool picker does the same on iPad). The canvas takes
+keyboard focus, so camera keys never reach the sidebar: W/S fly forward and back, A/D strafe,
+Q/E move down and up, arrow keys orbit (⇧ for larger steps). A burst of key presses previews
+live and saves as one undo step once the keys go quiet. With a 3D
+object selected, dragging rotates it (⇧ moves it in X/Y). Drags preview live by patching the
+native scene without re-running JavaScript, then save as one undo step. Where a camera edit is
+saved depends on who drives the camera (shown as the overlay's badge):
+
+- **Code rig:** an element whose `keys` prop is a literal array (inline, or a `const` in the same
+  file) of `{frame, position, target, fov, roll?}` objects, like the showcase's `<CameraRig>`.
+  Drags rewrite the key at the playhead in code, or insert one in frame order; orbit and dolly
+  keep the key's target, a pan moves the target along, and fov/roll come from the existing key
+  or the eased value at that frame. The Camera track shows the rig's keys (click to jump,
+  context menu to delete; a rig keeps at least two). Rig frames are the frames the rig receives,
+  normally the composition's `useCurrentFrame()`.
+- **Keyframed:** timeline keyframes on `<ThreeCanvas>`; drags add a keyframe at the playhead.
+- **Code (authored):** `camera={{position, rotation, …}}` that nothing else moves; drags rewrite it.
+- **Code (other):** any other camera code. The first drag adds the camera to the timeline (as
+  Add Camera below) with the drag applied at the playhead, in one undo step.
+
+**Add Camera.** When the camera is not keyframed, **Add Camera** on the timeline or overlay
+(**Rig to Keyframes** for a code rig) writes an explicit `camera={{position, rotation, fov, near,
+far}}` and bakes the evaluated camera into keyframes every 10 frames (one keyframe when it never
+moves). Camera keyframes take over from code that aims the camera, so the timeline becomes the
+source of the shot; undo restores the code. Rotation keyframes are unwrapped so angles
+interpolate the short way.
+
+Numeric properties support capture at the playhead, linear/hold keyframes, timeline moves,
+trims and keyframe deletion. These keyframes animate R3F props rather than CSS. Editing an
+already keyframed 3D value saves a keyframe at the current playhead immediately. Source edits
+return byte-exact inverses for undo. A camera with keyframes alone leaves child object timing
+editable; trimming or moving an ancestor protects its children's timing.
 
 ## 4. Timeline: time, duration, and keyframes
 
@@ -205,13 +268,17 @@ literal string labels/groups are read, without executing metadata expressions. U
 remain visible with their CSS names and automatic groups. Use **Add Property** to write a new literal
 into an existing inline style object; renderer CSS support still applies.
 
+Typography controls include weight, style, alignment, whitespace, case and letter spacing;
+border controls include per-edge width, color and style. Properties without a visual control
+remain visible with a `code` badge and must be edited in source.
+
 ### Showcase motion studies and example workspaces
 
 Motion Studies has its own sidebar section above Showcase. Its eight entries are Ribbon,
 Orbit, Signal, Atlas, the Hong Kong Island Line railway, both synthetic map fixtures,
 and the 90-second Test Film. Selecting a study, map, Test Film or rendering essential
-opens its visual editor directly. All Studies opens the gallery. 3D scenes remain
-preview-only for now. **Export Edit** renders the current edited bundle.
+opens its visual editor directly. All Studies opens the gallery. Opening a 3D scene opens
+its editor directly too. **Export Edit** renders the current edited bundle.
 
 The Test Film editor separates the flattened benchmark into 179 independent text,
 shape and icon layers plus its gradient, grain and two backdrop circles. Each logical
