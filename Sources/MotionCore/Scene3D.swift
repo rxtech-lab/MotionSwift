@@ -4,6 +4,14 @@ import Foundation
 /// three.js r187 + React Three Fiber 8 resolve them: colors are linear sRGB, rotations are
 /// quaternions and every material/light default is explicit. The native 3D renderer draws it.
 public struct Scene3D: Codable, Sendable, Equatable {
+  /// Stamped R3F elements, including material children consumed by scene serialization.
+  public struct EditorElement: Codable, Sendable, Equatable {
+    public let source: String
+    public let type: String
+    public let properties: [String: JSONValue]
+  }
+
+  public var editor: [EditorElement]?
   public struct Fog: Codable, Sendable, Equatable {
     /// `linear` (three.js `Fog`) or `exp2` (`FogExp2`).
     public var type: String
@@ -100,9 +108,9 @@ public struct Scene3D: Codable, Sendable, Equatable {
   public struct Object: Codable, Sendable, Equatable {
     /// `group`, `mesh`, `model`, `ambient`, `hemisphere`, `directional`, `point` or `spot`.
     public let kind: String
-    public let position: [Double]
-    public let quaternion: [Double]
-    public let scale: [Double]
+    public var position: [Double]
+    public var quaternion: [Double]
+    public var scale: [Double]
     public let visible: Bool
     public let renderOrder: Double
     public let geometry: Geometry?
@@ -110,7 +118,9 @@ public struct Scene3D: Codable, Sendable, Equatable {
     public let light: Light?
     /// Model source (`static:`, file path or URL) for `model` objects.
     public let src: String?
-    public let children: [Object]
+    /// Editor stamp (`file:line:column`) of the JSX element, present only in editor builds.
+    public var source: String?
+    public var children: [Object]
   }
 
   /// Canvas size in CSS pixels.
@@ -161,5 +171,76 @@ public struct Scene3D: Codable, Sendable, Equatable {
   public var modelSources: [String] {
     func visit(_ object: Object) -> [String] { (object.src.map { [$0] } ?? []) + object.children.flatMap(visit) }
     return objects.flatMap(visit)
+  }
+}
+
+// MARK: Editor previews
+
+extension Scene3D {
+  /// three.js `Euler` (order XYZ, radians) → quaternion `[x, y, z, w]`.
+  public static func quaternion(euler: [Double]) -> [Double] {
+    let (c1, c2, c3) = (cos(euler[0] / 2), cos(euler[1] / 2), cos(euler[2] / 2))
+    let (s1, s2, s3) = (sin(euler[0] / 2), sin(euler[1] / 2), sin(euler[2] / 2))
+    return [s1 * c2 * c3 + c1 * s2 * s3, c1 * s2 * c3 - s1 * c2 * s3,
+            c1 * c2 * s3 + s1 * s2 * c3, c1 * c2 * c3 - s1 * s2 * s3]
+  }
+
+  /// Quaternion `[x, y, z, w]` → three.js `Euler` (order XYZ, radians), as `Euler.setFromQuaternion`.
+  public static func euler(quaternion value: [Double]) -> [Double] {
+    let (qx, qy, qz, qw) = (value[0], value[1], value[2], value[3])
+    let m11 = 1 - 2 * (qy * qy + qz * qz), m12 = 2 * (qx * qy - qz * qw), m13 = 2 * (qx * qz + qy * qw)
+    let m22 = 1 - 2 * (qx * qx + qz * qz), m23 = 2 * (qy * qz - qx * qw)
+    let m32 = 2 * (qy * qz + qx * qw), m33 = 1 - 2 * (qx * qx + qy * qy)
+    let ry = asin(min(max(m13, -1), 1))
+    if abs(m13) < 0.9999999 { return [atan2(-m23, m33), ry, atan2(-m12, m11)] }
+    return [atan2(m32, m22), ry, 0]
+  }
+
+  /// Applies editor preview patches (keyed by editor stamp) to the camera of the canvas stamped
+  /// `canvas` and to stamped objects, so 3D drags preview without re-running JavaScript.
+  public func applying(_ overrides: [String: [String: JSONValue]], canvas: String?) -> Scene3D {
+    var scene = self
+    func patched(_ values: [Double], _ patch: [String: JSONValue], _ prefix: String) -> [Double]? {
+      let keys = ["X", "Y", "Z"].map { prefix + $0 }
+      guard keys.contains(where: { patch[$0]?.number != nil }) else { return nil }
+      var result = values
+      for (index, key) in keys.enumerated() { if let number = patch[key]?.number { result[index] = number } }
+      return result
+    }
+    if let canvas, let patch = overrides[canvas] {
+      if let position = patched(camera.position, patch, "cameraPosition") { scene.camera.position = position }
+      if let euler = patched(Self.euler(quaternion: camera.quaternion), patch, "cameraRotation") {
+        scene.camera.quaternion = Self.quaternion(euler: euler)
+      }
+      if let fov = patch["cameraFov"]?.number, fov > 0, fov < 180 { scene.camera.fov = fov }
+      if let zoom = patch["cameraZoom"]?.number, zoom > 0 { scene.camera.zoom = zoom }
+    }
+    func visit(_ object: Object) -> Object {
+      var object = object
+      if let source = object.source, let patch = overrides[source] {
+        if let position = patched(object.position, patch, "position") { object.position = position }
+        if let euler = patched(Self.euler(quaternion: object.quaternion), patch, "rotation") {
+          object.quaternion = Self.quaternion(euler: euler)
+        }
+        if let scale = patched(object.scale, patch, "scale") { object.scale = scale }
+      }
+      object.children = object.children.map(visit)
+      return object
+    }
+    scene.objects = objects.map(visit)
+    if let editor {
+      scene.editor = editor.map { element in
+        guard let patch = overrides[element.source] else { return element }
+        let properties = element.properties.merging(patch.filter { element.properties[$0.key] != nil }) { _, new in new }
+        return EditorElement(source: element.source, type: element.type, properties: properties)
+      }
+    }
+    return scene
+  }
+}
+
+extension RenderNode {
+  public var threeEditorElements: [Scene3D.EditorElement] {
+    (scene?.editor ?? []) + children.flatMap(\.threeEditorElements)
   }
 }

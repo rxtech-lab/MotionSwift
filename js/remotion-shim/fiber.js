@@ -5,6 +5,7 @@
 'use strict';
 const React = require('react');
 const THREE = require('./three');
+const threeEdit = require('./three-edit');
 
 const ThreeContext = React.createContext(null);
 
@@ -153,7 +154,9 @@ function serializeObject(node, scene) {
   if (node.type === '#text') throw Error('Text is not allowed inside <ThreeCanvas>');
   const props = node.props;
   const base = {visible: props.visible === undefined ? true : !!props.visible,
-    renderOrder: props.renderOrder === undefined ? 0 : finite(props.renderOrder, 'renderOrder')};
+    renderOrder: props.renderOrder === undefined ? 0 : finite(props.renderOrder, 'renderOrder'),
+    // Editor stamps let previews patch an object's transform without re-running JavaScript.
+    ...(typeof props['data-ms-src'] === 'string' ? {source: props['data-ms-src']} : {})};
   const children = [];
   const visitChildren = (exclude = () => false) => node.children.forEach(child => {
     if (exclude(child)) return;
@@ -204,7 +207,18 @@ function serializeObject(node, scene) {
   throw Error(`<${node.type}> is not supported inside <ThreeCanvas>`);
 }
 
-function serialize(state, node) {
+// Editor camera keyframes are authored on <ThreeCanvas camera>; they take over from code that aims
+// the camera in effects (camera rigs), so the timeline is the single source of the shot.
+function applyEditorCamera(camera, options) {
+  if (!options || options instanceof THREE.PerspectiveCamera) return;
+  if (options.position) camera.position.set(...vector(options.position, 'camera.position'));
+  if (options.rotation) { const r = toArray(options.rotation); camera.rotation.set(r[0], r[1], r[2], r[3] || 'XYZ'); }
+  else if (options.quaternion) camera.quaternion.set(...toArray(options.quaternion));
+  for (const key of ['fov', 'zoom', 'near', 'far']) if (options[key] !== undefined) camera[key] = finite(options[key], 'camera.' + key);
+}
+
+function serialize(state, node, editorCamera = null) {
+  applyEditorCamera(state.camera, editorCamera);
   const scene = {background: null, fog: null};
   const objects = [];
   for (const child of node.children) {
@@ -214,6 +228,20 @@ function serialize(state, node) {
   const camera = state.camera;
   const position = vector(camera.position, 'camera.position');
   const quaternion = camera.quaternion.toArray().map(v => finite(v, 'camera.quaternion'));
+  const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'XYZ', false);
+  const editor = [];
+  function collect(node) {
+    const source = node.props['data-ms-src'];
+    if (source && threeEdit.isThree(node.type)) editor.push({source, type: node.type, properties: threeEdit.values(node.type, node.props)});
+    node.children.forEach(collect);
+  }
+  if (node.props['data-ms-src']) {
+    node.children.forEach(collect);
+    editor.push({source: node.props['data-ms-src'], type: 'ThreeCanvas',
+      properties: {cameraPositionX: position[0], cameraPositionY: position[1], cameraPositionZ: position[2],
+        cameraRotationX: euler.x, cameraRotationY: euler.y, cameraRotationZ: euler.z,
+        cameraFov: camera.fov, cameraZoom: camera.zoom}});
+  }
   return JSON.stringify({
     width: state.size.width, height: state.size.height, dpr: state.dpr, flat: state.flat,
     background: scene.background, fog: scene.fog,
@@ -221,6 +249,7 @@ function serialize(state, node) {
       zoom: finite(camera.zoom, 'camera.zoom'), aspect: camera.manual ? finite(camera.aspect, 'camera.aspect') : null,
       position, quaternion},
     objects,
+    ...(editor.length ? {editor} : {}),
   });
 }
 
@@ -243,7 +272,8 @@ function createCamera(options = {}, width, height) {
   return camera;
 }
 
-function ThreeCanvas({width, height, style, children, camera, flat = false, linear = false, legacy = false, dpr = [1, 2],
+function ThreeCanvas({width, height, style, children, camera, __msEditorCamera = false,
+  flat = false, linear = false, legacy = false, dpr = [1, 2],
   shadows, orthographic, gl, scene, onCreated, frameloop, resize, events, raycaster, eventSource, eventPrefix,
   onPointerMissed, performance: _performance, ...rest}) {
   for (const [name, value] of [['width', width], ['height', height]]) {
@@ -270,17 +300,21 @@ function ThreeCanvas({width, height, style, children, camera, flat = false, line
     };
     value.get = () => value;
     return value;
-  // Remotion creates the R3F root once; camera options are applied only when it is created.
+  // Ordinary R3F cameras initialize once. Editor keyframes explicitly opt into camera updates.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [__msEditorCamera ? camera : null]);
   if (!state.camera.manual) state.camera.aspect = width / height;
   state.size = {width, height, top: 0, left: 0};
   React.useLayoutEffect(() => { if (onCreated) onCreated(state); }, []);
   return React.createElement('ms-three', {
+    'data-ms-src': rest['data-ms-src'],
     style: {width, height, ...style},
-    __msScene: node => serialize(state, node),
+    __msScene: node => serialize(state, node, __msEditorCamera ? camera : null),
   }, React.createElement(ThreeContext.Provider, {value: state}, children));
 }
+
+// Stable across vendor minification; function names are not runtime identities.
+ThreeCanvas.__msThreeCanvas = true;
 
 module.exports = {
   ThreeCanvas, useThree, useFrame, useLoader, Canvas: unsupported('Canvas'), extend: unsupported('extend'),

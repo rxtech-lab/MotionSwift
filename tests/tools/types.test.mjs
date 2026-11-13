@@ -5,13 +5,19 @@ import assert from 'node:assert/strict';
 import ts from 'typescript';
 import {root,testRoot} from './common.mjs';
 
-function check(file) {
+function check(file, useUpstream = false) {
   const options={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,
     jsx:ts.JsxEmit.ReactJSX,jsxImportSource:'@motionswift/remotion',strict:true,noEmit:true,isolatedModules:true,types:['react'],typeRoots:[path.join(testRoot,'node_modules/@types')],
-    esModuleInterop:true,baseUrl:testRoot,skipLibCheck:false,paths:{
+    esModuleInterop:true,baseUrl:testRoot,skipLibCheck:useUpstream,paths:{
+      '@remotion/paths':['../js/remotion-shim/remotion-paths.d.ts'],
+      '@remotion/shapes':['../js/remotion-shim/remotion-shapes.d.ts'],
+      '@remotion/transitions':['../js/remotion-shim/transitions.d.ts'],
+      '@remotion/transitions/fade':['../js/remotion-shim/transition-fade.d.ts'],
+      '@remotion/transitions/slide':['../js/remotion-shim/transition-slide.d.ts'],
+      '@remotion/transitions/wipe':['../js/remotion-shim/transition-wipe.d.ts'],
       '@motionswift/remotion':['../js/remotion-shim/index.d.ts'],
       '@motionswift/remotion/jsx-runtime':['../js/remotion-shim/jsx-runtime.d.ts'],
-      'remotion':['../js/remotion-shim/index.d.ts'],
+      'remotion':[useUpstream ? 'node_modules/remotion/dist/cjs/index.d.ts' : '../js/remotion-shim/index.d.ts'],
       'react':['node_modules/@types/react/index.d.ts'],
       'react/jsx-runtime':['node_modules/@types/react/jsx-runtime.d.ts'],
     }};
@@ -27,4 +33,12 @@ test('supported TSX and all visual fixtures type check against the subset',()=>{
 for(const [file,diagnostic] of [['grid.tsx',2322],['iframe.tsx',2305],['canvas.tsx',[2339,2786]]])test(`types reject ${file}`,()=>{
   const diagnostics=check(path.join(testRoot,'type-fixtures/invalid',file));
   assert(diagnostics.length>0 && diagnostics.every(item=>(Array.isArray(diagnostic)?diagnostic:[diagnostic]).includes(item.code)),JSON.stringify(diagnostics.map(item=>item.code)));
+});
+
+test('added contracts type check against both installed Remotion and subset declarations',()=>{
+  const file=path.join(testRoot,'type-fixtures/valid/contracts.tsx');
+  for(const upstream of [false,true]) {
+    const diagnostics=check(file,upstream);
+    assert.equal(diagnostics.length,0,ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCanonicalFileName:x=>x,getCurrentDirectory:()=>root,getNewLine:()=> '\n'}));
+  }
 });

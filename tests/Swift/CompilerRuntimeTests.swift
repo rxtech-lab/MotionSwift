@@ -1,6 +1,7 @@
 import Foundation
 import MotionCompiler
 import MotionCore
+import MotionPortable
 import MotionRuntime
 import Testing
 
@@ -70,7 +71,7 @@ private var repository: URL {
   let composition = try #require(runtime.compositions().first)
   let samples = try JSONDecoder().decode(
     [Sample].self, from: Data(contentsOf: project.appendingPathComponent("expected.json")))
-  for sample in samples {
+  for sample in samples.sorted(by: { ($0.frame * 17 % 31) < ($1.frame * 17 % 31) }) {
     let tree = try runtime.frame(composition: composition, number: sample.frame)
     let values = tree.children[0].children.compactMap { $0.style["left"]?.number }
     #expect(values.count == sample.values.count)
@@ -149,4 +150,93 @@ func embeddedCompilerRejectsUnsupportedSources(source: String) throws {
   #expect(try compiler.checkTypes(project: temporary, entry: "input.tsx").contains { $0.rule == "ts/2322" })
   let runtime = try Runtime(bundle: compiler.compile(project: temporary, entry: "input.tsx"))
   #expect(try runtime.compositions().first?.id == "Types")
+}
+
+@Test func nativeCompilerCacheAliasesExportsAndOriginalMaps() throws {
+  let project = FileManager.default.temporaryDirectory.appendingPathComponent("motionswift-contract-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: project) }
+  let package = project.appendingPathComponent("node_modules/palette")
+  try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+  func write(_ path: String, _ source: String) throws {
+    try source.write(to: project.appendingPathComponent(path), atomically: true, encoding: .utf8)
+  }
+  try write("tsconfig.json", #"{"compilerOptions":{"baseUrl":".","paths":{"@value":["value.ts"]}}}"#)
+  try write("value.ts", "export const value: number = 1;")
+  try write("node_modules/palette/package.json",
+    #"{"name":"palette","exports":{"./accent":{"browser":"./browser.js","import":"./import.js","default":"./default.js"}}}"#)
+  try write("node_modules/palette/browser.js", "export const accent = 'browser';")
+  try write("node_modules/palette/import.js", "export const accent = 'import';")
+  try write("node_modules/palette/default.js", "export const accent = 'default';")
+  try write("main.ts",
+    "import {value} from '@value';\nimport {accent} from 'palette/accent';\nthrow Error('original-fixture-' + value + '-' + accent);")
+  let compiler = Compiler()
+  let start = Date()
+  let cold = try compiler.graph(project: project, entry: "main.ts")
+  let coldTime = Date().timeIntervalSince(start)
+  let warmStart = Date()
+  let warm = try compiler.graph(project: project, entry: "main.ts")
+  print("Native cache: cold \(coldTime * 1000) ms; warm \(Date().timeIntervalSince(warmStart) * 1000) ms; hits=1 misses=1")
+  #expect(compiler.cacheStatistics == .init(hits: 1, misses: 1))
+  #expect(try cold.encoded() == warm.encoded())
+  #expect(cold.modules.values.first?.sourceMap?.contains("main.ts") == true)
+  do { _ = try Runtime(bundle: GraphLinker.link(cold)); Issue.record("Expected mapped error") } catch {
+    let message = String(describing: error)
+    #expect(message.contains("original-fixture-1-browser"), "\(message)")
+    #expect(message.contains("main.ts:3:"), "\(message)")
+  }
+  try write("value.ts", "export const value = 2;")
+  let changed = try compiler.graph(project: project, entry: "main.ts")
+  #expect(changed != cold)
+  #expect(compiler.cacheStatistics.misses == 2)
+  try write("node_modules/palette/browser.js", "export const accent = 'changed';")
+  #expect(try compiler.graph(project: project, entry: "main.ts") != changed)
+  // A cold rebuild must not embed random toolchain extraction paths.
+  compiler.clearCache()
+  let again = try compiler.graph(project: project, entry: "main.ts")
+  compiler.clearCache()
+  #expect(try again.encoded() == compiler.graph(project: project, entry: "main.ts").encoded())
+}
+
+@Test func nativeExportsPatternsArraysConditionsAndBlockedImports() throws {
+  let project = FileManager.default.temporaryDirectory.appendingPathComponent("motionswift-exports-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: project) }
+  let package = project.appendingPathComponent("node_modules/@fixture/colors")
+  try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+  func write(_ url: URL, _ text: String) throws { try text.write(to: url, atomically: true, encoding: .utf8) }
+  try write(package.appendingPathComponent("package.json"), #"""
+    {"name":"@fixture/colors","exports":{
+      ".":{"import":"./import.js","browser":"./browser.js","default":"./fallback.js"},
+      "./feature/*":"./*.js","./array":["./browser.js"],"./private":null}}
+    """#)
+  try write(package.appendingPathComponent("import.js"), "export const value = 'import-first';")
+  try write(package.appendingPathComponent("browser.js"), "export const value = 'browser';")
+  try write(package.appendingPathComponent("fallback.js"), "export const value = 'fallback';")
+  let main = project.appendingPathComponent("main.ts")
+  let compiler = Compiler()
+  let cases = [("@fixture/colors", "import-first"), ("@fixture/colors/feature/browser", "browser"),
+    ("@fixture/colors/array", "browser")]
+  for (specifier, expected) in cases {
+    try write(main, "import {value} from '\(specifier)'; throw Error(value);")
+    let graph = try compiler.graph(project: project, entry: "main.ts")
+    #expect(graph.packages == ["@fixture/colors"])
+    do { _ = try Runtime(bundle: GraphLinker.link(graph)); Issue.record("Expected fixture throw")
+    } catch { #expect(String(describing: error).contains(expected)) }
+  }
+  try write(main, "// original import location\nimport {value} from '@fixture/colors/private';\nthrow Error(value);")
+  do { _ = try compiler.graph(project: project, entry: "main.ts"); Issue.record("Expected exports block")
+  } catch {
+    let message = String(describing: error)
+    #expect(message.contains("main.ts:2:21:"), "\(message)")
+    #expect(message.contains("package exports"))
+  }
+}
+
+@Test func nativeRequiresInsideStringsAreNotDependencies() throws {
+  let project = FileManager.default.temporaryDirectory.appendingPathComponent("motionswift-literal-\(UUID())")
+  try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: project) }
+  try #"export const text = "require('fake-package')";"#
+    .write(to: project.appendingPathComponent("main.ts"), atomically: true, encoding: .utf8)
+  let graph = try Compiler().graph(project: project, entry: "main.ts")
+  #expect(graph.modules.values.first?.dependencies.isEmpty == true)
 }

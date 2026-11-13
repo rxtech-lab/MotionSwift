@@ -4,10 +4,24 @@ import Testing
 
 @Suite struct StylePropertyTests {
   @Test func searchOnlyReturnsCatalogProperties() {
-    #expect(StylePropertyDefinition.matching("BORDER").map(\.id) == ["borderRadius"])
+    #expect(StylePropertyDefinition.matching("BORDER").contains { $0.id == "borderRadius" })
+    #expect(StylePropertyDefinition.matching("BORDER").allSatisfy { $0.id.hasPrefix("border") })
     #expect(StylePropertyDefinition.matching("madeUpProperty").isEmpty)
     #expect(StylePropertyDefinition.find("madeUpProperty") == nil)
     #expect(Set(StylePropertyDefinition.all.map(\.id)).count == StylePropertyDefinition.all.count)
+  }
+
+  @Test func detectedTypographyAndBordersHaveUsableControls() throws {
+    let weight = try #require(StylePropertyDefinition.find("fontWeight"))
+    #expect(weight.value(text: "700", unit: "px") == .string("700"))
+    let spacing = try #require(StylePropertyDefinition.find("letterSpacing"))
+    #expect(spacing.value(text: "-0.5", unit: "px") == .number(-0.5))
+    let width = try #require(StylePropertyDefinition.find("borderTopWidth"))
+    #expect(width.value(text: "2", unit: "px") == .number(2))
+    #expect(width.value(text: "-1", unit: "px") == nil)
+    let whitespace = try #require(StylePropertyDefinition.find("whiteSpace"))
+    #expect(whitespace.value(text: "pre-wrap", unit: "px") == .string("pre-wrap"))
+    #expect(whitespace.value(text: "pre-line", unit: "px") == nil)
   }
 
   @Test func numericValuesRespectUnitsAndLimits() throws {

@@ -39,7 +39,7 @@ function projectFiles(root) {
 test('portable compiler builds a stamped module graph with vendor imports', () => {
   const files = projectFiles(path.join(repo, 'tests/compositions'));
   const graph = JSON.parse(portable.compile(JSON.stringify({files, entry: 'src/index.ts', stamp: true, vendor: vendorInfo().specifiers})));
-  assert.deepEqual(Object.keys(graph.modules).sort(), ['src/Root.tsx', 'src/index.ts', 'visuals/Boxes.tsx']);
+  assert.deepEqual(Object.keys(graph.modules).sort(), ['src/Root.tsx', 'src/index.ts', 'visuals/Boxes.tsx', 'visuals/CoreContracts.tsx', 'visuals/Effects.tsx']);
   assert.equal(graph.modules['src/index.ts'].dependencies['./Root'], 'src/Root.tsx');
   assert.equal(graph.modules['src/Root.tsx'].dependencies.remotion, 'vendor:remotion');
   assert.equal(graph.modules['visuals/Boxes.tsx'].dependencies['@motionswift/remotion/jsx-runtime'], 'vendor:@motionswift/remotion/jsx-runtime');

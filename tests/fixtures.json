@@ -4,11 +4,199 @@
   "entryPoint": "src/index.ts",
   "maxDiffRatio": 0.003,
   "fixtures": [
-    {"id": "core/solid", "composition": "Solid", "frames": [0, 15, 29]},
-    {"id": "core/boxes", "composition": "Boxes", "frames": [0, 15, 29]},
-    {"id": "motion/translate", "composition": "Motion", "frames": [0, 7, 15, 29]},
-    {"id": "core/flex", "composition": "Flex", "frames": [0, 15, 29]},
-    {"id": "core/opacity", "composition": "Layers", "frames": [0, 15, 29]},
-    {"id": "motion/sequence-spring", "composition": "Timed", "frames": [0, 9, 10, 15, 24, 25, 29]}
+    {
+      "id": "core/solid",
+      "composition": "Solid",
+      "frames": [
+        0,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "core/boxes",
+      "composition": "Boxes",
+      "frames": [
+        0,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "motion/translate",
+      "composition": "Motion",
+      "frames": [
+        0,
+        7,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "core/flex",
+      "composition": "Flex",
+      "frames": [
+        0,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "core/opacity",
+      "composition": "Layers",
+      "frames": [
+        0,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "motion/sequence-spring",
+      "composition": "Timed",
+      "frames": [
+        0,
+        9,
+        10,
+        15,
+        24,
+        25,
+        29
+      ]
+    },
+    {
+      "id": "core/border-order",
+      "composition": "BorderOrder",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "core/flex-origin",
+      "composition": "FlexOrigin",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "motion/series-timing",
+      "composition": "SeriesTiming",
+      "frames": [
+        0,
+        1,
+        2,
+        3,
+        8,
+        9,
+        10,
+        11,
+        12,
+        20,
+        21,
+        22,
+        23,
+        27,
+        28,
+        29
+      ]
+    },
+    {
+      "id": "core/nested-order",
+      "composition": "NestedOrder",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/gradients",
+      "composition": "Gradients",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/shadows",
+      "composition": "Shadows",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/filters",
+      "composition": "Filters",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/blending",
+      "composition": "Blending",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/clipmask",
+      "composition": "ClipMask",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/backdrop",
+      "composition": "Backdrop",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/transform3d",
+      "composition": "Transform3D",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/inlinesvg",
+      "composition": "InlineSVG",
+      "frames": [
+        0,
+        15,
+        29
+      ]
+    },
+    {
+      "id": "effects/externalsvg",
+      "composition": "ExternalSVG",
+      "frames": [
+        0
+      ]
+    },
+    {
+      "id": "effects/fadetransition",
+      "composition": "FadeTransition",
+      "frames": [
+        10,
+        16,
+        21
+      ]
+    },
+    {
+      "id": "effects/slidetransition",
+      "composition": "SlideTransition",
+      "frames": [
+        10,
+        16,
+        21
+      ]
+    },
+    {
+      "id": "effects/wipetransition",
+      "composition": "WipeTransition",
+      "frames": [
+        10,
+        16,
+        21
+      ]
+    }
   ]
 }

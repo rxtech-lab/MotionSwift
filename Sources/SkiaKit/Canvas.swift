@@ -59,6 +59,7 @@ public final class Canvas {
   public func clear() { msk_clear(surface) }
 
   public func save(opacity: Double = 1) { msk_save(surface, Float(opacity)) }
+  public func saveState() { msk_save_state(surface) }
   public func restore() { msk_restore(surface) }
   public func translate(_ x: Double, _ y: Double) { msk_translate(surface, Float(x), Float(y)) }
   public func rotate(_ degrees: Double) { msk_rotate(surface, Float(degrees)) }
@@ -71,12 +72,51 @@ public final class Canvas {
     msk_rect(surface, Float(x), Float(y), Float(width), Float(height), Float(radius), color)
   }
 
+  /// Starts an isolated CSS group; restore composites the entire subtree once.
+  public func effects(opacity: Double, blend: Int, filters: [[Double]]) {
+    let entries = filters.flatMap { $0.map(Float.init) }
+    msk_effect_layer(surface, Float(opacity), Int32(blend), entries, filters.count)
+  }
+
+  public func backdrop(width: Double, height: Double, radius: Double, blur: Double) {
+    msk_backdrop(surface, Float(width), Float(height), Float(radius), Float(blur))
+  }
+
+  public func concatenate(_ matrix: [Double]) {
+    precondition(matrix.count == 9)
+    msk_concat(surface, matrix.map(Float.init))
+  }
+
+  public func clip(path: String) throws {
+    guard msk_clip_path(surface, path) else { throw MotionError("Unsupported clip-path geometry") }
+  }
+
+  public func gradient(width: Double, height: Double, radius: Double, radial: Bool,
+                       geometry: [Double], colors: [UInt32], stops: [Double], mask: Bool = false) throws {
+    precondition(geometry.count == 4 && colors.count == stops.count)
+    guard msk_gradient(surface, Float(width), Float(height), Float(radius), radial ? 1 : 0,
+                       geometry.map(Float.init), colors, stops.map(Float.init), colors.count, mask ? 1 : 0)
+    else { throw MotionError("Cannot draw gradient") }
+  }
+
+  // Mirrors the native shadow ABI, including geometry and paint options.
+  // swiftlint:disable:next function_parameter_count
+  public func shadow(width: Double, height: Double, radius: Double, x: Double, y: Double,
+                     blur: Double, spread: Double, color: UInt32, inset: Bool) {
+    msk_shadow(surface, Float(width), Float(height), Float(radius), Float(x), Float(y),
+               Float(blur / 2), Float(spread), color, inset)
+  }
+
   public func text(
     _ text: String, family: String, size: Double, color: UInt32, x: Double = 0, baseline: Double
   ) throws {
     guard msk_text(surface, text, family, Float(size), color, Float(x), Float(baseline)) else {
       throw MotionError("Skia could not resolve font: \(family)")
     }
+  }
+
+  public func paragraph(_ paragraph: Paragraph, x: Double = 0, y: Double = 0) {
+    msk_paragraph_paint(surface, paragraph.handle, Float(x), Float(y))
   }
 
   /// Renders SVG bytes through Skia's SVG DOM with the system font manager.

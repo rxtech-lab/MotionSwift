@@ -8,6 +8,12 @@ function check(project,entry) {
   const options={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,
     jsx:ts.JsxEmit.ReactJSX,jsxImportSource:'@motionswift/remotion',strict:true,noEmit:true,isolatedModules:true,types:['react'],typeRoots:[path.join(testRoot,'node_modules/@types')],
     esModuleInterop:true,skipLibCheck:false,baseUrl:testRoot,paths:{
+      '@remotion/paths':['../js/remotion-shim/remotion-paths.d.ts'],
+      '@remotion/shapes':['../js/remotion-shim/remotion-shapes.d.ts'],
+      '@remotion/transitions':['../js/remotion-shim/transitions.d.ts'],
+      '@remotion/transitions/fade':['../js/remotion-shim/transition-fade.d.ts'],
+      '@remotion/transitions/slide':['../js/remotion-shim/transition-slide.d.ts'],
+      '@remotion/transitions/wipe':['../js/remotion-shim/transition-wipe.d.ts'],
       '@motionswift/remotion':['../js/remotion-shim/index.d.ts'],
       '@motionswift/remotion/jsx-runtime':['../js/remotion-shim/jsx-runtime.d.ts'],
       remotion:['../js/remotion-shim/index.d.ts'],three:['../js/remotion-shim/three.d.ts'],

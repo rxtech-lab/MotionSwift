@@ -32,8 +32,12 @@ public final class Runtime {
 
   private func check() throws {
     if let error = context.exception {
-      let message = "JavaScript: \(error.toString() ?? "unknown error")\n\(error.forProperty("stack")?.toString() ?? "")"
+      var message = "JavaScript: \(error.toString() ?? "unknown error")\n\(error.forProperty("stack")?.toString() ?? "")"
       context.exception = nil
+      if let mapper = context.objectForKeyedSubscript("__ms_mapStack"), !mapper.isUndefined {
+        message = mapper.call(withArguments: [message])?.toString() ?? message
+        context.exception = nil
+      }
       throw MotionError(message)
     }
   }

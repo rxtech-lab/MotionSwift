@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 export PKG_CONFIG_PATH := $(CURDIR)/native/pkgconfig:$(PKG_CONFIG_PATH)
+# Optional isolation flags for concurrent verification runs (for example --scratch-path).
+SWIFT_BUILD_FLAGS ?=
 .PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark runtime-benchmark showcase ci three-visual three-goldens three-benchmark maps-visual
 .NOTPARALLEL:
 
@@ -32,7 +34,7 @@ ios: compiler native-ios
 	./tests/tools/build-ios.sh
 
 build: compiler native
-	swift build -c release
+	swift build $(SWIFT_BUILD_FLAGS) -c release
 
 test: lint build
 	swift test --no-parallel

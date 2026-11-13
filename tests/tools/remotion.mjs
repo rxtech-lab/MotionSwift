@@ -5,13 +5,13 @@ import {browserOptions} from './browser.mjs';
 import {project,manifest} from './common.mjs';
 
 export async function bundleFixtures() {
-  return bundle({entryPoint:path.join(project,manifest.entryPoint)});
+  return bundle({entryPoint:path.join(project,manifest.entryPoint),publicDir:path.join(project,'public')});
 }
-export async function composition(serveUrl,fixture) {
-  return selectComposition({...await browserOptions(),serveUrl,id:fixture.composition,inputProps:fixture.props||{}});
+export async function composition(serveUrl,fixture,options={}) {
+  return selectComposition({...await browserOptions(),...options,serveUrl,id:fixture.composition,inputProps:fixture.props||{}});
 }
-export async function still(serveUrl,fixture,frame,output) {
-  return renderStill({...await browserOptions(),serveUrl,composition:await composition(serveUrl,fixture),frame,output,
+export async function still(serveUrl,fixture,frame,output,options={}) {
+  return renderStill({...await browserOptions(),...options,serveUrl,composition:await composition(serveUrl,fixture,options),frame,output,
     inputProps:fixture.props||{},imageFormat:'png',logLevel:'error'});
 }
 export async function video(serveUrl,fixture,output,options={}) {

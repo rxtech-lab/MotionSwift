@@ -46,7 +46,8 @@ If text parity fails badly, make SkParagraph tuning the next phase before anythi
 
 ## Phase 1: Skia and compiler packaging, SkiaKit (weeks 3–4)
 
-- Bundle native TypeScript 7 (tsgo) for TS/TSX emission and type checking, with esbuild linking emitted JavaScript. Source maps, editor source stamps, and in-process iOS compiler integration remain follow-ups.
+- Bundle native TypeScript 7 (tsgo) for TS/TSX emission and type checking, with esbuild linking emitted JavaScript. Original-source maps, editor stamps and in-process portable compilation now extend these delivered paths; see [compiler contract](compiler-contract.md).
+- Original Rust SWC compiler C ABI requirement: not implemented; superseded for this release by the delivered tsgo/esbuild and JavaScriptCore architecture. See [compiler contract and decision](compiler-contract.md).
 - `MotionCompiler` Swift side: the resolver (Node algorithm, `exports` conditions, tsconfig `paths`, aliases, allowlist), the module graph, and the content-hash transform cache.
 
 - Choose and pin the Skia milestone, matching the Chrome Headless Shell version Remotion pins where possible.

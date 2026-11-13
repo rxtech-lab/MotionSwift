@@ -1,7 +1,7 @@
 import Foundation
 import ImageIO
 import MotionCore
-import MotionEditor
+@testable import MotionEditor
 import MotionPortable
 import MotionSwiftUI
 import Testing
@@ -138,8 +138,12 @@ func testFilmHasIndependentObjectLayersAndVisualEdits() async throws {
   await model.open(compositionID: "Main")
   #expect(model.status == .idle)
   let layers = model.objectTracks.filter { $0.label == "EditableLayer" || $0.owner == "editableObject" }
-  #expect(layers.count == 179)
+  #expect(layers.count > 179) // Repeated appearances and outgoing dissolves have their own clips.
   #expect(layers.allSatisfy { $0.reason == nil })
+  #expect(layers.allSatisfy { $0.duration != nil && ($0.start > 0 || $0.end(in: 2700) < 2700) })
+  let audience = try #require(layers.first { $0.label == "aub0" })
+  #expect(audience.start == 319)
+  #expect(audience.end(in: 2700) == 660)
   let title = try #require(layers.first { $0.label == "title" })
   model.player.seek(to: 90)
   for _ in 0..<200 where model.player.displayedFrame?.frame != 90 { try await Task.sleep(for: .milliseconds(10)) }
@@ -162,7 +166,13 @@ func testFilmHasIndependentObjectLayersAndVisualEdits() async throws {
   await model.endGesture(named: "Resize title")
   #expect(try await model.player.render(frame: 90).image.dataProvider?.data != before.image.dataProvider?.data)
   await model.undo()
-  await model.setStyle("content", .string("可编辑的电影标题"))
+  #expect(model.canEditText)
+  #expect(!model.selectedTextValue.isEmpty)
+  let titleSource = try #require(model.selection)
+  let titleFile = try #require(SourceStamp(titleSource)?.file)
+  let expectedSource = try #require(model.files[titleFile])
+  #expect(await model.setText("可编辑的电影标题", source: titleSource, expectedSource: expectedSource))
+  #expect(model.selectedTextValue == "可编辑的电影标题")
   #expect(model.status == .idle)
   #expect(try await model.player.render(frame: 90).image.dataProvider?.data != before.image.dataProvider?.data)
   await model.undo()
@@ -174,9 +184,13 @@ func testFilmHasIndependentObjectLayersAndVisualEdits() async throws {
   defer { try? FileManager.default.removeItem(at: fixture) }
   let reference = MotionPlayer(configuration: .init(scale: 0.25, backend: .gpu))
   await reference.load(.portable(project: fixture, entry: "src/index.ts"), compositionID: "Main")
-  for frame in [0, 90, 300, 660, 1050, 1424, 2574, 2699] {
+  for frame in [0, 90, 299, 300, 318, 319, 659, 660, 680, 681, 1050, 1424, 2574, 2588, 2699] {
     let rendered = try await model.player.render(frame: frame)
     #expect(rendered.image.width == 480)
+    let visibleSources = Set(rendered.layout.compactMap(\.source))
+    for layer in layers where visibleSources.contains(layer.src) {
+      #expect(frame >= layer.start && frame < layer.end(in: 2700), "\(layer.label) timing at \(frame)")
+    }
     if let output = ProcessInfo.processInfo.environment["MOTIONSWIFT_REVIEW_FRAMES"] {
       let original = try await reference.render(frame: frame)
       for (label, image) in [("editable", rendered.image), ("original", original.image)] {
@@ -187,4 +201,41 @@ func testFilmHasIndependentObjectLayersAndVisualEdits() async throws {
       }
     }
   }
+}
+
+@Test @MainActor
+func ribbonLetteringTitleEditsTextPreservesAnimationAndUndoes() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ribbon-text-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let location = try ShowcaseExample.project(MotionStudy.project, entry: "index.tsx").prepare(root: directory)
+  let file = location.project.appendingPathComponent(location.entry)
+  let original = try String(contentsOf: file, encoding: .utf8)
+  let model = EditorModel(project: location.project, entry: location.entry, configuration: .init(scale: 0.5, backend: .gpu))
+  await model.open(compositionID: "Ribbon")
+  model.player.seek(to: 112)
+  for _ in 0..<500 where model.player.displayedFrame?.frame != 112 { try await Task.sleep(for: .milliseconds(10)) }
+  let title = try #require(model.objectTracks.first { $0.owner == "Ribbon" && $0.label == "Img" && $0.keyframes["left"] != nil })
+  let box = try #require(model.player.displayedFrame?.layout.first { $0.source == title.src })
+  let target = try #require(await model.textEditTarget(at: CGPoint(x: box.x + box.width / 2, y: box.y + box.height / 2)))
+  #expect(target.text == "Make it move.")
+  #expect(target.fontSize == 88)
+  #expect(target.expectedSource == original)
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  #expect(model.canEditText)
+  #expect(model.selectedTextValue == "Make it move.")
+  let before = try await model.player.render(frame: 112)
+  #expect(await model.setText("Make something wonderful.", source: title.src, expectedSource: original))
+  #expect(model.selectedTextValue == "Make something wonderful.")
+  #expect(model.selectedTrack?.keyframes == title.keyframes)
+  #expect(model.selectedTrack?.start == title.start)
+  let edited = try String(contentsOf: file, encoding: .utf8)
+  #expect(edited == original.replacingOccurrences(of: "Make it move.", with: "Make something wonderful."))
+  #expect(try await model.player.render(frame: 112).image.dataProvider?.data != before.image.dataProvider?.data)
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  #expect(model.selectedTextValue == "Make it move.")
+  #expect(try await model.player.render(frame: 112).image.dataProvider?.data == before.image.dataProvider?.data)
+  await model.redo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == edited)
+  #expect(model.selectedTextValue == "Make something wonderful.")
 }

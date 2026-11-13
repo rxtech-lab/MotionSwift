@@ -28,6 +28,10 @@
     "./usd-loader": {
       "types": "./usd-loader.d.ts",
       "default": "./usd-loader.js"
+    },
+    "./transitions": {
+      "types": "./transitions.d.ts",
+      "default": "./transitions.js"
     }
   },
   "peerDependencies": {

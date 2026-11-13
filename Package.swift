@@ -31,7 +31,7 @@ let package = Package(
       .linkedFramework("UIKit", .when(platforms: [.iOS])),
       .linkedFramework("Metal"), .linkedFramework("QuartzCore"), .linkedFramework("Foundation"),
     ]),
-    .target(name: "MotionLayout", dependencies: ["MotionCore", .product(name: "yoga", package: "yoga")]),
+    .target(name: "MotionLayout", dependencies: ["MotionCore", "SkiaKit", .product(name: "yoga", package: "yoga")]),
     // iOS bundles reserve a top-level "Resources" directory, so portable targets use "JavaScript".
     .target(name: "MotionPortable", dependencies: ["MotionCore"], resources: [.copy("JavaScript")]),
     .target(name: "MotionCompiler", dependencies: ["MotionCore", "MotionPortable"], resources: [.copy("Resources")]),

@@ -241,3 +241,65 @@ pub unsafe extern "C" fn msk_image_rgba(s: *mut Target, bytes: *const u8, len: u
     canvas.restore();
     true
 }
+
+// Paragraph and font handles are worker-confined. Paragraphs retain their collection.
+use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextAlign};
+pub struct Fonts { collection: FontCollection, provider: TypefaceFontProvider }
+#[no_mangle]
+pub extern "C" fn msk_fonts_create() -> *mut Fonts {
+    let mut collection = FontCollection::new();
+    collection.set_default_font_manager(FontMgr::default(), Some("Arial"));
+    Box::into_raw(Box::new(Fonts { collection, provider: TypefaceFontProvider::new() }))
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_fonts_destroy(fonts: *mut Fonts) { if !fonts.is_null() { drop(Box::from_raw(fonts)); } }
+#[no_mangle]
+pub unsafe extern "C" fn msk_fonts_register(fonts: *mut Fonts, bytes: *const u8, len: usize, family: *const c_char) -> bool {
+    if fonts.is_null() || bytes.is_null() || family.is_null() { return false; }
+    let Some(face) = FontMgr::default().new_from_data(std::slice::from_raw_parts(bytes, len), None) else { return false; };
+    let Ok(family) = CStr::from_ptr(family).to_str() else { return false; };
+    let fonts = &mut *fonts;
+    fonts.provider.register_typeface(face, Some(family));
+    fonts.collection.set_asset_font_manager(Some(fonts.provider.clone().into()));
+    fonts.collection.clear_caches();
+    true
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_builder(fonts: *mut Fonts, align: i32) -> *mut ParagraphBuilder {
+    if fonts.is_null() { return std::ptr::null_mut(); }
+    let mut style = ParagraphStyle::new();
+    style.set_text_align(match align { 1 => TextAlign::Center, 2 => TextAlign::Right, 3 => TextAlign::Justify, _ => TextAlign::Left });
+    Box::into_raw(Box::new(ParagraphBuilder::new(&style, (*fonts).collection.clone())))
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_add(builder: *mut ParagraphBuilder, text: *const c_char, families: *const c_char, size: f32, weight: i32, italic: bool, color: u32, height: f32, spacing: f32) {
+    let mut style = TextStyle::new();
+    let families = CStr::from_ptr(families).to_string_lossy();
+    let names: Vec<&str> = families.split(',').map(|s| s.trim().trim_matches(|c| c == '\'' || c == '"')).collect();
+    style.set_font_families(&names).set_font_size(size).set_color(Color::from(color)).set_letter_spacing(spacing);
+    style.set_font_style(FontStyle::new(skia_safe::font_style::Weight::from(weight), skia_safe::font_style::Width::NORMAL,
+        if italic { skia_safe::font_style::Slant::Italic } else { skia_safe::font_style::Slant::Upright }));
+    if height > 0. { style.set_height(height).set_height_override(true).set_half_leading(true); }
+    (*builder).push_style(&style);
+    (*builder).add_text(CStr::from_ptr(text).to_string_lossy());
+    (*builder).pop();
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_build(builder: *mut ParagraphBuilder) -> *mut Paragraph {
+    let mut builder = Box::from_raw(builder);
+    Box::into_raw(Box::new(builder.build()))
+}
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_destroy(p: *mut Paragraph) { if !p.is_null() { drop(Box::from_raw(p)); } }
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_layout(p: *mut Paragraph, width: f32) { (*p).layout(width.max(0.)); }
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_height(p: *mut Paragraph) -> f32 { (*p).height() }
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_width(p: *mut Paragraph) -> f32 { (*p).max_intrinsic_width() }
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_baseline(p: *mut Paragraph) -> f32 { (*p).alphabetic_baseline() }
+#[no_mangle]
+pub unsafe extern "C" fn msk_paragraph_paint(s: *mut Target, p: *mut Paragraph, x: f32, y: f32) { (*p).paint((*s).surface.canvas(), (x, y)); }
+
+mod effects;

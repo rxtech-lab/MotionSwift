@@ -8,8 +8,11 @@ import {manifest,testRoot,root,nativeBin,nativeArgs,outputPath,run,writeJSON} fr
 const backendArg=process.argv.slice(2).find(arg=>arg.startsWith('--backend='))?.slice('--backend='.length);
 const backend=backendArg??process.env.MOTIONSWIFT_BACKEND??'cpu';
 if(!['cpu','gpu'].includes(backend)||process.argv.slice(2).some(arg=>!arg.startsWith('--backend=')))throw Error('Usage: visual.mjs [--backend=cpu|gpu]');
-const output=path.join(testRoot,'reports/visual',backend);
+const output=process.env.MOTIONSWIFT_VISUAL_OUTPUT ? path.resolve(process.env.MOTIONSWIFT_VISUAL_OUTPUT,backend) : path.join(testRoot,'reports/visual',backend);
 fs.mkdirSync(output,{recursive:true});
+const requested=process.env.MOTIONSWIFT_FIXTURE_IDS?.split(',').filter(Boolean);
+const fixtures=requested ? manifest.fixtures.filter(fixture=>requested.includes(fixture.id)) : manifest.fixtures;
+if(requested && (new Set(requested).size !== requested.length || fixtures.length !== requested.length))throw Error('Unknown or repeated fixture IDs');
 const results=[];
 let failed=false;
 try {
@@ -17,7 +20,7 @@ try {
   const metadata=JSON.parse(fs.readFileSync(path.join(testRoot,'golden/metadata.json')));
   assertProvenance(metadata);
   const bin=nativeBin();
-  for(const fixture of manifest.fixtures) {
+  for(const fixture of fixtures) {
     const props=path.join(output,fixture.id,'props.json');
     writeJSON(props,fixture.props||{});
     // Deliberately shuffled frames check that JS state does not depend on evaluation order.
@@ -39,7 +42,7 @@ try {
     }
   }
 } catch(error) { failed=true; results.push({error:String(error)}); console.error(error); }
-writeJSON(path.join(output,'results.json'),{backend,maxDiffRatio:0.003,pass:!failed,results});
+writeJSON(path.join(output,'results.json'),{backend,fixtureIDs:fixtures.map(fixture=>fixture.id),maxDiffRatio:0.003,pass:!failed,results});
 const escape = value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 fs.writeFileSync(path.join(output,'index.html'),`<!doctype html><meta charset="utf-8"><title>MotionSwift pixel comparisons</title>
 <style>body{background:#15181e;color:#eee;font:16px system-ui;margin:32px}section{margin-bottom:40px}img{width:320px;border:1px solid #555}figure{display:inline-block;margin:8px}figcaption{padding:4px}</style>

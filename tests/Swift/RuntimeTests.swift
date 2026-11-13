@@ -28,7 +28,7 @@ import Testing
   let unsupported = try JSONDecoder().decode(
     RenderNode.self,
     from: Data(
-      ##"{"type":"div","style":{"filter":"blur(2px)"},"children":[]}"##.utf8))
+      ##"{"type":"div","style":{"filter":"url(#unsupported)"},"children":[]}"##.utf8))
   #expect(throws: MotionError.self) {
     _ = try Renderer(width: 16, height: 16).render(unsupported, composition: composition, to: file)
   }

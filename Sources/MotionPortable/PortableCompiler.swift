@@ -11,6 +11,8 @@ import MotionCore
 public final class PortableCompiler {
   private let context: JSContext
   private let portable: JSValue
+  private var graphs: [String: ModuleGraph] = [:]
+  public private(set) var cacheStatistics = CompilerCacheStatistics()
 
   public static let producer = "MotionSwift portable compiler (Sucrase in JavaScriptCore)"
   static let sourceExtensions: Set<String> = ["ts", "tsx", "js", "jsx", "mts", "mjs", "cts", "cjs", "json"]
@@ -30,11 +32,27 @@ public final class PortableCompiler {
   public func compile(files: [String: String], entry: String, stamp: Bool = false) throws -> ModuleGraph {
     let input = try JSONSerialization.data(withJSONObject: [
       "files": files, "entry": entry, "stamp": stamp, "vendor": Vendor.specifiers,
-    ] as [String: Any])
+      "hashes": files.mapValues { CompilerContent.hash(Data($0.utf8)) },
+      "version": try Vendor.resource("vendor", "json"),
+    ] as [String: Any], options: [.sortedKeys])
+    let key = CompilerContent.hash(input)
+    if let graph = graphs[key] {
+      cacheStatistics = .init(hits: graph.modules.count, misses: 0)
+      return graph
+    }
     let output = try call("compile", String(bytes: input, encoding: .utf8) ?? "{}")
-    struct Output: Decodable { let modules: [String: ModuleGraph.Module] }
-    let modules = try JSONDecoder().decode(Output.self, from: Data(output.utf8)).modules
-    return ModuleGraph(entry: entry, modules: modules, producer: Self.producer, stamped: stamp)
+    struct Output: Decodable {
+      let modules: [String: ModuleGraph.Module]
+      let hits: Int
+      let misses: Int
+    }
+    let result = try JSONDecoder().decode(Output.self, from: Data(output.utf8))
+    cacheStatistics = .init(hits: result.hits, misses: result.misses)
+    let modules = result.modules
+    let graph = ModuleGraph(entry: entry, modules: modules, producer: Self.producer, stamped: stamp)
+    if graphs.count >= 8 { graphs.removeAll() }
+    graphs[key] = graph
+    return graph
   }
 
   /// Compiles a project directory. Sources are read from the directory tree, skipping
@@ -43,10 +61,46 @@ public final class PortableCompiler {
     try compile(files: Self.sources(in: project), entry: entry, stamp: stamp)
   }
 
+  /// Clears the bounded per-instance transform cache. Statistics describe the last compilation.
+  public func clearCache() throws {
+    graphs.removeAll()
+    _ = try call("clearCache")
+    cacheStatistics = .init()
+  }
+
+  /// Normalized project-relative alias targets, including relative tsconfig inheritance.
+  public func resolutionOptions(files: [String: String]) throws -> [String: Any] {
+    let input = try JSONSerialization.data(withJSONObject: files)
+    guard let source = String(bytes: input, encoding: .utf8) else {
+      throw MotionError("Cannot encode resolution configuration as UTF-8")
+    }
+    let output = try call("configuration", source)
+    return try JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any] ?? [:]
+  }
+
+  public struct ImportLocation: Decodable, Sendable {
+    public let file: String
+    public let specifier: String
+    public let line: Int
+    public let col: Int
+  }
+
+  public func importLocations(files: [String: String]) throws -> [ImportLocation] {
+    let input = try JSONSerialization.data(withJSONObject: files, options: [.sortedKeys])
+    guard let json = String(data: input, encoding: .utf8) else { throw MotionError("importLocations: invalid UTF-8") }
+    let output = try call("importLocations", json)
+    return try JSONDecoder().decode([ImportLocation].self, from: Data(output.utf8))
+  }
+
   /// Inline style properties of the stamped element `src`, classified as static, animated,
   /// bound or computed.
   public func styles(source: String, src: String) throws -> StyleSummary {
     try JSONDecoder().decode(StyleSummary.self, from: Data(try call("styles", source, src).utf8))
+  }
+
+  /// Literal JSX children of a stamped element, or a reason the content must be edited in code.
+  public func text(source: String, src: String) throws -> TextSummary {
+    try JSONDecoder().decode(TextSummary.self, from: Data(try call("text", source, src).utf8))
   }
 
   /// Applies one edit operation; returns the new source and the exact inverse operation.
@@ -114,7 +168,7 @@ public struct EditError: Error, CustomStringConvertible, Sendable {
 /// A write-back operation (see docs/editor.md → Write-back).
 public struct EditOperation: Codable, Sendable, Equatable {
   public enum Kind: String, Codable, Sendable {
-    case setStyle, removeStyle, insertStyle, setTimeline
+    case setStyle, removeStyle, insertStyle, setTimeline, setText, setThreeProperty, setCameraRigKey
   }
 
   public var op: Kind
@@ -177,6 +231,8 @@ public enum StylePropertyKind: String, Decodable, Sendable {
 }
 
 public struct StyleSummary: Decodable, Sendable, Equatable {
+  public let domain: String?
+  public var isThree: Bool { domain == "three" }
   public struct Declaration: Decodable, Sendable, Equatable {
     public let key: String
     public let label: String?
@@ -212,6 +268,11 @@ public struct StyleSummary: Decodable, Sendable, Equatable {
 
   public func group(for key: String) -> String {
     if let group = declarations?.last(where: { $0.key == key })?.group { return group }
+    if isThree {
+      if key.hasPrefix("camera") { return "Camera" }
+      if ["position", "rotation", "scale"].contains(where: { key.hasPrefix($0) }) { return "3D Transform" }
+      return "Surface & Light"
+    }
     if key.range(of: "^(font|text|letter|line|word|color)", options: .regularExpression) != nil { return "Text" }
     if key.range(of: "^(transform|rotate|scale|translate|perspective)", options: .regularExpression) != nil { return "Transform" }
     if key.range(of: "^(background|border|opacity|boxShadow|filter|mixBlend|clip|mask)", options: .regularExpression) != nil {
@@ -268,6 +329,37 @@ extension PortableCompiler {
   public func timeline(source: String, file: String) throws -> [ObjectTrack] {
     try JSONDecoder().decode([ObjectTrack].self, from: Data(try call("timeline", source, file).utf8))
   }
+
+  /// Camera rigs whose keys are literal `{frame, position, target, fov, roll?}` objects.
+  public func cameraRigs(source: String, file: String) throws -> [CameraRig] {
+    try JSONDecoder().decode([CameraRig].self, from: Data(try call("cameraRigs", source, file).utf8))
+  }
+}
+
+/// A code camera rig (`<CameraRig keys={…}>`) whose keys the editor rewrites in place.
+public struct CameraRig: Decodable, Sendable, Equatable {
+  public struct Key: Codable, Sendable, Equatable {
+    public var frame: Int
+    public var position: [Double]
+    public var target: [Double]
+    public var fov: Double
+    public var roll: Double?
+
+    public init(frame: Int, position: [Double], target: [Double], fov: Double, roll: Double? = nil) {
+      self.frame = frame
+      self.position = position
+      self.target = target
+      self.fov = fov
+      self.roll = roll
+    }
+  }
+
+  /// Stamp of the keys array literal; edits address it with `setCameraRigKey`.
+  public let src: String
+  /// Stamp of the rig element.
+  public let element: String
+  public let name: String?
+  public let keys: [Key]
 }
 
 extension EditOperation {
@@ -277,4 +369,12 @@ extension EditOperation {
     let value = JSONValue.object(object)
     return Self(op: .setTimeline, src: src, key: "timeline", value: value)
   }
+}
+
+/// Source-backed text content. Containers and computed children are never replaced by a text edit.
+public struct TextSummary: Decodable, Sendable {
+  public let styleContent: Bool?
+  public let editable: Bool
+  public let value: String?
+  public let reason: String?
 }

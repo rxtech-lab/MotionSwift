@@ -26,6 +26,7 @@ public struct LayoutBox: Codable, Sendable, Equatable {
 /// Strict Phase 0 box painter. Unsupported styles fail instead of silently drawing incorrect output.
 /// A renderer owns one Skia surface and is not thread-safe; parallel renders use one per worker.
 public final class Renderer {
+  public let fonts = FontCollection()
   private let mediaDecoder = MediaDecoder()
   private var scene3D: SceneRenderer3D?
   private let canvas: Canvas
@@ -65,7 +66,7 @@ public final class Renderer {
     canvas.clear()
     boxes = []
     let layout = try LayoutEngine.calculate(
-      node, width: Double(composition.width), height: Double(composition.height))
+      node, width: Double(composition.width), height: Double(composition.height), fonts: fonts)
     canvas.save()
     defer { canvas.restore() }
     if pixelScale != 1 { canvas.scale(pixelScale, pixelScale) }
@@ -85,68 +86,111 @@ public final class Renderer {
   public func videoFrame() throws -> MetalVideoFrame { try canvas.videoFrame() }
 
   private func transform(_ style: Style, width: Double, height: Double) throws {
-    let value = style.string("transform")
-    if value.isEmpty || value == "none" { return }
-    let expression = try NSRegularExpression(pattern: #"([A-Za-z]+)\(([^)]+)\)"#)
-    let matches = expression.matches(in: value, range: NSRange(value.startIndex..., in: value))
-    var consumed = ""
-    canvas.translate(width / 2, height / 2)
-    for match in matches {
-      guard let nameRange = Range(match.range(at: 1), in: value),
-        let argRange = Range(match.range(at: 2), in: value),
-        let fullRange = Range(match.range, in: value)
-      else { continue }
-      consumed += value[fullRange]
-      let name = String(value[nameRange])
-      let args = value[argRange].split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
-      let unit = name == "rotate" ? "deg" : "px"
-      let numbers = args.compactMap {
-        Double($0.hasSuffix(unit) ? String($0.dropLast(unit.count)) : $0)
-      }
-      guard numbers.count == args.count, !numbers.isEmpty else {
-        throw MotionError("Unsupported transform: \(value)")
-      }
-      switch name {
-      case "translateX" where numbers.count == 1: canvas.translate(numbers[0], 0)
-      case "translateY" where numbers.count == 1: canvas.translate(0, numbers[0])
-      case "translate" where numbers.count <= 2:
-        canvas.translate(numbers[0], numbers.count == 2 ? numbers[1] : 0)
-      case "rotate" where numbers.count == 1: canvas.rotate(numbers[0])
-      case "scale" where numbers.count <= 2:
-        canvas.scale(numbers[0], numbers.count == 2 ? numbers[1] : numbers[0])
-      default: throw MotionError("Unsupported transform: \(value)")
-      }
-    }
-    guard consumed.filter({ !$0.isWhitespace }) == value.filter({ !$0.isWhitespace }) else {
-      throw MotionError("Unsupported transform: \(value)")
-    }
-    canvas.translate(-width / 2, -height / 2)
+    let origin = try style.origin(width: width, height: height)
+    canvas.translate(origin.0, origin.1)
+    canvas.concatenate(try CSSTransform.matrix(style.string("transform"), width: width, height: height))
+    canvas.translate(-origin.0, -origin.1)
   }
 
-  private func paint(_ layout: LayoutNode, id: String, origin: (Double, Double)) throws {
+  private struct PaintClip {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+  }
+
+  private struct PaintEntry {
+    let layout: LayoutNode
+    let id: String
+    let x: Double
+    let y: Double
+    let zIndex: Double
+    let onlySelf: Bool
+    let clips: [PaintClip]
+  }
+
+  /// Auto-z containers contribute their descendants to the nearest stacking context.
+  /// Transform/opacity/effect groups remain atomic, as do explicit z-index contexts.
+  private func stackingEntries(_ root: LayoutNode, id: String) -> [PaintEntry] {
+    var entries: [PaintEntry] = []
+    func visit(_ parent: LayoutNode, path: String, x: Double, y: Double, clips: [PaintClip], positioned: Bool) {
+      for (index, child) in parent.children.enumerated() {
+        let style = child.node.style
+        let context = style["zIndex"]?.number != nil || (style["opacity"]?.number ?? 1) < 1
+          || ["transform", "filter", "backdropFilter", "clipPath", "maskImage"].contains {
+            let value = style[$0]?.string ?? "none"
+            return !value.isEmpty && value != "none"
+          } || (style["mixBlendMode"]?.string ?? "normal") != "normal"
+
+        let childPositioned = positioned || ["relative", "absolute"].contains(style["position"]?.string ?? "")
+        let paintLevel = style["zIndex"]?.number ?? (context || childPositioned ? 0 : -0.5)
+        let childID = "\(path).\(index)"
+        entries.append(PaintEntry(layout: child, id: childID, x: x + child.x, y: y + child.y,
+                                  zIndex: paintLevel, onlySelf: !context, clips: clips))
+        if !context {
+          let childClips = style["overflow"]?.string == "hidden"
+            ? clips + [PaintClip(x: x + child.x, y: y + child.y, width: child.width, height: child.height)] : clips
+          visit(child, path: childID, x: x + child.x, y: y + child.y, clips: childClips, positioned: childPositioned)
+        }
+      }
+    }
+    visit(root, path: id, x: 0, y: 0, clips: [], positioned: false)
+    return entries.enumerated().sorted {
+      $0.element.zIndex == $1.element.zIndex ? $0.offset < $1.offset : $0.element.zIndex < $1.element.zIndex
+    }.map(\.element)
+  }
+
+  private func paint(_ layout: LayoutNode, id: String, origin: (Double, Double), onlySelf: Bool = false) throws {
     let node = layout.node
     let width = layout.width
     let height = layout.height
     if node.type == "ms-audio" { return }
-    if node.type == "#text" {
-      throw MotionError("Paragraph text layout is not implemented in this Phase 0 painter")
-    }
-    guard ["div", "span", "img", "ms-video", "ms-three"].contains(node.type) else {
+    guard ["div", "span", "img", "ms-video", "ms-three", "ms-svg", "#text", "p", "h1", "h2", "h3", "h4", "h5", "h6", "br",
+           "section", "header", "footer", "main", "strong", "b", "em", "i"].contains(node.type) else {
       throw MotionError("Unsupported element: \(node.type)")
     }
     let style = try Style(node.style)
     if style.string("display") == "none" { return }
     boxes.append(LayoutBox(id: id, x: origin.0, y: origin.1, width: width, height: height, source: node.source))
-    let opacity = try style.length("opacity", relativeTo: 1, fallback: 1)
-    guard (0...1).contains(opacity) else { throw MotionError("Opacity must be in 0...1") }
-    canvas.save(opacity: opacity)
+    let effects = try PaintEffects(style, width: width, height: height)
+    canvas.saveState()
     defer { canvas.restore() }
     try transform(style, width: width, height: height)
+    let group = try EffectGroup(effects, on: canvas)
+    defer { group.restore() }
+    let roundedBox = effects.gradient == nil && effects.shadows.isEmpty
+      ? try BorderPainter.paintsOpaqueRoundedBox(style, radius: effects.radius) : false
+    try effects.drawBackground(on: canvas, fill: !roundedBox)
+    try BorderPainter.draw(style, canvas: canvas, width: width, height: height, radius: effects.radius, paintBackground: roundedBox)
     if style.string("overflow") == "hidden" { canvas.clip(width: width, height: height) }
-    let background = style.string("backgroundColor", style.string("background", "transparent"))
-    let radius = try style.length("borderRadius", relativeTo: min(width, height))
-    canvas.rectangle(
-      width: width, height: height, radius: radius, color: try Style.color(background))
+    try paintMedia(node, style: style, width: width, height: height)
+    if let paragraph = layout.paragraph {
+      canvas.paragraph(paragraph, x: layout.textX, y: layout.textY)
+    }
+    if !onlySelf { try paintChildren(layout, id: id, origin: origin) }
+    try group.finish()
+  }
+
+  private func paintChildren(_ layout: LayoutNode, id: String, origin: (Double, Double)) throws {
+      let entries = stackingEntries(layout, id: id)
+      for entry in entries {
+        canvas.saveState()
+        for clip in entry.clips {
+          canvas.translate(clip.x, clip.y)
+          canvas.clip(width: clip.width, height: clip.height)
+          canvas.translate(-clip.x, -clip.y)
+        }
+        canvas.translate(entry.x, entry.y)
+        try paint(entry.layout, id: entry.id, origin: (origin.0 + entry.x, origin.1 + entry.y), onlySelf: entry.onlySelf)
+        canvas.restore()
+      }
+  }
+
+  private func paintMedia(_ node: RenderNode, style: Style, width: Double, height: Double) throws {
+    if node.type == "ms-svg" {
+      guard let src = node.src else { throw MotionError("Missing inline SVG document") }
+      try canvas.svg(Data(src.utf8), width: width, height: height)
+    }
     if node.type == "ms-three" {
       guard let scene = node.scene else { throw MotionError("<ThreeCanvas> did not commit a scene") }
       if scene3D == nil { scene3D = try SceneRenderer3D() }
@@ -157,11 +201,19 @@ public final class Renderer {
     }
     if node.type == "img" || node.type == "ms-video" {
       guard let src = node.src else { throw MotionError("Missing media source") }
-      if src.hasPrefix("data:image/svg+xml") {
+      if src.hasPrefix("data:image/svg+xml") || (try? MediaSource.url(src).pathExtension.lowercased()) == "svg" {
         guard style.string("objectFit") == "contain" else {
           throw MotionError("SVG images require objectFit: contain")
         }
-        try canvas.svg(MediaSource.data(src), width: width, height: height)
+        let bytes: Data
+        do {
+          bytes = src.hasPrefix("data:") ? try MediaSource.data(src) : try Data(contentsOf: MediaSource.url(src))
+        } catch let error as MotionError {
+          throw error
+        } catch {
+          throw MotionError("Cannot load SVG image: \(error.localizedDescription)")
+        }
+        try canvas.svg(bytes, width: width, height: height)
       } else {
         if node.type == "ms-video", node.media == nil { throw MotionError("Missing video timing") }
         if let image = try mediaDecoder.image(src, time: node.media?.time) {
@@ -170,11 +222,6 @@ public final class Renderer {
         }
       }
     }
-    for (index, child) in layout.children.enumerated() {
-      canvas.save()
-      canvas.translate(child.x, child.y)
-      try paint(child, id: "\(id).\(index)", origin: (origin.0 + child.x, origin.1 + child.y))
-      canvas.restore()
-    }
   }
+
 }

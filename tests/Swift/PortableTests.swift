@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 import MotionCompiler
 import MotionCore
 import MotionPortable
@@ -144,4 +145,106 @@ func portableAndMacGraphsMatchTsgoPixels(composition: String) throws {
   #expect(summary.group(for: "width") == "Size")
   #expect(summary.group(for: "fontSize") == "Text")
   #expect(summary.group(for: "opacity") == "Appearance")
+}
+
+@Test func portableContentCacheRevalidatesDependenciesAndOptions() throws {
+  let compiler = try PortableCompiler()
+  var files = ["main.ts": "export {value} from './value.js';", "value.ts": "export const value: number = 1;"]
+  files["value.js"] = "export const value = 99;"
+  let start = Date()
+  let cold = try compiler.compile(files: files, entry: "main.ts")
+  #expect(cold.modules["main.ts"]?.dependencies["./value.js"] == "value.ts")
+  let coldTime = Date().timeIntervalSince(start)
+  #expect(compiler.cacheStatistics == .init(hits: 0, misses: 2))
+  let warmStart = Date()
+  let warm = try compiler.compile(files: files, entry: "main.ts")
+  print("Portable cache: cold \(coldTime * 1000) ms; warm \(Date().timeIntervalSince(warmStart) * 1000) ms; hits=2 misses=0")
+  #expect(compiler.cacheStatistics == .init(hits: 2, misses: 0))
+  #expect(try cold.encoded() == warm.encoded())
+  files["value.ts"] = "export const value: number = 2;"
+  let changed = try compiler.compile(files: files, entry: "main.ts")
+  #expect(compiler.cacheStatistics == .init(hits: 1, misses: 1))
+  #expect(changed != cold)
+  _ = try compiler.compile(files: files, entry: "main.ts", stamp: true)
+  #expect(compiler.cacheStatistics.misses == 2)
+  files["value.ts"] = nil
+  let fallback = try compiler.compile(files: files, entry: "main.ts")
+  #expect(fallback.modules["main.ts"]?.dependencies["./value.js"] == "value.js")
+  files["value.js"] = nil
+  #expect(throws: EditError.self) { try compiler.compile(files: files, entry: "main.ts") }
+}
+
+@Test func portableAliasesPreferExactThenLongestPrefixAndOrderedFallbacks() throws {
+  let compiler = try PortableCompiler()
+  var files = [
+    "tsconfig.json": #"{"extends":"./config/base","compilerOptions":{"paths":{"@/*":["missing/*","src/*"],"#
+      + #""@/deep/*":["deep/*"],"@/deep/value":["exact.ts"],"*suffix":["src/prefix*.ts"]}}}"#,
+    "config/base.json": #"{/* JSONC */ "compilerOptions":{"baseUrl":"..", /* trailing */},}"#,
+    "main.ts": "export {x} from '@/deep/value'; export {y} from '@/deep/other'; export {z} from '@/fallback'; export {s} from 'suffix';",
+    "exact.ts": "export const x = 1;", "deep/other.ts": "export const y = 2;", "src/fallback.ts": "export const z = 3;",
+    "src/prefix.ts": "export const s = 4;",
+  ]
+  let graph = try compiler.compile(files: files, entry: "main.ts")
+  #expect(graph.modules["main.ts"]?.dependencies == [
+    "@/deep/value": "exact.ts", "@/deep/other": "deep/other.ts", "@/fallback": "src/fallback.ts", "suffix": "src/prefix.ts",
+  ])
+  files["exact.ts"] = nil
+  do {
+    _ = try compiler.compile(files: files, entry: "main.ts")
+    Issue.record("Expected unresolved alias")
+  } catch {
+    #expect(String(describing: error).contains("main.ts:1:17:"))
+  }
+}
+
+@Test func portableMapsOriginalColumnsAfterMultipleStampsAndLinking() throws {
+  let source = "const View = () => <div><span />{(() => { throw Error('mapped-fixture'); })()}</div>;\nView();"
+  let compiler = try PortableCompiler()
+  let graph = try compiler.compile(files: ["src/view.tsx": source], entry: "src/view.tsx", stamp: true)
+  #expect(graph.modules["src/view.tsx"]?.code.contains("src/view.tsx:1:25") == true)
+  #expect(graph.modules["src/view.tsx"]?.sourceMap?.contains("sourcesContent") == true)
+  #expect(try ModuleGraph(data: graph.encoded()) == graph)
+  let linked = try GraphLinker.link(graph)
+  let context = try #require(JSContext())
+  context.evaluateScript("function __ms_start() {}")
+  context.evaluateScript(linked)
+  let range = try #require(linked.range(of: "Error('mapped-fixture')"))
+  let prefix = linked[..<range.lowerBound].split(separator: "\n", omittingEmptySubsequences: false)
+  let generated = "motionswift:bundle:\(prefix.count):\((prefix.last?.utf16.count ?? 0) + 1)"
+  let originalRange = try #require(source.range(of: "Error("))
+  let original = source.distance(from: source.startIndex, to: originalRange.lowerBound) + 1
+  let mapped = context.objectForKeyedSubscript("__ms_mapStack")?.call(withArguments: [generated])?.toString()
+  #expect(mapped == "src/view.tsx:1:\(original)", "\(mapped ?? "missing position")")
+  print("Portable original-source example: \(mapped ?? "missing position")")
+  do { _ = try Runtime(bundle: linked); Issue.record("Expected mapped runtime error") } catch {
+    let message = String(describing: error)
+    #expect(message.contains("mapped-fixture"))
+    #expect(message.contains("src/view.tsx:1:"), "\(message)")
+  }
+}
+
+@Test func portableImportDiagnosticsUseOriginalSourceLocations() throws {
+  do {
+    _ = try PortableCompiler().compile(files: ["src/main.ts": "// header\nimport {x} from './missing';\nexport {x};"], entry: "src/main.ts")
+    Issue.record("Expected unresolved import")
+  } catch { #expect(String(describing: error).contains("src/main.ts:2:17:")) }
+  // A string that looks like a require must never become a dependency.
+  let graph = try PortableCompiler().compile(files: ["main.ts": #"export const text = "require('fake')";"#], entry: "main.ts")
+  #expect(graph.modules["main.ts"]?.dependencies.isEmpty == true)
+}
+
+@Test func portableDependencyErrorsMapThroughLinkedModules() throws {
+  let graph = try PortableCompiler().compile(files: [
+    "main.ts": "import './z'; export const value = 1;",
+    "z.ts": "type Label = string;\nconst label: Label = 'dependency-map';\nthrow Error(label);",
+  ], entry: "main.ts", stamp: true)
+  let restored = try ModuleGraph(data: graph.encoded())
+  do {
+    _ = try Runtime(bundle: GraphLinker.link(restored))
+    Issue.record("Expected dependency error")
+  } catch {
+    let message = String(describing: error)
+    #expect(message.contains("dependency-map"))
+    #expect(message.contains("z.ts:3:"), "\(message)")
+  }
 }

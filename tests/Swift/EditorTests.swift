@@ -369,3 +369,60 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(model.notice?.kind == .refusal)
   #expect(try String(contentsOf: file, encoding: .utf8) == updated)
 }
+
+@MainActor
+@Test func editorTextSavesReloadsUndoesAndProtectsExternalChanges() async throws {
+  let project = try temporarySample()
+  defer { try? FileManager.default.removeItem(at: project) }
+  let file = project.appendingPathComponent("src/Cards.tsx")
+  let original = """
+    import React from 'react';
+    import {AbsoluteFill} from 'remotion';
+    export const Cards = () => <AbsoluteFill>
+      <div style={{position: 'absolute', left: 48, top: 48, fontSize: 24}}>原始文字</div>
+    </AbsoluteFill>;
+    """
+  try original.write(to: file, atomically: true, encoding: .utf8)
+  let model = EditorModel(project: project, entry: "src/index.ts", configuration: .init(scale: 1))
+  await model.open(compositionID: "Cards")
+  try await waitUntil { model.player.displayedFrame != nil }
+  let target = try #require(await model.textEditTarget(at: CGPoint(x: 55, y: 55)))
+  #expect(target.text == "原始文字")
+  #expect(target.fontSize == 24)
+  #expect(target.expectedSource == original)
+  #expect(target.rect == model.selectedRect)
+  #expect(!model.player.isPlaying)
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  let selection = target.source
+  #expect(model.textContent?.editable == true)
+  #expect(model.textContent?.value == "原始文字")
+  #expect(await model.setText(target.text, source: selection, expectedSource: original))
+  #expect(!model.canUndo)
+  #expect(model.commitFeedback == 0)
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  let replacement = "新的文字 <&> {hello} 😀"
+  // Clicking away may change selection before the native editor resigns focus.
+  model.clearSelection()
+  #expect(await model.setText(replacement, source: selection, expectedSource: original, requiresSelection: false))
+  model.select(at: CGPoint(x: 55, y: 55))
+  try await waitUntil { model.textContent != nil }
+  #expect(model.textContent?.value == replacement)
+  #expect(model.canUndo)
+  let saved = try String(contentsOf: file, encoding: .utf8)
+  #expect(saved.contains(replacement))
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  #expect(model.textContent?.value == "原始文字")
+  await model.redo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == saved)
+  #expect(model.textContent?.value == replacement)
+  // A stale sheet must not overwrite an edit performed since the sheet opened.
+  #expect(await model.setText("stale", source: selection, expectedSource: original) == false)
+  #expect(model.notice?.kind == .conflict)
+  // Changes on disk are protected even if the in-memory draft is still current.
+  let external = saved + "\n// external edit\n"
+  try external.write(to: file, atomically: true, encoding: .utf8)
+  #expect(await model.setText("overwrite", source: selection, expectedSource: saved) == false)
+  #expect(model.notice?.kind == .conflict)
+  #expect(try String(contentsOf: file, encoding: .utf8) == external)
+}

@@ -10,8 +10,11 @@ public struct ModuleGraph: Codable, Sendable, Equatable {
     public var code: String
     /// Import specifier → module path in this graph, or `vendor:<specifier>`.
     public var dependencies: [String: String]
+    /// Source Map v3 JSON, mapping generated module code to original project sources.
+    public var sourceMap: String?
 
-    public init(code: String, dependencies: [String: String]) {
+    public init(code: String, dependencies: [String: String], sourceMap: String? = nil) {
+      self.sourceMap = sourceMap
       self.code = code
       self.dependencies = dependencies
     }

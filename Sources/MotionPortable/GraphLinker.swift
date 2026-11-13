@@ -9,10 +9,17 @@ public enum GraphLinker {
   public static func link(_ graph: ModuleGraph) throws -> String {
     try graph.validate()
     var script = try Vendor.script()
+    script += "\n" + (try Vendor.resource("map-stack", "js"))
+    var maps: [String] = []
     script += "\nvar __ms_graph=(function(){var defs={"
     for path in graph.modules.keys.sorted() {
       guard let module = graph.modules[path] else { continue }
       let dependencies = try json(module.dependencies)
+      if let sourceMap = module.sourceMap {
+        let offset = script.reduce(0) { $1 == "\n" ? $0 + 1 : $0 } + 2
+        let lines = module.code.reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        maps.append("{offset:\(offset),lines:\(lines),map:\(sourceMap)}")
+      }
       script += "\n\(try json(path)):[function(module,exports,require){\n\(module.code)\n},\(dependencies)],"
     }
     script += """
@@ -33,6 +40,7 @@ public enum GraphLinker {
         shim:'vendor:@motionswift/remotion',entry:\(try json(graph.entry))};
       function __ms_require(id){return __ms_graph(id);}
       globalThis.__ms_resetModules=()=>{__ms_graph.reset();globalThis.__ms_root=null;};
+      globalThis.__ms_sourceMaps=[\(maps.joined(separator: ","))];
       __ms_start();
 
       """

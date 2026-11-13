@@ -145,8 +145,9 @@ globalThis.__ms_start = function() {
     const visit = (node, path) => {
       // A <ThreeCanvas> commits its R3F subtree as one scene description instead of layout children.
       const scene = typeof node.props.__msScene === 'function' ? node.props.__msScene(node) : null;
-      const children = scene !== null ? [] : node.children.map((child,index) => { const id=path+'.'+index; visit(child,id); return id; });
-      const data = {type:node.type,style:node.props.style||{},text:node.text??null,src:node.props.src??null,source:node.props['data-ms-src']??null,media:node.props['data-ms-media']??null,scene};
+      const svg = node.type === "svg" ? shim.__svgHost(node) : null;
+      const children = scene !== null || svg !== null ? [] : node.children.map((child,index) => { const id=path+'.'+index; visit(child,id); return id; });
+      const data = {type:svg ? "ms-svg" : node.type,style:svg ? svg.style : node.props.style||{},text:node.text??null,src:svg ? svg.src : node.props.src??null,source:node.props['data-ms-src']??null,media:node.props['data-ms-media']??null,scene};
       const old = retained.get(path);
       // Copy values: style objects may be mutated by user code on a subsequent render.
       const copy = JSON.parse(JSON.stringify(data));
