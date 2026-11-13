@@ -16,8 +16,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make bootstrap build
+      - name: Probe hardware encoder access
+        run: node tests/tools/hardware-capabilities.mjs
       - name: Real software and hardware codec fixtures
-        run: MOTIONSWIFT_TEST_HARDWARE=1 swift test --no-parallel --filter 'Encoder|codecCombinations|remainingSoftware|segmentConcatenation|sharedIOSurface|hevcHardware'
+        run: swift test --no-parallel --filter 'Encoder|codecCombinations|remainingSoftware|segmentConcatenation|sharedIOSurface|hevcHardware'
       - name: Frame-step, alpha, concat and cancellation
         run: node tests/tools/codec-cli.mjs
       - name: Enforce measured codec time and memory budgets

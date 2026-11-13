@@ -59,6 +59,22 @@ private func verifyVideo(encoder: VideoEncoder) throws {
   try verifyVideo(encoder: .software)
 }
 
+@Test func failedEncoderThrowsWithoutTerminatingHost() throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  let output = directory.appendingPathComponent("video.mp4")
+  // An existing directory is an invalid output even when FFmpeg uses -y.
+  try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let stream = try VideoStream(output: output, width: 320, height: 180, fps: 24)
+  defer { stream.cancel() }
+  let frame = Data(repeating: 255, count: 320 * 180 * 4)
+  #expect(throws: MotionError.self) {
+    // Exceed pipe capacity so writes encounter the child closing its input.
+    for _ in 0..<32 { try stream.write(frame) }
+    try stream.finish()
+  }
+}
+
 // Opt in on a host with an accessible hardware encoder; absence must not count as a pass.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["MOTIONSWIFT_TEST_HARDWARE"] == "1"))
 func hardwareEncoderProducesDecodableVideo() throws {

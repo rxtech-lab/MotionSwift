@@ -124,7 +124,7 @@ async function measure(record,engine,{fixture,tier,range,props,slug,expectedFram
     fps:count/(median(times)/1000),outputBytes:fs.statSync(video).size,metadata,logFile,video};
   if(engine!=='remotion') {
     measured.stages=readJSON(report);
-    const expected=engine==='gpu-shared'?'videotoolbox-iosurface':`ffmpeg-${engine==='gpu-hw'?'h264_videotoolbox':'libx264'}-rawvideo-pipe`;
+    const expected=engine==='gpu-shared'?'videotoolbox-iosurface-h264':`ffmpeg-${engine==='gpu-hw'?'h264_videotoolbox':'libx264'}`;
     if(measured.stages.encoder!==expected)throw Error(`Expected ${expected}, got ${measured.stages.encoder}`);
   }
   return measured;
@@ -150,7 +150,10 @@ try {
         continue;
       }
       try {record[engine]=await measure(record,engine,{fixture,tier,range,props,slug,expectedFrames});}
-      catch(error) {record[engine]={status:'failed',error:String(error),logFile:`logs/${slug}-${engine}.log`};failed=true;}
+      catch(error) {
+        console.error(`${id} ${engine}: ${error}`);
+        record[engine]={status:'failed',error:String(error),logFile:`logs/${slug}-${engine}.log`};failed=true;
+      }
     }
     // Remotion is the reference when it ran; otherwise (tiers beyond Chrome's reliable scale)
     // the GPU backend is checked against the CPU backend, which is itself gated by the goldens.

@@ -19,10 +19,16 @@ const generated=join(root,'tests/perf/long.js');
 const generatedExisted=existsSync(generated);
 if(budgets&&budgets.machine.cpu!==cpus()[0].model)throw Error('Codec budgets require '+budgets.machine.cpu+'; use --measure-only to establish budgets for this host');
 const results=[];
+const skipped=[];
 let failed=false;
 try {
   for(const frames of [30,300])for(const [codec,encoder,backend] of matrix) {
     const id=`${codec}/${encoder}/${frames}`;
+    if(encoder!=='software'&&process.env.MOTIONSWIFT_TEST_HARDWARE==='0') {
+      skipped.push({id,reason:'Hardware encoder unavailable (preflight); hardware performance is unverified'});
+      console.log(`${id}: SKIPPED (hardware encoder unavailable)`);
+      continue;
+    }
     const file=join(work,`video.${codec.startsWith('prores')?'mov':'mp4'}`);
     const report=join(work,'stages.json');
     const args=['render','--project',join(root,'tests'),'--entry','perf/long.tsx','Layers',file,
@@ -52,7 +58,7 @@ try {
     console.log(`${id}: ${medianMs.toFixed(1)} ms, ${(peakRssBytes/1048576).toFixed(1)} MiB${regression?' REGRESSION':''}`);
   }
 } finally {
-  writeFileSync(join(output,'results.json'),JSON.stringify({machine:{cpu:cpus()[0].model,platform:platform(),arch:arch()},measureOnly,results},null,2));
+  writeFileSync(join(output,'results.json'),JSON.stringify({machine:{cpu:cpus()[0].model,platform:platform(),arch:arch()},measureOnly,results,skipped},null,2));
   rmSync(work,{recursive:true,force:true});
   if(!generatedExisted)rmSync(generated,{force:true});
 }

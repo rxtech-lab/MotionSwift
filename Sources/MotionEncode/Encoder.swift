@@ -14,6 +14,8 @@ public enum VideoEncoder: String, Sendable {
 }
 
 #if os(macOS)
+import Darwin
+
 /// Streams unpremultiplied RGBA8888 frames into ffmpeg through a pipe, so rendered
 /// frames never round-trip through PNG files. Write frames in presentation order.
 /// Hardware encoding still reads CPU pixels; this is not a zero-copy Metal encoder.
@@ -41,6 +43,11 @@ public final class VideoStream {
       "-pix_fmt", settings.pixelFormat.rawValue, output.path,
     ]
     process.standardInput = input
+    // Keep a failed child local to this stream, without changing the host app's
+    // process-wide SIGPIPE handler. FileHandle can then throw EPIPE on writes.
+    guard fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+      throw MotionError("Cannot configure ffmpeg input pipe: \(String(cString: strerror(errno)))")
+    }
     // Inherit stderr so encoder errors stay visible and cannot fill a pipe.
     try process.run()
   }
