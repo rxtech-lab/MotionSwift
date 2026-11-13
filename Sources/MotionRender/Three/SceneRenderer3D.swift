@@ -297,6 +297,7 @@ private final class LibraryCache: @unchecked Sendable {
       // Preserve floating-point edge cases across repeated exports and GPU driver implementations.
       if #available(macOS 15, iOS 18, *) {
         options.mathMode = .safe
+        options.mathFloatingPointFunctions = .precise
       } else {
         options.fastMathEnabled = false
       }
