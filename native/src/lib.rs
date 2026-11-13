@@ -5,15 +5,7 @@ use skia_safe::{
 };
 use std::ffi::{c_char, c_void, CStr};
 extern "C" {
-    fn msk_solid_rrect(
-        canvas: *const c_void,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        radius: f32,
-        color: u32,
-    );
+    fn msk_shader_borders(canvas: *const c_void);
     fn msk_rrect_mask(
         canvas: *const c_void,
         left: f32,
@@ -258,11 +250,7 @@ pub unsafe extern "C" fn msk_create_gpu(
         return std::ptr::null_mut();
     }
     let backend = gpu::mtl::BackendContext::new(device, queue);
-    // Shader tiling implements transparent borders on the GPU without requiring a
-    // clamp-to-border sampler, which virtual Metal devices do not support.
-    let mut options = gpu::ContextOptions::default();
-    options.reduced_shader_variations = true;
-    let Some(mut context) = gpu::direct_contexts::make_metal(&backend, Some(&options)) else {
+    let Some(mut context) = gpu::direct_contexts::make_metal(&backend, None) else {
         return std::ptr::null_mut();
     };
     // Blend in half-float and round to 8 bits once, on readback, like the raster backend's
@@ -279,7 +267,10 @@ pub unsafe extern "C" fn msk_create_gpu(
         false,
         None,
     )
-    .map(|s| boxed(s, Some(context)))
+    .map(|mut surface| {
+        msk_shader_borders(surface.canvas() as *const skia_safe::Canvas as *const c_void);
+        boxed(surface, Some(context))
+    })
     .unwrap_or(std::ptr::null_mut())
 }
 /// Select the CSS effects pipeline before drawing a frame. Existing SVG data-URI
@@ -579,18 +570,6 @@ pub unsafe extern "C" fn msk_rect(
             target.effects_precision,
         )
     {
-        return;
-    }
-    if target.context.is_some() && radius > 0. {
-        msk_solid_rrect(
-            target.surface.canvas() as *const skia_safe::Canvas as *const c_void,
-            x,
-            y,
-            w,
-            h,
-            radius,
-            color,
-        );
         return;
     }
     let mut paint = Paint::default();

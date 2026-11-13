@@ -188,19 +188,21 @@ extern "C" void msk_rrect_mask(void* ptr,float left,float top,float right,float 
     SkPaint paint;paint.setShader(builder.makeShader());canvas->drawRect(SkRect::MakeLTRB(left-1,top-1,right+1,bottom+1),paint);
 }
 
-// Reduced shader mode also replaces Ganesh's analytic circular-rrect coverage.
-// Keep that geometry path for solid fills; it does not sample any texture. Restore
-// shader tiling before recording image/filter draws so virtual Metal stays supported.
+// Skia 0.99 assumes every macOS Metal device supports border samplers, including
+// virtual devices that reject them. Disable that capability before recording draws;
+// Ganesh then implements decal edges in its texture shaders on the same GPU.
 #include "src/gpu/ganesh/GrRecordingContextPriv.h"
 #include "src/gpu/ganesh/GrCaps.h"
-#include "src/gpu/ganesh/GrShaderCaps.h"
-extern "C" void msk_solid_rrect(const void* raw,float x,float y,float w,float h,float radius,uint32_t color) {
-    auto canvas=const_cast<SkCanvas*>(static_cast<const SkCanvas*>(raw));
-    auto context=canvas->recordingContext();
-    auto caps=context?const_cast<GrShaderCaps*>(context->priv().caps()->shaderCaps()):nullptr;
-    bool reduced=caps && caps->fReducedShaderMode;
-    if(caps)caps->fReducedShaderMode=false;
-    SkPaint paint;paint.setColor(color);paint.setAntiAlias(true);
-    canvas->drawRoundRect(SkRect::MakeXYWH(x,y,w,h),radius,radius,paint);
-    if(caps)caps->fReducedShaderMode=reduced;
+void disableBorderSamplers(GrCaps&);
+// Explicit template instantiation permits access to the pinned protected capability
+// (C++20 [temp.explicit]). This avoids layout casts or modifying Skia's binary ABI.
+template<auto setter> struct BorderCapabilityAccess {
+    friend void disableBorderSamplers(GrCaps& caps) { setter(caps); }
+};
+template struct BorderCapabilityAccess<[](GrCaps& caps) { caps.fClampToBorderSupport=false; }>;
+extern "C" void msk_shader_borders(const void* raw) {
+    auto canvas=static_cast<const SkCanvas*>(raw);
+    if(auto context=canvas->recordingContext()) {
+        disableBorderSamplers(*const_cast<GrCaps*>(context->priv().caps()));
+    }
 }

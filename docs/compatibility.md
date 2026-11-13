@@ -207,8 +207,8 @@ Maximum changed-pixel percentages across the effects samples:
 
 | Fixture | CPU | Metal |
 |---|---:|---:|
-| Gradients | 0.1389% | 0.1667% |
-| Shadows | 0.2118% | 0.2882% |
+| Gradients | 0.1389% | 0.0955% |
+| Shadows | 0.2118% | 0.2604% |
 | Filters | 0.1528% | 0.1528% |
 | Blending | 0% | 0% |
 | Clip / filter / mask / transparency interaction | 0.2378% | 0.2396% |
@@ -223,8 +223,8 @@ Maximum changed-pixel percentages across the effects samples:
 The native implementation aligns gradient dithering, Gaussian weights, intermediate color
 rounding, clipping coverage and SVG antialiasing with the pinned Chrome fixtures. Small
 Gaussian blurs use separable runtime filters; larger radii use Skia's native blur on the
-selected backend. Metal filters use shader tiling for transparent borders on devices without
-hardware border samplers; solid rounded boxes preserve analytic coverage. Thread-local Rust
+selected backend. The Metal adapter disables unsupported border samplers before recording draws, so Ganesh
+emulates transparent borders in GPU shaders while preserving normal antialiasing paths. Thread-local Rust
 runtime-effect caches are bounded. SVG shader and
 external-document caching remain performance work. Existing data-URI SVG scenes keep their
 original raster path; a retained renderer can switch between this path and CSS effects.
