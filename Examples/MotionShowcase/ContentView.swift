@@ -5,10 +5,22 @@ import SwiftUI
 
 enum SidebarItem: Hashable {
   case media
+  case scenes3D
   case gallery
   case testFilm
   case editor
   case composition(String)
+}
+
+extension SidebarItem {
+  static var launch: SidebarItem {
+    switch ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] {
+    case "editor": .editor
+    case "media": .media
+    case "3d": .scenes3D
+    default: .gallery
+    }
+  }
 }
 
 struct ShowcaseSettings: Equatable {
@@ -25,10 +37,8 @@ struct ProjectLocation: Equatable {
 struct ContentView: View {
   @State private var player = MotionPlayer()
   @State private var testFilmPlayer = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
-  /// `MOTIONSWIFT_SHOWCASE_START=editor` opens the visual editor first (demos and screenshots).
-  @State private var selection: SidebarItem? =
-    ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "editor" ? .editor :
-      (ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "media" ? .media : .gallery)
+  /// `MOTIONSWIFT_SHOWCASE_START=editor|media|3d` opens that destination first (demos and screenshots).
+  @State private var selection: SidebarItem? = SidebarItem.launch
   @State private var settings = ShowcaseSettings()
   @State private var location = ProjectLocation(
     project: ShowcaseDefaults.project, entry: ShowcaseDefaults.entry)
@@ -52,14 +62,14 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
           .keyboardShortcut("r")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D)
       }
     }
     .sheet(isPresented: $showsSettings) {
@@ -106,6 +116,11 @@ struct ContentView: View {
         Label("Gallery", systemImage: "square.grid.2x2").tag(SidebarItem.gallery)
         Label("Media Composition", systemImage: "rectangle.stack.fill").tag(SidebarItem.media)
         VStack(alignment: .leading, spacing: 2) {
+          Label("3D Scenes", systemImage: "cube.transparent")
+          Text("three.js · USDZ · Metal").font(.caption).foregroundStyle(.secondary)
+        }
+        .tag(SidebarItem.scenes3D)
+        VStack(alignment: .leading, spacing: 2) {
           Label("Test Film", systemImage: "film")
           Text("1920×1080 · \(liveRate(testFilmPlayer))")
             .font(.caption)
@@ -142,6 +157,8 @@ struct ContentView: View {
     switch selection {
     case .media:
       MediaDemoView()
+    case .scenes3D:
+      Scenes3DView()
     case .testFilm:
       TestFilmView(player: testFilmPlayer)
     case .editor:

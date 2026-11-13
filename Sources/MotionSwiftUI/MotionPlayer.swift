@@ -27,6 +27,17 @@ public enum MotionSource: Sendable, Equatable {
   case project(repository: URL, project: URL, entry: String)
   #endif
 
+  /// The project's `public/` folder for `staticFile()` assets, when the source is a project directory.
+  var publicDirectory: URL? {
+    switch self {
+    case .portable(let project, _, _): return project.appendingPathComponent("public")
+    #if os(macOS)
+    case .project(_, let project, _): return project.appendingPathComponent("public")
+    #endif
+    default: return nil
+    }
+  }
+
   func compile() throws -> String {
     switch self {
     case .bundle(let bundle): return bundle
@@ -134,6 +145,7 @@ public final class MotionPlayer {
     loadGeneration += 1
     let generation = loadGeneration
     mediaPlayback.reset()
+    if let folder = source.publicDirectory { MediaSource.publicDirectory = folder }
     status = .loading
     do {
       let (bundle, catalog) = try await Self.onLargeStack {

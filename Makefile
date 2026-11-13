@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 export PKG_CONFIG_PATH := $(CURDIR)/native/pkgconfig:$(PKG_CONFIG_PATH)
-.PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark showcase ci
+.PHONY: lint lint-fix bootstrap compiler native native-ios ios build test visual goldens benchmark runtime-benchmark showcase ci three-visual three-goldens three-benchmark
 .NOTPARALLEL:
 
 lint:
@@ -45,10 +45,25 @@ visual: build
 goldens:
 	node tests/tools/generate-goldens.mjs
 
+# 3D: native Metal ThreeCanvas stills vs Remotion three.js references (CPU and GPU compositing).
+three-visual: build
+	node tests/tools/three-visual.mjs --backend=cpu
+	node tests/tools/three-visual.mjs --backend=gpu
+
+three-goldens:
+	node tests/tools/three-goldens.mjs
+
+# 3D: Remotion vs native video timings at 360p and 1080p with SSIM parity and a minimum speedup.
+three-benchmark: build
+	node tests/perf/three.mjs
+
 benchmark: build
 	node tests/perf/bench.mjs
+
+runtime-benchmark: compiler native
+	node tests/perf/runtime.mjs
 
 showcase: compiler native
 	swift run -c release motionswift-showcase
 
-ci: test visual
+ci: test visual three-visual

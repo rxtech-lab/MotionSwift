@@ -1,11 +1,36 @@
 {
   "name": "@motionswift/remotion",
   "version": "0.1.0",
+  "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
   "exports": {
-    ".": {"types": "./index.d.ts", "default": "./index.js"},
-    "./jsx-runtime": {"types": "./jsx-runtime.d.ts", "default": "./jsx-runtime.js"}
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./jsx-runtime.d.ts",
+      "default": "./jsx-runtime.js"
+    },
+    "./three": {
+      "types": "./three.d.ts",
+      "default": "./three.js"
+    },
+    "./fiber": {
+      "types": "./fiber.d.ts",
+      "default": "./fiber.js"
+    },
+    "./remotion-three": {
+      "types": "./remotion-three.d.ts",
+      "default": "./remotion-three.js"
+    },
+    "./usd-loader": {
+      "types": "./usd-loader.d.ts",
+      "default": "./usd-loader.js"
+    }
   },
-  "peerDependencies": {"react": "18.3.1"}
+  "peerDependencies": {
+    "react": "18.3.1"
+  }
 }

@@ -124,6 +124,7 @@ func run() throws {
     return
   }
   let project = URL(fileURLWithPath: arguments.options["project"] ?? ".").standardizedFileURL
+  MediaSource.publicDirectory = project.appendingPathComponent("public")
   let startup = Date()
   if command == "check" {
     let diagnostics = try Compiler().checkTypes(

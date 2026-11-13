@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "project": "three",
+  "entryPoint": "src/index.ts",
+  "publicDir": "public",
+  "chromiumOptions": {"gl": "angle"},
+  "gate": {
+    "maxChangedRatio": 0.04,
+    "largeDelta": 8,
+    "maxLargeDeltaRatio": 0.003,
+    "minPSNR": 48
+  },
+  "fixtures": [
+    {"id": "three/crystal-orbit", "composition": "CrystalOrbit", "frames": [0, 23, 45, 67, 89]},
+    {"id": "three/neon-city", "composition": "NeonCity", "frames": [0, 20, 40, 60, 80]},
+    {"id": "three/probe-fleet", "composition": "ProbeFleet", "frames": [0, 30, 60, 89]},
+    {"id": "three/geometry-lab", "composition": "GeometryLab", "frames": [0, 10, 59]}
+  ],
+  "benchmark": {
+    "compositions": ["CrystalOrbit", "NeonCity", "ProbeFleet"],
+    "tiers": [{"id": "360p", "scale": 1}, {"id": "1080p", "scale": 3}],
+    "concurrency": 8,
+    "minSSIM": 0.97,
+    "minSpeedup": 1.0
+  }
+}

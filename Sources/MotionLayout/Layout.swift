@@ -35,7 +35,7 @@ public enum LayoutEngine {
     }
     return RenderNode(
       type: node.type, style: values, text: node.text, src: node.src, source: node.source, media: node.media,
-      children: node.children.map { inherit($0, parent: values) })
+      scene: node.scene, children: node.children.map { inherit($0, parent: values) })
   }
 
   private static func build(_ input: RenderNode, config: YGConfigRef) throws -> YGNodeRef {

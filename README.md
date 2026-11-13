@@ -108,9 +108,25 @@ Measured on an Apple M4 Max (16 cores, 128 GB), eight workers per engine, one ru
 
 [Comparison results and reproduction](docs/benchmarks/2026-11-12-remotion-comparison.md) · [Memory measurements](docs/benchmarks/2026-11-12-memory.md).
 
+### 3D scenes with three.js and USDZ
+
+`@remotion/three` compositions render natively. `<ThreeCanvas>` scenes written with React Three Fiber elements run through a Metal port of three.js's shading. The scenes can use keyframed cameras, moving and rotating meshes, animated lights, fog, transparency and USDZ models loaded with `useLoader(USDLoader, staticFile(...))`. On three complex test scenes (up to 1,200+ meshes and a 13× instanced USDZ model), native export was **11.5× faster than Remotion** (geometric mean, 360p and 1080p). Still frames stay within a PSNR ≥ 48 dB gate of Remotion's three.js output.
+
+| Crystal Orbit | Neon City | Probe Fleet (USDZ) |
+|---|---|---|
+| ![Crystal Orbit](docs/images/rendering/ThreeCrystalOrbit.png) | ![Neon City](docs/images/rendering/ThreeNeonCity.png) | ![Probe Fleet](docs/images/rendering/ThreeProbeFleet.png) |
+
+The showcase's **3D Scenes** page plays all of them live (`MOTIONSWIFT_SHOWCASE_START=3d make showcase`). See [3D support](docs/three-d.md) for the API subset and the [3D benchmark](docs/benchmarks/2026-11-13-three.md).
+
 ### Compose smaller clips with media
 
 The showcase's **Media Composition** page opens a 24-second master containing reusable montage,
 image and video compositions. Double-click a nested composition on the canvas or timeline to
 open it; return through the breadcrumbs with the parent's playhead preserved. Playback controls,
 mute, a scrubbable multitrack timeline, and an export sheet follow the selected composition. See [nested clips and media](docs/media-compositions.md) for the supported APIs and limits.
+
+## License
+
+MotionSwift's original source code is available under the [MIT License](LICENSE).
+Third-party dependencies and bundled tools retain their own licenses; the MIT
+License does not replace their license terms or notices.

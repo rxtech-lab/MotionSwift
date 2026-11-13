@@ -48,6 +48,9 @@ jobs:
       - name: Benchmark actual Test Film project (full clip)
         if: ${{ !cancelled() }}
         run: node tests/perf/test-film.mjs --allow-unavailable-hardware --work-dir "$RUNNER_TEMP"
+      - name: Benchmark complex 3D scenes against Remotion three.js (parity + speed gate)
+        if: ${{ !cancelled() }}
+        run: node tests/perf/three.mjs --allow-unavailable-hardware
       - name: Combine synthetic and Test Film benchmark tables
         if: always()
         run: node tests/perf/combine-summaries.mjs

@@ -45,3 +45,9 @@ jobs:
           if ls tests/reports/visual/*/results.json >/dev/null 2>&1; then
             node tests/tools/visual-summary.mjs >> "$GITHUB_STEP_SUMMARY"
           fi
+          for backend in cpu gpu; do
+            report="tests/reports/three/$backend/results.json"
+            if [ -f "$report" ]; then
+              node -e 'const r=require(process.argv[1]);console.log(`### 3D visual (${r.backend}): ${r.pass?"PASS":"FAIL"}\n\n| Fixture | Frame | Changed | >${r.gate.largeDelta} | PSNR | Repeatable |\n|---|---|---|---|---|---|\n`+r.results.filter(x=>!x.error).map(x=>`| ${x.id} | ${x.frame} | ${(x.changedRatio*100).toFixed(3)}% | ${(x.largeDeltaRatio*100).toFixed(3)}% | ${x.psnr} dB | ${x.deterministic?"yes":"no"} |`).join("\n"))' "$PWD/$report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done

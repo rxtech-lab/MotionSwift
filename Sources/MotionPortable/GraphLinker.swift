@@ -27,10 +27,12 @@ public enum GraphLinker {
           if(!Object.prototype.hasOwnProperty.call(d[1],s))throw Error('Unresolved import '+s+' in '+id);
           return load(d[1][s]);});
         return module.exports;}
+      load.reset=function(){cache={};};
       return load;})();
       var __ms_ids={react:'vendor:react',reconciler:'vendor:react-reconciler',
         shim:'vendor:@motionswift/remotion',entry:\(try json(graph.entry))};
       function __ms_require(id){return __ms_graph(id);}
+      globalThis.__ms_resetModules=()=>{__ms_graph.reset();globalThis.__ms_root=null;};
       __ms_start();
 
       """

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fixtureSourceHash} from './provenance.mjs';
 import {testRoot} from './common.mjs';
+import {threePins} from './three-common.mjs';
 
 test('real-content census and private staging do not invalidate visual references',t=>{
   const project=fs.mkdtempSync(path.join(os.tmpdir(),'motionswift-provenance-'));
@@ -25,4 +26,11 @@ test('real-content census and private staging do not invalidate visual reference
 test('checked-in visual sources retain their reviewed golden provenance',()=>{
   const metadata=JSON.parse(fs.readFileSync(path.join(testRoot,'golden/metadata.json')));
   assert.equal(fixtureSourceHash(),metadata.sourceSha256);
+});
+
+test('checked-in 3D references retain every pinned dependency and source hash',()=>{
+  const metadata=JSON.parse(fs.readFileSync(path.join(testRoot,'golden/three/metadata.json')));
+  for(const [key,value] of Object.entries(threePins())) {
+    assert.deepEqual(metadata[key],value,`3D golden ${key} changed; run make three-goldens and review`);
+  }
 });

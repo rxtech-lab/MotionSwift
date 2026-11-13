@@ -59,6 +59,7 @@ The current macOS implementation launches bundled native TypeScript and esbuild 
 | `@remotion/paths`, `@remotion/shapes`, `@remotion/noise`, `@remotion/transitions` | The real packages (pure JS), with a version range checked against the shim |
 | `@remotion/google-fonts/*`, `@remotion/fonts` | `@motionswift/fonts` (registers fonts with Skia instead of the DOM) |
 | `@remotion/media-utils` | `@motionswift/media-utils` (native audio data) |
+| `@remotion/three`, `@react-three/fiber`, `three`, `three/addons/loaders/USDLoader.js` (and the `examples/jsm` and `USDZLoader` paths) | Vendor-graph modules in the shim (`remotion-three.js`, `fiber.js`, `three.js`, `usd-loader.js`): `ThreeCanvas`, `useThree`/`useLoader`, a three.js math subset and USD loader tags. Implemented; see [3D support](three-d.md). Other `three/...` imports fail with `ms/unsupported-package`. |
 
 ### Where `node_modules` comes from
 
@@ -71,17 +72,46 @@ The current macOS implementation launches bundled native TypeScript and esbuild 
 
 ## JS runtime environment
 
-JavaScriptCore is a bare engine. `MotionRuntime` provides these globals, implemented in Swift:
+JavaScriptCore is a bare engine. The worker supplies this deliberately limited environment:
 
-| Global | Implementation | Notes |
-|---|---|---|
-| `console.*` | → engine log, with source-mapped locations | |
-| `setTimeout`, `clearTimeout`, `setInterval`, `queueMicrotask` | Swift run loop | Needed by `delayRender` patterns. Timers don't advance frames. |
-| `fetch`, `Response`, `Headers`, `AbortController` | URLSession / libcurl | For `calculateMetadata` and data loading inside `delayRender`. Responses can be recorded and replayed in CI for determinism. |
-| `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `atob`, `btoa`, `structuredClone` | Swift | |
-| `process.env.NODE_ENV` | Inlined at compile time | `production` for renders and `development` in the editor. |
-| `Math.random`, `Date.now`, `new Date()`, `performance.now` | Deterministic | See [compatibility.md → Motion determinism](compatibility.md#motion-determinism). |
-| `window`, `document`, `requestAnimationFrame`, `Image`, `HTMLCanvasElement` | ❌ not defined | Accessing them throws an error that names the source location. |
+| Global | Current behavior |
+|---|---|
+| `console.log/warn/error` | Defined, muted during rendering. Source-mapped logging is planned. |
+| `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `queueMicrotask` | Deterministic virtual-time queue, ordered by deadline then registration ID; microtasks settle between host calls. Timers never advance the video frame. Intervals must be cleared before the sample settles. |
+| `Promise` | Rejected runtime promises and errors in timer/microtask callbacks fail the current frame. Caught rejections are allowed. Native `async` function promises should be returned to a tracked `.then/.catch` chain or explicitly passed to `cancelRender`; JSC does not expose their unhandled rejections through this shim. |
+| `fetch`, `Response`, `Headers`, `AbortController` | Buffered HTTP(S) via URLSession on the render worker, surfaced as a Promise; `text()`, `json()`, `arrayBuffer()` and case-insensitive headers. Text request bodies supported. Pre-aborted signals reject; in-flight abort and streaming are not implemented. Network results are not cached/replayed and must be stable for deterministic renders. |
+| `URL`, `URLSearchParams` | Absolute/relative parsing through Foundation, query get/getAll/has/set/append/delete and iteration. URL property setters and the full WHATWG surface are not implemented. |
+| `TextEncoder`, `TextDecoder`, `atob`, `btoa` | UTF-8 text and Latin-1 base64. Other decoder encodings/streaming are unsupported. |
+| `structuredClone` | JSON-compatible values only; cycles and browser transferable objects are unsupported. |
+| `process.env.NODE_ENV` | `production` for render workers. |
+| `Math.random`, `Date.now`, `new Date()`, `performance.now` | Seeded random resets each sample; clocks are fixed at zero independently of virtual timer time. |
+| `window`, `document`, `requestAnimationFrame`, `Image`, `HTMLCanvasElement` | Not defined; normal JavaScript exceptions include bundle stacks. |
+
+### Async render lifecycle
+
+`delayRender(label?, {timeoutInMilliseconds?})` returns a monotonically unique
+worker handle. Every handle must be released exactly once using
+`continueRender(handle)`. Unknown, stale and duplicate handles fail the frame.
+`cancelRender(error)` fails it immediately at the next lifecycle checkpoint.
+The default timeout is 30,000 ms, configurable with
+`Runtime(bundle:timeoutInMilliseconds:)` and per-handle options. Diagnostics include
+composition ID, frame, handle label and registration stack. A worker also bounds
+settling to 10,000 tasks and a wall-time budget; synchronous infinite JS loops
+cannot be interrupted by that budget.
+
+The worker flushes React effects, state changes, promises and virtual timers before
+committing the native tree. Errors discard retained output; the next sample starts
+with clean task, handle and rejection bookkeeping. Switching compositions resets
+the same lifecycle state. User module caches and React state also reset every
+sample, while vendor code and host output remain retained. User code must not
+mutate vendor objects or retain state through custom globals. Cleanup effects run
+before reset; handle IDs are never reused so stale callbacks cannot release a new
+sample's handles. `calculateMetadata` remains unsupported.
+
+Runtime bundles now use the resettable module-graph loader on both macOS and iOS.
+Recompile legacy monolithic bundles; the runtime reports a missing bridge function
+if an old bundle is supplied. `make compiler` regenerates both compiler and portable
+vendor resources after shim changes.
 
 ## Type-level compatibility
 

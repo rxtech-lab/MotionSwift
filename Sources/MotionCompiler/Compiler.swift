@@ -39,6 +39,7 @@ public struct Compiler {
       var arguments = [compiledEntry.path, "--bundle", "--platform=browser", "--format=cjs", "--target=es2022",
         "--define:process.env.NODE_ENV=\"production\"", "--log-level=warning",
         "--outfile=\(output.path)", "--metafile=\(metadata.path)"]
+      arguments.append("--external:node:*")
       arguments += Vendor.specifiers.map { "--external:\($0)" }
       let modules = project.appendingPathComponent("node_modules").path
       let result = try run(toolchain.appendingPathComponent("esbuild/bin/esbuild"), arguments, directory: project,
@@ -74,38 +75,7 @@ public struct Compiler {
   }
 
   public func compile(project: URL, entry: String) throws -> String {
-    try withToolchain { toolchain, temporary in
-      let vendor = try resource("Vendor")
-      let compiledEntry = try emit(project: project, entry: entry, toolchain: toolchain, temporary: temporary,
-        vendor: vendor)
-      let bootstrap = temporary.appendingPathComponent("entry.js")
-      let output = temporary.appendingPathComponent("bundle.js")
-      let metadata = temporary.appendingPathComponent("meta.json")
-      let source = """
-        import \(try quoted(compiledEntry.standardizedFileURL.path));
-        export {default as react} from \(try quoted(vendor.appendingPathComponent("node_modules/react/index.js").path));
-        export {default as reconciler} from \(try quoted(vendor.appendingPathComponent("node_modules/react-reconciler/index.js").path));
-        export * as shim from \(try quoted(vendor.appendingPathComponent("shim/index.js").path));
-        """
-      try source.write(to: bootstrap, atomically: true, encoding: .utf8)
-      var arguments = [bootstrap.path, "--bundle", "--platform=browser", "--format=iife",
-        "--global-name=__ms_compiled", "--target=es2022", "--packages=external",
-        "--define:process.env.NODE_ENV=\"production\"", "--log-level=warning",
-        "--outfile=\(output.path)", "--metafile=\(metadata.path)"]
-      for name in ["react", "react-reconciler", "scheduler"] {
-        arguments.append("--alias:\(name)=\(vendor.appendingPathComponent("node_modules/\(name)").path)")
-      }
-      arguments.append("--alias:@motionswift/remotion=\(vendor.appendingPathComponent("shim").path)")
-      arguments.append("--alias:remotion=\(vendor.appendingPathComponent("shim/index.js").path)")
-      let result = try run(toolchain.appendingPathComponent("esbuild/bin/esbuild"), arguments, directory: project)
-      guard result.status == 0 else { throw MotionError("esbuild: \(result.output)") }
-      try inspect(metadata: metadata)
-      return try String(contentsOf: output, encoding: .utf8) + """
-        \nconst __ms_ids={react:'react',reconciler:'reconciler',shim:'shim'};
-        function __ms_require(id){return __ms_compiled[id];}
-        __ms_start();
-        """
-    }
+    try GraphLinker.link(graph(project: project, entry: entry))
   }
 
   public func checkTypes(project: URL, entry: String) throws -> [Diagnostic] {
@@ -130,6 +100,13 @@ public struct Compiler {
       "paths": ["@motionswift/remotion": [shim.appendingPathComponent("index.d.ts").path],
         "@motionswift/remotion/jsx-runtime": [shim.appendingPathComponent("jsx-runtime.d.ts").path],
         "remotion": [shim.appendingPathComponent("index.d.ts").path],
+        "three": [shim.appendingPathComponent("three.d.ts").path],
+        "three/addons/loaders/USDLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
+        "three/examples/jsm/loaders/USDLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
+        "three/addons/loaders/USDZLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
+        "three/examples/jsm/loaders/USDZLoader.js": [shim.appendingPathComponent("usd-loader.d.ts").path],
+        "@react-three/fiber": [shim.appendingPathComponent("fiber.d.ts").path],
+        "@remotion/three": [shim.appendingPathComponent("remotion-three.d.ts").path],
         "react": [modules.appendingPathComponent("@types/react/index.d.ts").path],
         "react/jsx-runtime": [modules.appendingPathComponent("@types/react/jsx-runtime.d.ts").path]],
     ]

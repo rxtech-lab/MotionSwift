@@ -74,25 +74,38 @@
 
 Per-node FFI calls through JSC are slow (each call crosses the JS/C boundary). Instead:
 
-1. The reconciler writes mutation ops (`CREATE`, `APPEND_CHILD`, `INSERT_BEFORE`, `REMOVE`, `SET_STYLE`, `SET_PROP`, `SET_TEXT`) into a shared `ArrayBuffer` created with `JSObjectMakeArrayBufferWithBytesNoCopy`. Strings go into a side table that is interned per frame.
-2. At commit end, JS calls a single host function `__ms_commit(opCount)`.
-3. Swift decodes the ops, mutates the retained tree, and marks dirty subtrees for style, layout, and paint.
+The current worker uses a deterministic batch of `create`, `patch`, `children`, and
+`delete` operations returned through one JSC call. It diffs the settled host output
+against the retained JS tree, sends only changed style keys and properties, and
+applies the batch to retained Swift nodes. Unchanged native `RenderNode` subtrees
+are cached; mutations invalidate that node and every ancestor. There is no
+per-frame full-tree JSON encoding/decoding. Paths provide deterministic host IDs;
+React keys still determine component identity within a sample.
 
-Style objects are diffed in JS (the reconciler's `prepareUpdate`). Only changed keys cross the bridge.
+The VM, parsed graph definitions, React and reconciler are retained. User module
+caches and React roots are reset for **each** sample, including sequential playback:
+module counters, random initializers and hooks must not depend on prior samples.
+React effects and state updates may settle within that sample. Props/composition
+changes clear both retained trees; new source requires a new `Runtime(bundle:)`.
+`Runtime.invalidate()` explicitly clears retained output. This implementation
+reuses native output subtrees, not layout results or SkPictures. A shared binary
+`ArrayBuffer` with interned strings and direct reconciler mutation recording remains
+a future transport optimization; the present bridge uses JSC arrays.
 
 ## Frame lifecycle
 
 ```text
 setFrame(n)
+  → reset user modules, lifecycle queues and React state
   → JS: update the frame context, flushSync(render)   # React render + commit
-  → native: apply ops; resolve styles of dirty nodes
-  → Yoga calculateLayout (only if a layout-affecting style changed)
-  → wait for pending delayRender handles (images/video frames/fonts)
+  → flush effects, microtasks and deterministic timers until delayRender handles settle
+  → native: apply mutation batch; invalidate changed subtree snapshots
+  → Yoga calculateLayout
   → paint dirty subtrees → record (cached SkPictures for clean subtrees)
   → raster → hand the GPU surface to the encoder (no CPU readback)
 ```
 
-Clean subtrees keep their recorded `SkPicture`, so a frame where one title moves only re-records that title.
+SkPicture and incremental Yoga caching remain targets. Currently only unchanged native render-tree subtrees are reused.
 
 ## Preview overrides (editor)
 

@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import type {BoxProps} from './index';
+import type {ThreeElements} from './three-elements';
 export declare function jsx(type: any,props: any,key?: React.Key): React.ReactElement;
 export declare const jsxs: typeof jsx;
 export declare const Fragment: typeof React.Fragment;
@@ -10,7 +11,8 @@ export namespace JSX {
   interface IntrinsicAttributes {key?: React.Key | null}
   // SVG elements can be used as XML construction values. Direct host SVG is
   // rejected by the painter; the supported render path is an SVG data-URI img.
-  interface IntrinsicElements {
+  // React Three Fiber elements are valid only inside <ThreeCanvas>.
+  interface IntrinsicElements extends ThreeElements {
     div: BoxProps; span: BoxProps;
     img: BoxProps & {src: string};
     svg: React.SVGProps<SVGSVGElement>; g: React.SVGProps<SVGGElement>;

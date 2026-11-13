@@ -62,3 +62,6 @@ export declare const Audio: ComponentType<MediaProps>;
 export declare const OffthreadVideo: ComponentType<MediaProps>;
 export declare const Video: typeof OffthreadVideo;
 export declare const Img: ComponentType<BoxProps & {src: string}>;
+
+/** A file in the project's public/ folder, for example a USDZ model or an image. */
+export declare function staticFile(path: string): string;
