@@ -21,3 +21,5 @@ bool msk_read_rgba(MSKSurface s, uint8_t* dst, size_t len);
 /// GPU resolve to a borrowed id<MTLTexture> (BGRA8, same dimensions), synchronized on return.
 bool msk_copy_to_metal_texture(MSKSurface s, const void* texture);
 bool msk_png(MSKSurface s, const char* path);
+
+bool msk_image_rgba(MSKSurface s, const uint8_t* bytes, size_t len, int32_t iw, int32_t ih, float w, float h, int32_t fit);

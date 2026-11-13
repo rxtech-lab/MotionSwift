@@ -107,3 +107,10 @@ MotionSwift exported **17.24× faster with Metal + x264** and **18.89× faster w
 Measured on an Apple M4 Max (16 cores, 128 GB), eight workers per engine, one run without warmup. Export times include startup, compilation/bundling and encoding. All cases passed SSIM ≥ 0.98; hardware/software quality settings differ. These short synthetic results do not establish full-film or 4K speedups over Remotion. RSS is sampled and excludes separate GPU/media-engine accounting.
 
 [Comparison results and reproduction](docs/benchmarks/2026-11-12-remotion-comparison.md) · [Memory measurements](docs/benchmarks/2026-11-12-memory.md).
+
+### Compose smaller clips with media
+
+The showcase's **Media Composition** page opens a 24-second master containing reusable montage,
+image and video compositions. Double-click a nested composition on the canvas or timeline to
+open it; return through the breadcrumbs with the parent's playhead preserved. Playback controls,
+mute, a scrubbable multitrack timeline, and an export sheet follow the selected composition. See [nested clips and media](docs/media-compositions.md) for the supported APIs and limits.

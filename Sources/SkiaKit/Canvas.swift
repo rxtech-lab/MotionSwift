@@ -89,6 +89,17 @@ public final class Canvas {
     guard ok else { throw MotionError("Cannot decode SVG image") }
   }
 
+  /// Draws premultiplied sRGB pixels through the same CPU/Metal painter as shapes.
+  public func image(_ pixels: Data, pixelWidth: Int, pixelHeight: Int,
+                    width: Double, height: Double, fit: String) throws {
+    let ok = pixels.withUnsafeBytes { bytes in
+      msk_image_rgba(surface, bytes.bindMemory(to: UInt8.self).baseAddress, pixels.count,
+                    Int32(pixelWidth), Int32(pixelHeight), Float(width), Float(height),
+                    fit == "cover" ? 1 : fit == "fill" ? 2 : 0)
+    }
+    guard ok else { throw MotionError("Cannot draw raster media") }
+  }
+
   /// Unpremultiplied RGBA8888 pixels, rows tightly packed. GPU work is flushed first.
   public func rgba() throws -> Data {
     var data = Data(count: width * height * 4)

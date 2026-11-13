@@ -4,6 +4,7 @@ import MotionSwiftUI
 import SwiftUI
 
 enum SidebarItem: Hashable {
+  case media
   case gallery
   case testFilm
   case editor
@@ -26,7 +27,8 @@ struct ContentView: View {
   @State private var testFilmPlayer = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
   /// `MOTIONSWIFT_SHOWCASE_START=editor` opens the visual editor first (demos and screenshots).
   @State private var selection: SidebarItem? =
-    ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "editor" ? .editor : .gallery
+    ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "editor" ? .editor :
+      (ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] == "media" ? .media : .gallery)
   @State private var settings = ShowcaseSettings()
   @State private var location = ProjectLocation(
     project: ShowcaseDefaults.project, entry: ShowcaseDefaults.entry)
@@ -50,14 +52,14 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .disabled(selection == .testFilm || selection == .editor)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
           .keyboardShortcut("r")
-          .disabled(selection == .testFilm || selection == .editor)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .disabled(selection == .testFilm || selection == .editor)
+          .disabled(selection == .testFilm || selection == .editor || selection == .media)
       }
     }
     .sheet(isPresented: $showsSettings) {
@@ -102,6 +104,7 @@ struct ContentView: View {
     List(selection: $selection) {
       Section("Showcase") {
         Label("Gallery", systemImage: "square.grid.2x2").tag(SidebarItem.gallery)
+        Label("Media Composition", systemImage: "rectangle.stack.fill").tag(SidebarItem.media)
         VStack(alignment: .leading, spacing: 2) {
           Label("Test Film", systemImage: "film")
           Text("1920×1080 · \(liveRate(testFilmPlayer))")
@@ -137,6 +140,8 @@ struct ContentView: View {
 
   @ViewBuilder private var detail: some View {
     switch selection {
+    case .media:
+      MediaDemoView()
     case .testFilm:
       TestFilmView(player: testFilmPlayer)
     case .editor:
@@ -168,7 +173,7 @@ struct ContentView: View {
         .navigationTitle(id)
         .navigationSubtitle(player.composition?.summary ?? "")
     default:
-      GalleryView(player: player, settings: settings) { selection = .composition($0) }
+      GalleryView(player: player, settings: settings) { selection = $0 }
         .navigationTitle("Gallery")
         .navigationSubtitle(location.project.lastPathComponent)
     }

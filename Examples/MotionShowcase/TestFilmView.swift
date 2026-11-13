@@ -93,7 +93,7 @@ struct FilmExportSheet: View {
   var body: some View {
     NavigationStack {
       Form {
-        Section("Full benchmark film") {
+        Section("Composition export") {
           LabeledContent("Composition", value: composition.summary)
           LabeledContent("Frames", value: "\(composition.durationInFrames)")
           LabeledContent("Pipeline", value: "Metal → IOSurface → VideoToolbox")
@@ -101,7 +101,7 @@ struct FilmExportSheet: View {
             ForEach(1...ProcessInfo.processInfo.activeProcessorCount, id: \.self) { Text("\($0)").tag($0) }
           }
           .disabled(job.isRunning)
-          Text("Exports the full silent H.264 movie using the benchmark's shared-surface pipeline at native resolution.")
+          Text("Exports the full H.264 movie with synchronized audio at native resolution.")
             .font(.caption).foregroundStyle(.secondary)
         }
         Section("Memory") {
@@ -119,7 +119,7 @@ struct FilmExportSheet: View {
         }
       }
       .formStyle(.grouped)
-      .navigationTitle("Render Test Film")
+      .navigationTitle("Export Composition")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button(job.isRunning ? "Stop" : "Close") {
@@ -163,7 +163,7 @@ struct FilmExportSheet: View {
   private func chooseDestination() {
     let panel = NSSavePanel()
     panel.allowedContentTypes = [.mpeg4Movie]
-    panel.nameFieldStringValue = "Test Film.mp4"
+    panel.nameFieldStringValue = composition.id + ".mp4"
     guard panel.runModal() == .OK, let destination = panel.url else { return }
     Task { await job.render(bundle: bundle, composition: composition, destination: destination, workers: workers) }
   }

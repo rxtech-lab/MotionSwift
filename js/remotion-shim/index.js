@@ -1,6 +1,7 @@
 const React = require('react');
 const Frame = React.createContext(0);
 const Config = React.createContext(null);
+const MediaEnabled = React.createContext(true);
 const useCurrentFrame = () => React.useContext(Frame);
 const useVideoConfig = () => React.useContext(Config);
 const AbsoluteFill = ({style, children, ...props}) => React.createElement('div', {
@@ -49,12 +50,33 @@ function Sequence({from = 0, durationInFrames = Infinity, children, layout = 'ab
   const content = React.createElement(Frame.Provider, {value: frame-from}, children);
   return layout === 'none' ? content : React.createElement(AbsoluteFill, {style}, content);
 }
-function Freeze({frame, children}) { return React.createElement(Frame.Provider, {value: frame}, children); }
+function Freeze({frame, children}) { return React.createElement(MediaEnabled.Provider, {value: false}, React.createElement(Frame.Provider, {value: frame}, children)); }
 function Loop({durationInFrames, children, times = Infinity}) {
   const frame = useCurrentFrame();
   if (!(durationInFrames > 0)) throw Error('Loop duration must be positive');
-  return frame >= durationInFrames*times ? null : React.createElement(Freeze, {frame: frame%durationInFrames}, children);
+  return frame >= durationInFrames*times ? null : React.createElement(Frame.Provider, {value: frame%durationInFrames}, children);
 }
+// Media time is derived from the nearest Sequence/Freeze/Loop frame context.
+function media(type, {src, style, trimBefore, startFrom, trimAfter, endAt,
+  durationInFrames, playbackRate = 1, volume = 1, muted = false, ...props}) {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const enabled = React.useContext(MediaEnabled);
+  const start = trimBefore ?? startFrom ?? 0;
+  const end = durationInFrames == null ? (trimAfter ?? endAt ?? Infinity) : start + durationInFrames;
+  const gain = typeof volume === 'function' ? volume(frame) : volume;
+  if (typeof src !== 'string' || !src || !Number.isFinite(start) || start < 0 ||
+      !Number.isFinite(playbackRate) || playbackRate <= 0 || !Number.isFinite(gain) || gain < 0 || gain > 1 ||
+      !(end > start)) throw Error('Invalid native media source, trim, rate or volume');
+  const sourceFrame = start + frame * playbackRate;
+  if (sourceFrame >= end) return null;
+  return React.createElement(type, {...props, src,
+    style: type === 'ms-audio' ? {display: 'none'} : {objectFit: 'contain', ...style},
+    'data-ms-media': {time: sourceFrame / fps, playbackRate, volume: muted || !enabled ? 0 : gain}});
+}
+const Audio = props => media('ms-audio', props);
+const OffthreadVideo = props => media('ms-video', props);
+const Img = props => React.createElement('img', {...props, style: {objectFit: 'contain', ...props.style}});
 const Easing = {
   linear: x => x, quad: x => x*x, cubic: x => x*x*x,
   sin: x => 1-Math.cos(x*Math.PI/2), exp: x => Math.pow(2,10*(x-1)),
@@ -64,4 +86,9 @@ const Easing = {
 };
 module.exports = {AbsoluteFill, Composition, Still: props => Composition({...props, durationInFrames: 1, fps: 1}),
   Folder: ({children}) => children, registerRoot, useCurrentFrame, useVideoConfig, interpolate, spring,
-  Sequence, Freeze, Loop, Easing, __Frame: Frame, __Config: Config};
+  Sequence, Freeze, Loop, Audio, OffthreadVideo, Video: OffthreadVideo, Img, Easing, __Frame: Frame, __Config: Config};
+
+// The lifecycle belongs to the worker, rather than the module cache.
+module.exports.delayRender = (label, options) => globalThis.__ms_delayRender(label, options);
+module.exports.continueRender = handle => globalThis.__ms_continueRender(handle);
+module.exports.cancelRender = error => globalThis.__ms_cancelRender(error);

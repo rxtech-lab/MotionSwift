@@ -71,7 +71,7 @@ final class FilmExport {
     Self.log("Export start frames=\(composition.durationInFrames) size=\(composition.width)x\(composition.height) workers=\(workers)",
              baseline: baseline, started: started)
     sampleMemory()
-    status = "Rendering Test Film…"
+    status = "Rendering composition…"
     // Encode alongside the destination; publish only a finished movie, preserving any previous file.
     let temporary = destination.deletingLastPathComponent().appendingPathComponent(".\(UUID()).mp4")
     do {
@@ -102,7 +102,7 @@ final class FilmExport {
         thread.start()
       }
       output = destination
-      status = "Test Film rendered"
+      status = "Composition exported"
     } catch is CancellationError {
       status = "Render cancelled"
     } catch {
@@ -125,6 +125,10 @@ final class FilmExport {
     try cancellation.check()
     let stream = try SharedVideoStream(
       output: output, width: composition.width, height: composition.height, fps: composition.fps)
+    let audioDirectory = output.deletingLastPathComponent().appendingPathComponent("audio-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: audioDirectory) }
+    let audio = AudioMix(directory: audioDirectory, fps: composition.fps)
     log("Encoder created", baseline: baseline, started: started)
     do {
       try FramePipeline.run(
@@ -134,6 +138,7 @@ final class FilmExport {
         try cancellation.check()
         guard let video = frame.videoFrame else { throw MotionError("Missing IOSurface video frame") }
         try stream.write(video.pixelBuffer)
+        try audio.append(frame.media)
         if (frame.index + 1).isMultiple(of: 100) || frame.index == composition.durationInFrames - 1 {
           log("Encoded frames=\(frame.index + 1)/\(composition.durationInFrames)", baseline: baseline, started: started)
         }
@@ -144,6 +149,7 @@ final class FilmExport {
       log("Pipeline returned; workers joined", baseline: baseline, started: started)
       try cancellation.check()
       try stream.finish()
+      try audio.mux(video: output)
       log("Encoder finished", baseline: baseline, started: started)
     } catch {
       stream.cancel()

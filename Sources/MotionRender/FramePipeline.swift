@@ -13,6 +13,7 @@ public struct RenderedFrame: Sendable {
   public let pixels: Data
   public let videoFrame: MetalVideoFrame?
   public let layout: [LayoutBox]
+  public let media: [ActiveMedia]
   /// Evaluate + layout + paint + CPU readback or shared GPU resolve time.
   public let renderMs: Double
 }
@@ -123,7 +124,7 @@ public enum FramePipeline {
           state.complete(
             RenderedFrame(
               index: index, frame: frames[index], pixels: pixels, videoFrame: videoFrame,
-              layout: layout, renderMs: elapsed))
+              layout: layout, media: tree.activeMedia, renderMs: elapsed))
         }
       }
     } catch {

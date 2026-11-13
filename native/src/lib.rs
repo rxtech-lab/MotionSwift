@@ -223,3 +223,21 @@ pub unsafe extern "C" fn msk_png(s: *mut Target, path: *const c_char) -> bool {
     let Some(data) = image.encode(None, EncodedImageFormat::PNG, None) else { return false; };
     std::fs::write(path, data.as_bytes()).is_ok()
 }
+
+/// Draw tightly packed premultiplied RGBA pixels. fit: 0 contain, 1 cover, 2 fill.
+#[no_mangle]
+pub unsafe extern "C" fn msk_image_rgba(s: *mut Target, bytes: *const u8, len: usize, iw: i32, ih: i32, w: f32, h: f32, fit: i32) -> bool {
+    if s.is_null() || bytes.is_null() || iw <= 0 || ih <= 0 || !w.is_finite() || !h.is_finite() || w <= 0. || h <= 0. || len != iw as usize * ih as usize * 4 { return false; }
+    let info = ImageInfo::new((iw, ih), ColorType::RGBA8888, AlphaType::Premul, None);
+    let data = skia_safe::Data::new_copy(std::slice::from_raw_parts(bytes, len));
+    let Some(image) = skia_safe::images::raster_from_data(&info, data, iw as usize * 4) else { return false; };
+    let (sw, sh) = (iw as f32, ih as f32);
+    let scale = if fit == 1 { (w / sw).max(h / sh) } else { (w / sw).min(h / sh) };
+    let (dw, dh) = if fit == 2 { (w, h) } else { (sw * scale, sh * scale) };
+    let canvas = (*s).surface.canvas();
+    canvas.save();
+    canvas.clip_rect(Rect::from_xywh(0., 0., w, h), None, true);
+    canvas.draw_image_rect(&image, None, Rect::from_xywh((w-dw)/2., (h-dh)/2., dw, dh), &Paint::default());
+    canvas.restore();
+    true
+}

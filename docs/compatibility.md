@@ -25,7 +25,7 @@ Each row below has a status that the implementation must keep up to date:
 | `Img`, `staticFile` | ✅ | 2 | Decoded by `MotionMedia`. Uses `delayRender` internally. |
 | `delayRender`, `continueRender`, `cancelRender` | ✅ | 2 | A frame is not rasterized until all handles resolve. The timeout matches Remotion's default. |
 | `OffthreadVideo`, `Video` | 🟡 | 4 | Both map to native frame extraction. `playbackRate`, `startFrom`/`endAt`, `trimBefore`/`trimAfter`, `muted`, and `volume` are supported. |
-| `Audio`, `useAudioData`-style helpers | 🟡 | 4 | Volume curves are evaluated per frame in JS and sent to the mixer. |
+| `Audio` | 🟡 | 4 | Native preview and macOS export mixing with per-frame volume. See [media contract](media-compositions.md). `useAudioData` helpers are not implemented. |
 | `@remotion/google-fonts`, `@remotion/fonts` `loadFont` | 🟡 | 4 | Fonts are registered in the Skia font collection. |
 | `@remotion/paths`, `@remotion/shapes`, `@remotion/noise` | ✅ | 3 | Pure JS output → SVG paths. |
 | `@remotion/transitions` | 🟡 | 3 | Built on the supported subset (opacity, transforms, clip). |

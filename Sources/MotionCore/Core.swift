@@ -68,24 +68,39 @@ public enum JSONValue: Codable, Equatable, Sendable {
   }
 }
 
+/// Evaluated media position in source seconds, after clip offsets, trimming and rate.
+public struct MediaSample: Codable, Sendable, Equatable {
+  public let time: Double
+  public let playbackRate: Double
+  public let volume: Double
+
+  public init(time: Double, playbackRate: Double = 1, volume: Double = 1) {
+    self.time = time
+    self.playbackRate = playbackRate
+    self.volume = volume
+  }
+}
+
 public struct RenderNode: Codable, Sendable {
   public let type: String
   public let style: [String: JSONValue]
   public let text: String?
   /// The `src` prop of `img` elements.
   public let src: String?
+  public let media: MediaSample?
   /// Editor source stamp (`file:line:column`) from the portable compiler, if stamped.
   public let source: String?
   public let children: [RenderNode]
 
   public init(
     type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil, source: String? = nil,
-    children: [RenderNode] = []
+    media: MediaSample? = nil, children: [RenderNode] = []
   ) {
     self.type = type
     self.style = style
     self.text = text
     self.src = src
+    self.media = media
     self.source = source
     self.children = children
   }
@@ -99,7 +114,7 @@ public struct RenderNode: Codable, Sendable {
       for (key, value) in patch { style[key] = value == .null ? nil : value }
     }
     return RenderNode(
-      type: type, style: style, text: text, src: src, source: source,
+      type: type, style: style, text: text, src: src, source: source, media: media,
       children: children.map { $0.applying(overrides) })
   }
 

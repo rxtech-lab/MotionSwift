@@ -34,7 +34,7 @@ public enum LayoutEngine {
       values[key] = parent[key]
     }
     return RenderNode(
-      type: node.type, style: values, text: node.text, src: node.src, source: node.source,
+      type: node.type, style: values, text: node.text, src: node.src, source: node.source, media: node.media,
       children: node.children.map { inherit($0, parent: values) })
   }
 
