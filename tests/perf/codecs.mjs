@@ -10,14 +10,22 @@ const output=resolve(process.env.CODEC_REPORT_DIR||join(root,'tests/reports/code
 const bin=process.env.MOTIONSWIFT_BIN||join(root,'.build/release/motionswift');
 const budgetsPath=resolve(process.env.CODEC_BUDGETS_PATH||join(root,'tests/perf/codec-budgets.json'));
 const measureOnly=process.argv.includes('--measure-only');
-const budgets=measureOnly?null:JSON.parse(readFileSync(budgetsPath,'utf8'));
+let budgets=measureOnly?null:JSON.parse(readFileSync(budgetsPath,'utf8'));
+const machine={cpu:cpus()[0].model,platform:platform(),arch:arch()};
+let budgetStatus=measureOnly?'measure-only':'enforced';
+if(budgets&&!['cpu','platform','arch'].every(key=>budgets.machine[key]===machine[key])) {
+  const reason=`Codec budgets require ${budgets.machine.cpu}/${budgets.machine.platform}/${budgets.machine.arch}; this runner is ${machine.cpu}/${machine.platform}/${machine.arch}`;
+  if(!process.argv.includes('--allow-unmatched-machine'))throw Error(reason+'; use --measure-only to establish budgets for this host');
+  console.log(`::warning::${reason}. Encode/decode checks remain enabled; time and memory regression checks are unverified.`);
+  budgets=null;
+  budgetStatus='skipped-machine-mismatch';
+}
 const work=mkdtempSync(join(tmpdir(),'motionswift-codecs-'));
 mkdirSync(output,{recursive:true});
 const matrix=[['h264','software','cpu'],['hevc','software','cpu'],['prores','software','cpu'],['prores4444','software','cpu'],
   ['h264','videotoolbox','gpu'],['hevc','videotoolbox','gpu'],['h264','videotoolbox-shared','gpu'],['hevc','videotoolbox-shared','gpu']];
 const generated=join(root,'tests/perf/long.js');
 const generatedExisted=existsSync(generated);
-if(budgets&&budgets.machine.cpu!==cpus()[0].model)throw Error('Codec budgets require '+budgets.machine.cpu+'; use --measure-only to establish budgets for this host');
 const results=[];
 const skipped=[];
 let failed=false;
@@ -58,7 +66,7 @@ try {
     console.log(`${id}: ${medianMs.toFixed(1)} ms, ${(peakRssBytes/1048576).toFixed(1)} MiB${regression?' REGRESSION':''}`);
   }
 } finally {
-  writeFileSync(join(output,'results.json'),JSON.stringify({machine:{cpu:cpus()[0].model,platform:platform(),arch:arch()},measureOnly,results,skipped},null,2));
+  writeFileSync(join(output,'results.json'),JSON.stringify({machine,measureOnly,budgetStatus,results,skipped},null,2));
   rmSync(work,{recursive:true,force:true});
   if(!generatedExisted)rmSync(generated,{force:true});
 }

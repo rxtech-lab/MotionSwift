@@ -22,8 +22,10 @@ jobs:
         run: swift test --no-parallel --filter 'Encoder|codecCombinations|remainingSoftware|segmentConcatenation|sharedIOSurface|hevcHardware'
       - name: Frame-step, alpha, concat and cancellation
         run: node tests/tools/codec-cli.mjs
-      - name: Calibrate codec budgets for the CI runner
-        run: node tests/perf/codecs.mjs --measure-only
+      - name: Enforce measured codec time and memory budgets
+        env:
+          CODEC_BUDGETS_PATH: tests/perf/codec-budgets-ci.json
+        run: node tests/perf/codecs.mjs --allow-unmatched-machine
       - uses: actions/upload-artifact@v7
         if: always()
         with:
