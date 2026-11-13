@@ -8,7 +8,7 @@ import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'../..');
 const output=resolve(process.env.CODEC_REPORT_DIR||join(root,'tests/reports/codecs'));
 const bin=process.env.MOTIONSWIFT_BIN||join(root,'.build/release/motionswift');
-const budgetsPath=join(root,'tests/perf/codec-budgets.json');
+const budgetsPath=resolve(process.env.CODEC_BUDGETS_PATH||join(root,'tests/perf/codec-budgets.json'));
 const measureOnly=process.argv.includes('--measure-only');
 const budgets=measureOnly?null:JSON.parse(readFileSync(budgetsPath,'utf8'));
 const work=mkdtempSync(join(tmpdir(),'motionswift-codecs-'));
