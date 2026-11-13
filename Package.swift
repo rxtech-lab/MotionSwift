@@ -47,7 +47,7 @@ let package = Package(
     ]),
     .executableTarget(name: "motionswift-showcase", dependencies: [
       "MotionCore", "MotionRender", "MotionEncode", "MotionSwiftUI", "MotionEditor", "MotionPortable",
-    ], path: "Examples/MotionShowcase"),
+    ], path: "Examples/MotionShowcase", resources: [.copy("Media")]),
     .executableTarget(name: "motionswift-cli", dependencies: [
       "MotionCompiler", "MotionPortable", "MotionRuntime", "MotionRender", "MotionEncode",
     ]),

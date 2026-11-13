@@ -94,10 +94,14 @@ public final class MotionPlayer {
   /// The compiled bundle, reusable through `MotionSource.bundle` without recompiling.
   public private(set) var bundle: String?
   public var loops = true
+  public var isMuted = false {
+    didSet { synchronizeAudio() }
+  }
   /// Live style patches keyed by source stamp, applied on top of the reconciled tree of the
   /// current frame without re-running JavaScript. Frames rendered with overrides are not cached.
   public private(set) var previewOverrides: [String: [String: JSONValue]] = [:]
 
+  @ObservationIgnored private let mediaPlayback = MediaPlayback()
   @ObservationIgnored private var worker: FrameRenderWorker?
   @ObservationIgnored private var loadGeneration = 0
   @ObservationIgnored private var renderGeneration = 0
@@ -129,6 +133,7 @@ public final class MotionPlayer {
     pause()
     loadGeneration += 1
     let generation = loadGeneration
+    mediaPlayback.reset()
     status = .loading
     do {
       let (bundle, catalog) = try await Self.onLargeStack {
@@ -163,6 +168,7 @@ public final class MotionPlayer {
   public func select(compositionID: String) {
     guard let selected = compositions.first(where: { $0.id == compositionID }) else { return }
     pause()
+    mediaPlayback.reset()
     composition = selected
     currentFrame = 0
     displayedFrame = nil
@@ -196,7 +202,10 @@ public final class MotionPlayer {
 
   public func seek(to frame: Int) {
     guard let composition else { return }
+    let resume = isPlaying
+    if resume { pause() }
     show(min(max(frame, 0), composition.durationInFrames - 1))
+    if resume { play() }
   }
 
   public func step(by frames: Int) {
@@ -213,6 +222,8 @@ public final class MotionPlayer {
     let duration = composition.durationInFrames
     if currentFrame >= duration - 1 { show(0) }
     isPlaying = true
+    synchronizeAudio()
+    guard isPlaying else { return }
     liveFPS = nil
     playbackRate.start(at: ProcessInfo.processInfo.systemUptime)
     let fps = composition.fps
@@ -244,6 +255,7 @@ public final class MotionPlayer {
     playback?.cancel()
     playback = nil
     isPlaying = false
+    mediaPlayback.pause()
     liveFPS = nil
   }
 
@@ -302,8 +314,8 @@ public final class MotionPlayer {
         cache.setObject(CachedFrame(frame), forKey: frame.frame as NSNumber, cost: frame.byteCount)
       }
       // Frames finish in request order, so the newest delivery is the best available picture.
-      present(frame)
       renderError = nil
+      present(frame)
     case .failure(let error):
       renderError = String(describing: error)
       pause()
@@ -315,6 +327,7 @@ public final class MotionPlayer {
       playbackRate.record(at: ProcessInfo.processInfo.systemUptime)
     }
     displayedFrame = frame
+    synchronizeAudio()
     refreshLiveFPS()
   }
 
@@ -340,4 +353,16 @@ public final class MotionPlayer {
 private final class CachedFrame {
   let frame: MotionFrame
   init(_ frame: MotionFrame) { self.frame = frame }
+}
+
+extension MotionPlayer {
+  private func synchronizeAudio() {
+    do {
+      try mediaPlayback.synchronize(displayedFrame?.tree.activeMedia ?? [], playing: isPlaying, muted: isMuted)
+    } catch {
+      renderError = String(describing: error)
+      pause()
+    }
+  }
+
 }

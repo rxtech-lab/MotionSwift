@@ -18,7 +18,7 @@ export interface MotionCSSProperties {
   backgroundColor?: string; background?: string; color?: string;
   opacity?: number; borderRadius?: number | string; overflow?: 'hidden' | 'visible';
   transform?: string; transformOrigin?: 'center'; fontSize?: number; fontFamily?: string;
-  objectFit?: 'contain';
+  objectFit?: 'contain' | 'cover' | 'fill';
 }
 export interface MotionKeyframe {frame: number; value: number; easing: 'linear' | 'hold'}
 export interface MotionObjectTiming {
@@ -49,3 +49,16 @@ export declare const Easing: {
   linear:(x:number)=>number;quad:(x:number)=>number;cubic:(x:number)=>number;sin:(x:number)=>number;exp:(x:number)=>number;circle:(x:number)=>number;
   in:(easing:(x:number)=>number)=>(x:number)=>number;out:(easing:(x:number)=>number)=>(x:number)=>number;inOut:(easing:(x:number)=>number)=>(x:number)=>number;
 };
+
+export declare function delayRender(label?: string, options?: {timeoutInMilliseconds?: number}): number;
+export declare function continueRender(handle: number): void;
+export declare function cancelRender(error: Error | string): void;
+
+export interface MediaProps extends BoxProps {
+  src: string; trimBefore?: number; trimAfter?: number; startFrom?: number; endAt?: number;
+  durationInFrames?: number; playbackRate?: number; volume?: number | ((frame: number) => number); muted?: boolean;
+}
+export declare const Audio: ComponentType<MediaProps>;
+export declare const OffthreadVideo: ComponentType<MediaProps>;
+export declare const Video: typeof OffthreadVideo;
+export declare const Img: ComponentType<BoxProps & {src: string}>;

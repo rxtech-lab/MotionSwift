@@ -94,6 +94,7 @@ public struct MotionCompositionView: View {
 /// Play/pause, frame stepping, a scrubber and render timing for a player.
 public struct MotionTransportBar: View {
   private let player: MotionPlayer
+  @State private var feedback = 0
 
   public init(player: MotionPlayer) { self.player = player }
 
@@ -117,21 +118,26 @@ public struct MotionTransportBar: View {
     }
     .buttonStyle(.borderless)
     .disabled(player.composition == nil)
+    .sensoryFeedback(.selection, trigger: feedback)
   }
 
   private var duration: Int { player.composition?.durationInFrames ?? 1 }
 
   @ViewBuilder private var controls: some View {
-    Button { player.step(by: -1) } label: { Image(systemName: "backward.frame.fill") }
+    Button { player.isMuted.toggle(); feedback += 1 } label: {
+      Image(systemName: player.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+    }
+    .accessibilityLabel(player.isMuted ? "Unmute audio" : "Mute audio")
+    Button { player.step(by: -1); feedback += 1 } label: { Image(systemName: "backward.frame.fill") }
       .help("Previous frame")
       .accessibilityLabel("Previous frame")
-    Button { player.togglePlayback() } label: {
+    Button { player.togglePlayback(); feedback += 1 } label: {
       Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
     }
     .keyboardShortcut(.space, modifiers: [])
     .help(player.isPlaying ? "Pause" : "Play")
     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-    Button { player.step(by: 1) } label: { Image(systemName: "forward.frame.fill") }
+    Button { player.step(by: 1); feedback += 1 } label: { Image(systemName: "forward.frame.fill") }
       .help("Next frame")
       .accessibilityLabel("Next frame")
   }
@@ -143,6 +149,7 @@ public struct MotionTransportBar: View {
         set: {
           player.pause()
           player.seek(to: Int($0.rounded()))
+          feedback += 1
         }),
       in: 0...Double(max(duration - 1, 1))
     )

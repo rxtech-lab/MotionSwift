@@ -222,6 +222,9 @@ func render(
     stages["availabilityMs"] = .number(Date().timeIntervalSince(preflight) * 1000)
     var writeMs = 0.0
     var finishMs = 0.0
+    let audioDirectory = transaction.directory.appendingPathComponent("audio")
+    try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
+    let audio = AudioMix(directory: audioDirectory, fps: fps)
     for (index, segment) in segments.enumerated() {
       guard interrupted == 0 else { throw MotionError("Render cancelled") }
       let target = transaction.segment(index)
@@ -238,6 +241,7 @@ func render(
           } else if let stream {
             try stream.write(frame.pixels)
           } else { throw MotionError("Missing shared video frame") }
+          try audio.append(frame.media)
           writeMs += Date().timeIntervalSince(begin) * 1000
           if let path = arguments.options["dump-layout"] { try writeJSON(frame.layout, to: path) }
           timings.append(frame.renderMs)
@@ -249,7 +253,7 @@ func render(
       } catch { stream?.cancel(); shared?.cancel(); throw error }
     }
     let concat = Date()
-    try transaction.publish(count: segments.count, cancelled: { interrupted != 0 })
+    try transaction.publish(count: segments.count, beforePublish: { try audio.mux(video: $0) }, cancelled: { interrupted != 0 })
     stages["concatAndPublishMs"] = .number(Date().timeIntervalSince(concat) * 1000)
     stages["encodeWriteMs"] = .number(writeMs)
     stages["encodeFinishMs"] = .number(finishMs)
