@@ -178,6 +178,9 @@ func embeddedCompilerRejectsUnsupportedSources(source: String) throws {
   print("Native cache: cold \(coldTime * 1000) ms; warm \(Date().timeIntervalSince(warmStart) * 1000) ms; hits=1 misses=1")
   #expect(compiler.cacheStatistics == .init(hits: 1, misses: 1))
   #expect(try cold.encoded() == warm.encoded())
+  let oneShot = Compiler(cacheEnabled: false)
+  #expect(try oneShot.graph(project: project, entry: "main.ts").encoded() == cold.encoded())
+  #expect(oneShot.cacheStatistics == .init())
   #expect(cold.modules.values.first?.sourceMap?.contains("main.ts") == true)
   do { _ = try Runtime(bundle: GraphLinker.link(cold)); Issue.record("Expected mapped error") } catch {
     let message = String(describing: error)

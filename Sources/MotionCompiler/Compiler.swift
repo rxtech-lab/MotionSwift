@@ -9,11 +9,16 @@ public struct Compiler {
   /// Retained for source compatibility; compiler assets come from the package bundle.
   public let repository: URL
   private let cache = NativeGraphCache()
+  private var cacheEnabled = true
   public var cacheStatistics: CompilerCacheStatistics { cache.statistics }
   public func clearCache() { cache.clear() }
 
   public init(repository: URL) { self.repository = repository }
-  public init() { repository = Bundle.module.bundleURL }
+  /// Disable retained-graph bookkeeping for one-shot callers such as the CLI.
+  public init(cacheEnabled: Bool = true) {
+    repository = Bundle.module.bundleURL
+    self.cacheEnabled = cacheEnabled
+  }
 
   /// Emits the project with tsgo after subset inspection; returns the emitted entry module.
   private func emit(project: URL, entry: String, toolchain: URL, temporary: URL, vendor: URL) throws -> URL {
@@ -33,7 +38,7 @@ public struct Compiler {
   /// precompiled vendor graph. Packages are resolved from the project's `node_modules` and still
   /// pass the dynamic import/require inspection.
   public func graph(project: URL, entry: String) throws -> ModuleGraph {
-    let manifest = try NativeGraphCache.manifest(project)
+    let manifest = cacheEnabled ? try NativeGraphCache.manifest(project) : [:]
     let identity = try CompilerContent.key([
       "project": project.standardizedFileURL.path, "entry": entry,
       "manifest": try CompilerContent.key(manifest), "vendor": Vendor.sha256,
@@ -41,7 +46,7 @@ public struct Compiler {
       "inspector": CompilerContent.hash(try Data(contentsOf: resource("inspect.js"))),
       "contract": "native-graph-v2-es2022-browser-import",
     ])
-    if let graph = cache.lookup(identity) { return graph }
+    if cacheEnabled, let graph = cache.lookup(identity) { return graph }
     var tracked: [URL] = []
     let graph = try withToolchain { toolchain, temporary in
       let vendor = try resource("Vendor")
@@ -49,7 +54,7 @@ public struct Compiler {
         vendor: vendor)
       let output = temporary.appendingPathComponent("graph.js")
       let metadata = temporary.appendingPathComponent("meta.json")
-      let aliases = try PortableCompiler().resolutionOptions(files: PortableCompiler.sources(in: project))
+      let aliases = try resolutionOptions(project: project)
       let emitted = temporary.appendingPathComponent("emitted")
       var linkOptions: [String: Any] = ["baseUrl": emitted.path]
       if let paths = aliases["paths"] as? [String: [String]] {
@@ -125,7 +130,7 @@ public struct Compiler {
         producer: "tsgo 7.0.2 + esbuild 0.28.1 (macOS)", stamped: false)
     }
     // A project edited during compilation must not poison the identity captured before emission.
-    if try NativeGraphCache.manifest(project) == manifest {
+    if cacheEnabled, try NativeGraphCache.manifest(project) == manifest {
       try cache.store(identity, graph: graph, dependencies: tracked)
     }
     return graph
@@ -173,7 +178,7 @@ public struct Compiler {
         "react": [modules.appendingPathComponent("@types/react/index.d.ts").path],
         "react/jsx-runtime": [modules.appendingPathComponent("@types/react/jsx-runtime.d.ts").path]],
     ]
-    let aliases = try PortableCompiler().resolutionOptions(files: PortableCompiler.sources(in: project))
+    let aliases = try resolutionOptions(project: project)
     if let paths = aliases["paths"] as? [String: [String]], var builtins = options["paths"] as? [String: [String]] {
       for (key, targets) in paths where builtins[key] == nil {
         builtins[key] = targets.map { project.appendingPathComponent($0).path }
@@ -319,6 +324,16 @@ private extension Compiler {
     guard !values.isEmpty else { throw MotionError("TypeScript 7 exited with status \(status)") }
     return try JSONDecoder().decode([Diagnostic].self, from: JSONSerialization.data(withJSONObject: values))
   }
+}
+
+private extension Compiler {
+  func resolutionOptions(project: URL) throws -> [String: Any] {
+    // Without a root tsconfig there are no aliases or inherited options to resolve.
+    // Avoid loading the portable JS compiler and reading every project source just for this check.
+    guard FileManager.default.fileExists(atPath: project.appendingPathComponent("tsconfig.json").path) else { return [:] }
+    return try PortableCompiler().resolutionOptions(files: PortableCompiler.sources(in: project))
+  }
+
 }
 
 private struct CompilerGraph: Decodable {

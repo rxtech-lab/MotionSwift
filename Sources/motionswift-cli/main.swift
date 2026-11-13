@@ -127,14 +127,14 @@ func run() throws {
   MediaSource.publicDirectory = project.appendingPathComponent("public")
   let startup = Date()
   if command == "check" {
-    let diagnostics = try Compiler().checkTypes(
+    let diagnostics = try Compiler(cacheEnabled: false).checkTypes(
       project: project, entry: arguments.options["entry"] ?? "src/index.ts")
     if !diagnostics.isEmpty {
       print(String(bytes: try JSONEncoder().encode(diagnostics), encoding: .utf8) ?? "[]")
       throw MotionError("Type checking failed")
     }
   }
-  let bundle = try Compiler().compile(
+  let bundle = try Compiler(cacheEnabled: false).compile(
     project: project, entry: arguments.options["entry"] ?? "src/index.ts")
   let runtime = try Runtime(bundle: bundle)
   let catalog = try runtime.compositions()

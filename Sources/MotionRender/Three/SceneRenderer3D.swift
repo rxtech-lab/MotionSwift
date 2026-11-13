@@ -294,10 +294,11 @@ private final class LibraryCache: @unchecked Sendable {
     try lock.withLock {
       if let library = libraries[device.registryID] { return library }
       let options = MTLCompileOptions()
+      // Preserve floating-point edge cases across repeated exports and GPU driver implementations.
       if #available(macOS 15, iOS 18, *) {
-        options.mathMode = .fast
+        options.mathMode = .safe
       } else {
-        options.fastMathEnabled = true
+        options.fastMathEnabled = false
       }
       let library = try device.makeLibrary(source: scene3DShaderSource, options: options)
       libraries[device.registryID] = library
