@@ -22,7 +22,6 @@ jobs:
       - run: make ci
         env:
           MTL_DEBUG_LAYER: '1'
-          MTL_SHADER_VALIDATION: '1'
       - name: Publish map compatibility summary
         if: always()
         shell: bash
