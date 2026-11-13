@@ -125,6 +125,10 @@ image and video compositions. Double-click a nested composition on the canvas or
 open it; return through the breadcrumbs with the parent's playhead preserved. Playback controls,
 mute, a scrubbable multitrack timeline, and an export sheet follow the selected composition. See [nested clips and media](docs/media-compositions.md) for the supported APIs and limits.
 
+The macOS showcase can also be packaged as a standalone app with `make showcase-app`.
+Published releases build a Developer ID signed, notarized DMG once the required credentials are
+configured. See [showcase release setup and icon source](docs/showcase-release.md).
+
 ## License
 
 MotionSwift's original source code is available under the [MIT License](LICENSE).

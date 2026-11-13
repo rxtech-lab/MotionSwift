@@ -177,6 +177,12 @@ public enum StylePropertyKind: String, Decodable, Sendable {
 }
 
 public struct StyleSummary: Decodable, Sendable, Equatable {
+  public struct Declaration: Decodable, Sendable, Equatable {
+    public let key: String
+    public let label: String?
+    public let group: String?
+  }
+
   public struct Property: Decodable, Sendable, Equatable, Identifiable {
 
     public let key: String
@@ -189,8 +195,30 @@ public struct StyleSummary: Decodable, Sendable, Equatable {
   /// False when the style prop is an expression rather than an object literal.
   public let editable: Bool
   public let properties: [Property]
+  public let declarations: [Declaration]?
 
   public func property(_ key: String) -> Property? { properties.first { $0.key == key } }
+
+  /// Adds styles supplied by variables, components and spreads without making them writable.
+  public func detectedProperties(resolved: [String: JSONValue]) -> [Property] {
+    let detected = resolved.keys.filter { property($0) == nil }.sorted().map { key in
+      Property(key: key, kind: .computed, value: resolved[key], raw: nil)
+    }
+    return properties.filter { $0.key.range(of: "^[A-Za-z][A-Za-z0-9]*$", options: .regularExpression) != nil }
+      + detected
+  }
+
+  public func label(for key: String) -> String { declarations?.last { $0.key == key }?.label ?? key }
+
+  public func group(for key: String) -> String {
+    if let group = declarations?.last(where: { $0.key == key })?.group { return group }
+    if key.range(of: "^(font|text|letter|line|word|color)", options: .regularExpression) != nil { return "Text" }
+    if key.range(of: "^(transform|rotate|scale|translate|perspective)", options: .regularExpression) != nil { return "Transform" }
+    if key.range(of: "^(background|border|opacity|boxShadow|filter|mixBlend|clip|mask)", options: .regularExpression) != nil {
+      return "Appearance"
+    }
+    return "Layout"
+  }
 }
 
 /// Numeric, frame-based animation authored by the visual editor. Frames are local to the object.

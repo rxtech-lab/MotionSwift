@@ -38,6 +38,15 @@ Each row below has a status that the implementation must keep up to date:
 
 ## Host elements
 
+### Maps
+
+OpenStreetMap-style raster tile layouts and prepared MapKit snapshot images can use
+`Img` with frame-driven overlays. Interactive Leaflet / React Leaflet and MapKit JS
+are **not integrated** with the native JavaScriptCore renderer; neither is native
+MapKit snapshot generation. [Map regression coverage](../tests/maps/README.md) compares
+offline synthetic tile/snapshot compositions against Remotion on CPU and GPU in push CI.
+This verifies image compatibility, not live map services or authorization.
+
 | Element | Status | Notes |
 |---|---|---|
 | `div`, `span`, `p`, `h1`–`h6`, `section`, `header`, `footer`, `main` | ✅ | All are boxes. Text elements get user-agent defaults (margins, font sizes) that match Chrome. |

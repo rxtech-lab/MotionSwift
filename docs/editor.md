@@ -176,3 +176,65 @@ These are additions to [tests/README.md](../tests/README.md):
 - **Round trip:** apply the operation, re-render, and pixel-compare with a golden of the expected result. Also compare the committed frame with the preview-override frame, which must match exactly.
 - **Timeline mapping:** sequence trees with nested `from` offsets resolve to the expected absolute positions for keyframes and bars.
 - **SwiftUI UI tests:** select, drag, resize, rotate, timeline bar drag, and the keyframe sheet, run with XCUITest on a fixture project.
+
+## Detected HTML/CSS properties and agent declarations
+
+The inspector groups the selected element's style into Layout, Transform, Appearance and Text.
+It combines source properties with evaluated host styles, so dimensions, colors and other CSS
+values supplied by component code, variables or spreads appear at the current frame. These are
+MotionSwift host styles, not browser computed CSS; inherited defaults are not synthesized.
+Literal inline values open the dedicated Edit Property sheet. Values provided by expressions,
+spreads or variables are read-only and must be changed in code. A later spread or duplicate key
+also protects an earlier literal from edits that would have no visible effect.
+
+Agents can author any supported CSS property directly in `style` and optionally give it an inspector
+label and group using a literal `data-ms-properties` object on the same element:
+
+```tsx
+<div
+  data-ms-properties={{
+    width: {label: 'Card width', group: 'Size'},
+    backgroundColor: {label: 'Brand color', group: 'Brand'},
+  }}
+  style={{width: 320, height: 180, backgroundColor: '#fca311'}}
+/>
+```
+
+Declarations describe existing properties; they do not supply defaults or change rendering. Only
+literal string labels/groups are read, without executing metadata expressions. Unlisted properties
+remain visible with their CSS names and automatic groups. Use **Add Property** to write a new literal
+into an existing inline style object; renderer CSS support still applies.
+
+### Showcase motion studies and example workspaces
+
+Motion Studies has its own sidebar section above Showcase. Its eight entries are Ribbon,
+Orbit, Signal, Atlas, the Hong Kong Island Line railway, both synthetic map fixtures,
+and the 90-second Test Film. Selecting a study, map, Test Film or rendering essential
+opens its visual editor directly. All Studies opens the gallery. 3D scenes remain
+preview-only for now. **Export Edit** renders the current edited bundle.
+
+The Test Film editor separates the flattened benchmark into 179 independent text,
+shape and icon layers plus its gradient, grain and two backdrop circles. Each logical
+object has its own selectable source-backed track, move/resize/rotate controls, opacity,
+timing and keyframes. Text layers expose a `content` override; `color` overrides the fill.
+The initial empty text and transparent color values retain the original animated content.
+Edits offset the original motion, and undo restores source and rendering. The exact
+benchmark archive is unchanged; earlier flattened film copies are retained separately.
+Regenerate the layer registry with `node tests/tools/generate-editable-film.mjs` when
+changing the benchmark fixture.
+
+Examples are copied once to Application Support/MotionSwiftShowcase/Editor/Examples.
+Edits survive closing and reopening; source fixtures and packaged examples stay intact.
+Project copies include public assets, and the editor keeps that asset root across
+saving and undo. Map examples use the recent offline tile/snapshot regression fixtures:
+they contain synthetic imagery and do not contact OpenStreetMap or MapKit services.
+The standalone app bundles these map projects as well as the motion studies.
+
+Select a canvas object or timeline row to use the property inspector. Static CSS values
+open dedicated editing sheets; auto-detected values and agent-defined labels/groups
+from `data-ms-properties` use the same inspector. Images and video components now have
+source stamps and timeline tracks. The new studies use literal numeric keyframes so
+their motion can be adjusted in the timeline. SVG lettering is editable as an image box;
+changing its words requires editing the source. Computed expressions and 3D mesh/camera
+properties retain the existing code-editing restrictions; the inspector does not turn
+these into writable CSS values.

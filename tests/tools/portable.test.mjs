@@ -72,6 +72,36 @@ test('style classification drives which properties the editor may change', () =>
   assert.deepEqual(properties.map(({key, kind}) => [key, kind]), [['position', 'static'], ['left', 'animated']]);
 });
 
+test('agent property declarations are literal metadata and preserve source editing', () => {
+  const source = `const Card = () => <div data-ms-properties={{width: {label: 'Card width', group: 'Size'},
+    color: {label: dynamic}, opacity: {...dynamic}, ...other}} style={{width: 120, color: '#fff'}} />;`;
+  const src = 'a.tsx:1:20';
+  const summary = JSON.parse(portable.styles(source, src));
+  assert.deepEqual(summary.declarations, [
+    {key: 'width', label: 'Card width', group: 'Size'}, {key: 'color'}, {key: 'opacity'},
+  ]);
+  const changed = JSON.parse(portable.edit(source, JSON.stringify({op: 'setStyle', src, key: 'width', value: 160})));
+  assert.match(changed.source, /width: 160/);
+  assert.equal(JSON.parse(portable.edit(changed.source, JSON.stringify(changed.inverse))).source, source);
+  const bound = JSON.parse(portable.styles('const Card = () => <div style={theme} />;', src));
+  assert.equal(bound.editable, false);
+});
+
+test('spread overrides and duplicate style keys cannot be edited as static literals', () => {
+  const src = 'a.tsx:1:20';
+  const source = 'const Card = () => <div style={{width: 100, ...theme, color: "red"}} />;';
+  const summary = JSON.parse(portable.styles(source, src));
+  assert.equal(summary.properties.find(p => p.key === 'width').kind, 'computed');
+  assert.equal(summary.properties.find(p => p.key === 'color').kind, 'static');
+  for (const key of ['width', 'height']) {
+    assert.throws(() => portable.edit(source, JSON.stringify({op: 'setStyle', src, key, value: 200})), /refused/);
+  }
+  const duplicate = 'const Card = () => <div style={{width: 100, width: 200}} />;';
+  assert.equal(JSON.parse(portable.styles(duplicate, src)).properties.length, 1);
+  assert.equal(JSON.parse(portable.styles(duplicate, src)).properties[0].kind, 'computed');
+  assert.throws(() => portable.edit(duplicate, JSON.stringify({op: 'setStyle', src, key: 'width', value: 300})), /refused/);
+});
+
 test('timeline metadata edits preserve stamps and undo byte exactly', () => {
   const before = 'export const Card = () => <div style={{left: 20, opacity: 1}} />;\n';
   const src = 'a.tsx:1:27';
@@ -107,4 +137,16 @@ test('timeline refuses to replace code animations, invalid frames, or spread sty
   const source = 'const A = () => <div style={{left: 0}} />;';
   const value = {from: 0, duration: 20, keyframes: {left: [{frame: -1, value: 50, easing: 'linear'}]}};
   assert.throws(() => portable.edit(source, JSON.stringify({op: 'setTimeline', src, key: 'timeline', value})), /Invalid keyframe/);
+});
+
+test('media components expose source-backed timeline and style edits', () => {
+  const source = `const Film = () => <><Img style={{width: 80, height: 60}} /><Video style={{width: 90}} /><OffthreadVideo style={{height: 50}} /></>;`;
+  const tracks = JSON.parse(portable.timeline(source, 'media.tsx'));
+  assert.deepEqual(tracks.map(track => track.label), ['Img', 'Video', 'OffthreadVideo']);
+  for (const track of tracks) {
+    const edited = JSON.parse(portable.edit(source, JSON.stringify({op: 'setStyle', src: track.src, key: 'opacity', value: 0.5})));
+    assert.match(edited.source, /opacity: 0.5/);
+    const inverse = JSON.parse(portable.edit(edited.source, JSON.stringify(edited.inverse)));
+    assert.equal(inverse.source, source);
+  }
 });

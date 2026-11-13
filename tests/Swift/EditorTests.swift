@@ -126,6 +126,15 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(model.canRedo)
   await model.redo()
   #expect(try String(contentsOf: file, encoding: .utf8) == moved)
+
+  model.clearSelection()
+  #expect(model.selection == nil)
+  #expect(model.selectedPath == nil)
+  #expect(model.selectedRect == nil)
+  #expect(model.styles == nil)
+  let feedback = model.selectionFeedback
+  model.clearSelection()
+  #expect(model.selectionFeedback == feedback)
 }
 
 @MainActor
@@ -332,4 +341,31 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(try String(contentsOf: file, encoding: .utf8).contains("rotate(45deg)"))
   await model.undo()
   #expect(try String(contentsOf: file, encoding: .utf8) == original)
+}
+
+@MainActor
+@Test func editorDetectsSpreadStylesAtCurrentFrameAndAgentGroups() async throws {
+  let project = try temporarySample()
+  defer { try? FileManager.default.removeItem(at: project) }
+  let file = project.appendingPathComponent("src/Cards.tsx")
+  let source = try String(contentsOf: file, encoding: .utf8)
+  let updated = source.replacingOccurrences(
+    of: "left: 48, top: 48, width: 220",
+    with: "left: 48, top: 48, ...{width: 220, color: '#fca311', fontSize: 24}")
+    .replacingOccurrences(of: "<div style=", with: "<div data-ms-properties={{color: {label: 'Brand color', group: 'Brand'}}} style=")
+  #expect(updated != source)
+  try updated.write(to: file, atomically: true, encoding: .utf8)
+  let model = EditorModel(project: project, entry: "src/index.ts", configuration: .init(scale: 1))
+  await model.open(compositionID: "Cards")
+  try await waitUntil { model.player.displayedFrame != nil }
+  model.select(at: CGPoint(x: 60, y: 60))
+  try await waitUntil { model.styles != nil }
+  #expect(model.detectedStyleProperties.first { $0.key == "width" }?.kind == .computed)
+  #expect(model.detectedStyleProperties.first { $0.key == "fontSize" }?.value == .number(24))
+  #expect(model.currentStyleValue("color") == .string("#fca311"))
+  #expect(model.styles?.label(for: "color") == "Brand color")
+  #expect(model.styles?.group(for: "color") == "Brand")
+  await model.setStyle("width", .number(300))
+  #expect(model.notice?.kind == .refusal)
+  #expect(try String(contentsOf: file, encoding: .utf8) == updated)
 }

@@ -129,3 +129,19 @@ func portableAndMacGraphsMatchTsgoPixels(composition: String) throws {
   let red = try pixels(GraphLinker.link(ModuleGraph(data: graph.encoded())), composition: "Card", frame: 0)
   #expect(red.prefix(4) == Data([255, 0, 0, 255]))
 }
+
+@Test func detectedStylesIncludeResolvedValuesAndAgentLabels() throws {
+  let compiler = try PortableCompiler()
+  let summary = try compiler.styles(
+    source: "const Card = () => <div data-ms-properties={{width: {label: 'Card width', group: 'Size'}}} "
+      + "style={{width: 120, ...theme, color: '#fff'}} />;", src: "a.tsx:1:20")
+  let properties = summary.detectedProperties(resolved: ["width": .number(180), "color": .string("#fff"), "fontSize": .number(24)])
+  #expect(properties.map(\.key) == ["width", "color", "fontSize"])
+  #expect(properties.first { $0.key == "width" }?.kind == .computed)
+  #expect(properties.first { $0.key == "color" }?.kind == .static)
+  #expect(properties.first { $0.key == "fontSize" }?.value == .number(24))
+  #expect(summary.label(for: "width") == "Card width")
+  #expect(summary.group(for: "width") == "Size")
+  #expect(summary.group(for: "fontSize") == "Text")
+  #expect(summary.group(for: "opacity") == "Appearance")
+}

@@ -20,6 +20,20 @@ jobs:
       - name: Probe hardware encoder access
         run: node tests/tools/hardware-capabilities.mjs
       - run: make ci
+      - name: Publish map compatibility summary
+        if: always()
+        shell: bash
+        run: |
+          for report in tests/reports/maps/results.json tests/reports/maps/railway/results.json; do
+            if [ -f "$report" ]; then
+              node --input-type=module -e '
+                import fs from "node:fs";
+                const r = JSON.parse(fs.readFileSync(process.argv[1]));
+                console.log(`### Map compatibility: ${r.pass ? "PASS" : "FAIL"}\n\n${r.scope}\n`);
+                for (const x of r.results) console.log(x.error ? `- ${x.error}` : `- ${x.id}@${x.frame} (${x.backend}): ${x.pass ? "PASS" : "FAIL"}, ${(x.diffRatio * 100).toFixed(4)}% changed, repeatable: ${x.deterministic}`);
+              ' "$report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
       - name: Check real Test Film visual regressions
         shell: bash
         run: |

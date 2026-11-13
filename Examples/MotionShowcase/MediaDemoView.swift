@@ -17,6 +17,7 @@ struct MediaDemoView: View {
       MediaDemoTimeline(player: player, open: open)
     }
     .padding(20)
+    .editableExample(.media, compositionID: player.composition?.id) { player.pause() }
     .navigationTitle(player.composition?.id ?? "Master Composition")
     .navigationSubtitle("Double-click a composition in the preview or timeline to open it")
     .toolbar {
@@ -96,6 +97,10 @@ enum MediaDemo {
   }
 
   static func source() throws -> MotionSource {
+    .files(try files(), entry: "index.tsx")
+  }
+
+  static func files() throws -> [String: String] {
     var code = try String(contentsOf: asset("Demo", extension: "tsx"), encoding: .utf8)
     for (token, name, ext) in [("__VIDEO__", "motion", "mp4"), ("__IMAGE__", "poster", "png"),
                                ("__AUDIO__", "music", "m4a")] {
@@ -105,7 +110,7 @@ enum MediaDemo {
     }
     let layers = String(bytes: try JSONEncoder().encode(clips), encoding: .utf8)!
     code = code.replacingOccurrences(of: "__LAYERS__", with: layers)
-    return .files(["index.tsx": code], entry: "index.tsx")
+    return ["index.tsx": code]
   }
 }
 

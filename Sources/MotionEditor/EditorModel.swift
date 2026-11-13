@@ -89,7 +89,7 @@ public final class EditorModel {
       status = .failed(String(describing: error))
       return
     }
-    await player.load(.files(files, entry: entry, stamp: true), compositionID: compositionID)
+    await player.load(.portable(project: project, entry: entry, stamp: true), compositionID: compositionID)
     status = finish()
     await refreshStyles()
     await refreshTimeline()
@@ -102,7 +102,7 @@ public final class EditorModel {
 
   private func reload() async {
     status = .compiling
-    await player.reload(.files(files, entry: entry, stamp: true))
+    await player.reload(.portable(project: project, entry: entry, stamp: true))
     status = finish()
     await refreshStyles()
     await refreshTimeline()
@@ -584,6 +584,12 @@ extension EditorModel {
   }
 
   /// Current inspector value, including unsaved canvas/inspector adjustments at this frame.
+  public var detectedStyleProperties: [StyleSummary.Property] {
+    guard let styles else { return [] }
+    let resolved = selectedBox.flatMap { player.displayedFrame?.tree.node(at: $0.id)?.style } ?? [:]
+    return styles.detectedProperties(resolved: resolved)
+  }
+
   public func currentStyleValue(_ key: String) -> JSONValue? {
     if let draft = keyframeDraft[key] { return draft }
     if let box = selectedBox, let value = player.displayedFrame?.tree.node(at: box.id)?.style[key] { return value }
