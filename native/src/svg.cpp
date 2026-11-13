@@ -187,3 +187,20 @@ extern "C" void msk_rrect_mask(void* ptr,float left,float top,float right,float 
     SkRuntimeShaderBuilder builder(effect);builder.uniform("rect")=SkV4{left,top,right,bottom};builder.uniform("radius")=radius;SkMatrix inverse;if(!canvas->getTotalMatrix().invert(&inverse))return;builder.uniform("inverseJ")=SkV4{inverse[0],inverse[3],inverse[1],inverse[4]};
     SkPaint paint;paint.setShader(builder.makeShader());canvas->drawRect(SkRect::MakeLTRB(left-1,top-1,right+1,bottom+1),paint);
 }
+
+// Reduced shader mode also replaces Ganesh's analytic circular-rrect coverage.
+// Keep that geometry path for solid fills; it does not sample any texture. Restore
+// shader tiling before recording image/filter draws so virtual Metal stays supported.
+#include "src/gpu/ganesh/GrRecordingContextPriv.h"
+#include "src/gpu/ganesh/GrCaps.h"
+#include "src/gpu/ganesh/GrShaderCaps.h"
+extern "C" void msk_solid_rrect(const void* raw,float x,float y,float w,float h,float radius,uint32_t color) {
+    auto canvas=const_cast<SkCanvas*>(static_cast<const SkCanvas*>(raw));
+    auto context=canvas->recordingContext();
+    auto caps=context?const_cast<GrShaderCaps*>(context->priv().caps()->shaderCaps()):nullptr;
+    bool reduced=caps && caps->fReducedShaderMode;
+    if(caps)caps->fReducedShaderMode=false;
+    SkPaint paint;paint.setColor(color);paint.setAntiAlias(true);
+    canvas->drawRoundRect(SkRect::MakeXYWH(x,y,w,h),radius,radius,paint);
+    if(caps)caps->fReducedShaderMode=reduced;
+}

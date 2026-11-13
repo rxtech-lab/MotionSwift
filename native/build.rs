@@ -89,7 +89,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=SKIA_SOURCE_DIR");
     cc::Build::new()
         .cpp(true)
-        .std("c++17")
+        .std("c++20")
         .flag("-fno-rtti")
         .flag_if_supported("-Wno-unused-parameter")
         .define("NDEBUG", None)
