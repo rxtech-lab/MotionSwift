@@ -13,7 +13,7 @@ test('PR benchmark summary puts actual-project timings before synthetic results 
     fs.mkdirSync(path.join(out,'long'));
     fs.writeFileSync(path.join(out,'summary.md'),'<!-- motionswift-bench -->\n## Short\nSynthetic short table\n<details>large raw data</details>');
     fs.writeFileSync(path.join(out,'long/summary.md'),'<!-- motionswift-bench -->\n## Long\nSynthetic long table\n');
-    fs.writeFileSync(path.join(out,'test-film/summary.md'),'<!-- motionswift-bench -->\n## Real\nReal project timing table\n❌ parity failed\n<details>large real raw data</details>');
+    fs.writeFileSync(path.join(out,'test-film/summary.md'),'<!-- motionswift-bench -->\n## Real\nReal project timing table\nLong methodology explanation\n| Fixture | Size | Remotion | CPU | GPU | HW | Shared | HW speedup | Shared speedup | FFmpeg speedup | SSIM | Delta |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| film | 1080p | 10 s | 8 s | 6 s | 5 s | 4 s | 1.2× | 1.5× | 1.25× | 0.99 ✅ | -2% |\n### Sampled peak memory\nMemory measurements\n❌ parity failed\n<details>large real raw data</details>');
     const result=spawnSync(process.execPath,[path.join(root,'tests/perf/combine-summaries.mjs'),out],{encoding:'utf8'});
     assert.equal(result.status,0,result.stderr);
     const summary=fs.readFileSync(path.join(out,'summary.md'),'utf8');
@@ -23,5 +23,14 @@ test('PR benchmark summary puts actual-project timings before synthetic results 
     assert.ok(summary.includes('❌ parity failed'));
     assert.ok(summary.includes('test-film/results.json'));
     assert.ok(!summary.includes('<details>'));
+    const comment=fs.readFileSync(path.join(out,'comment.md'),'utf8');
+    assert.ok(comment.startsWith('<!-- motionswift-bench -->\n## Benchmark'));
+    assert.ok(comment.includes('| film | 10 s | 8 s | 6 s | 5 s | 4 s | 0.99 ✅ | -2% |'));
+    assert.ok(comment.includes('❌ parity failed'));
+    assert.ok(comment.includes('<details><summary>30-frame clips</summary>'));
+    assert.ok(comment.includes('<details><summary>300-frame clips</summary>'));
+    assert.ok(!comment.includes('Long methodology explanation'));
+    assert.ok(!comment.includes('Memory measurements'));
+    assert.ok(!comment.includes('large real raw data'));
   } finally {fs.rmSync(out,{recursive:true,force:true});}
 });

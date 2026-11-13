@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "measuredOn": "2026-11-13",
+  "sourceRun": "https://github.com/rxtech-lab/MotionSwift/actions/runs/43359094534",
+  "machine": {
+    "cpu": "Apple M1 Max (Virtual)",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "policy": "Median wall time <= measured median * 1.5; sampled peak process-tree RSS <= measured peak * 1.5. Same host class only. Hardware cells require a separately measured profile on a hardware-capable runner.",
+  "cells": {
+    "h264/software/30": {
+      "maxMs": 1607,
+      "maxRssBytes": 1037451264
+    },
+    "hevc/software/30": {
+      "maxMs": 2081,
+      "maxRssBytes": 952983552
+    },
+    "prores/software/30": {
+      "maxMs": 1468,
+      "maxRssBytes": 771121152
+    },
+    "prores4444/software/30": {
+      "maxMs": 1491,
+      "maxRssBytes": 865566720
+    },
+    "h264/software/300": {
+      "maxMs": 2981,
+      "maxRssBytes": 1225777152
+    },
+    "hevc/software/300": {
+      "maxMs": 4982,
+      "maxRssBytes": 1044160512
+    },
+    "prores/software/300": {
+      "maxMs": 2931,
+      "maxRssBytes": 790560768
+    },
+    "prores4444/software/300": {
+      "maxMs": 3220,
+      "maxRssBytes": 869818368
+    }
+  }
+}
