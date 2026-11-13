@@ -72,7 +72,7 @@ if(!fixtures.length||requested?.some(id=>!fixtures.some(f=>f.id===id)))throw Err
 const machine={platform:`${os.platform()} ${os.release()} (${os.arch()})`,cpu:os.cpus()[0]?.model,
   cores:os.cpus().length,availableCores:workerCounts.availableCores,memoryGB:Math.round(os.totalmem()/1024**3),runner:process.env.RUNNER_NAME||os.hostname(),node:process.version};
 const settings={runs,warmup,codec:config.codec,crf:18,preset:'medium',encoders:ENCODERS,hardwareQuality:65,concurrency,requestedConcurrency:workerCounts.requested,minSsim:config.minSsim,
-  memory:memoryMethod,remotionGl:config.remotionGl??process.env.REMOTION_GL??null,
+  memory:memoryMethod,remotionImageFormat:'png',remotionGl:config.remotionGl??process.env.REMOTION_GL??null,
   entryPoint:config.entryPoint,entrySha256:sha256(fs.readFileSync(path.resolve(project,config.entryPoint))),
   tiers:tiers.map(({id,scale,engines:tierEngines})=>({id,scale,engines:tierEngines??ENGINES})),regressionThreshold:threshold};
 const baseline=options.baseline?readJSON(path.resolve(options.baseline)):null;
@@ -80,7 +80,7 @@ const sourceSha256=config.sourceSha256??fixtureSourceHash();
 if(!/^[a-f0-9]{64}$/.test(sourceSha256))throw Error('Invalid benchmark source hash');
 const browserPin=readJSON(path.join(root,'tests/browser.lock.json'));
 const comparableMachine=baseline?.schema===2 && baseline?.sourceSha256===sourceSha256 && JSON.stringify(baseline?.versions?.browser)===JSON.stringify(browserPin)
-  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','memory','remotionGl','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
+  && sameMachine(machine,baseline?.machine) && ['codec','crf','preset','encoders','hardwareQuality','concurrency','minSsim','memory','remotionGl','remotionImageFormat','tiers','entryPoint','entrySha256'].every(key=>JSON.stringify(settings[key])===JSON.stringify(baseline?.settings?.[key]));
 const candidates=[options['native-bin'],process.env.MOTIONSWIFT_BIN,path.join(root,'.build/release/motionswift'),'motionswift'].filter(Boolean);
 const native=candidates.find(file=>{try{return !!command(file,['--version']).trim();}catch{return false;}});
 const versions={browser:browserPin,remotion:readJSON(path.join(root,'tests/node_modules/remotion/package.json')).version,

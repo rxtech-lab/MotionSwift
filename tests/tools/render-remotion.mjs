@@ -13,4 +13,4 @@ const composition=await selectComposition({serveUrl,id,inputProps,...browser});
 const frameRange=range.split('-').map(Number);
 const workers=Math.min(Number(concurrency),frameRange[1]-frameRange[0]+1);
 await renderMedia({...browser,serveUrl,composition,outputLocation:output,codec:'h264',crf:18,x264Preset:'medium',pixelFormat:'yuv420p',inputProps,
-  disableSharedMemoryCapture:true,frameRange,concurrency:workers,scale:Number(scale),logLevel:'verbose'});
+  imageFormat:'png',disableSharedMemoryCapture:true,frameRange,concurrency:workers,scale:Number(scale),logLevel:'verbose'});

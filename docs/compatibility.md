@@ -232,7 +232,9 @@ original raster path; a retained renderer can switch between this path and CSS e
 Transition fixtures now declare their incoming background during overlap. All nine freshly
 rendered pinned-Chrome transition references exactly match the existing PNGs; only source
 provenance metadata changed. At 720p, the external SVG video also passes the unchanged 0.98
-SSIM gate on CPU and Metal (0.9970). Benchmark references include the project's public
+SSIM gate on CPU and Metal (0.9970). Benchmark video references capture lossless PNG intermediates before H.264 encoding, avoiding
+JPEG capture artifacts in the SSIM comparison. Capture format is part of benchmark baseline
+compatibility. Benchmark references include the project's public
 assets, and single-frame benchmark fixtures render two frames to form a valid video.
 
 Artifacts: `tests/reports/visual/{cpu,gpu}/{results.json,index.html}`. These results cover the
