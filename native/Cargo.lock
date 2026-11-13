@@ -240,6 +240,8 @@ dependencies = [
 name = "motionswift-native"
 version = "0.1.0"
 dependencies = [
+ "cc",
+ "skia-bindings",
  "skia-safe",
 ]
 

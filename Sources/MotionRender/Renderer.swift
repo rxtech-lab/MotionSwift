@@ -53,6 +53,21 @@ public final class Renderer {
     return (Int(scaled.0), Int(scaled.1))
   }
 
+  /// Legacy data-URI SVGs retain their original SkSVG raster contract. CSS effects,
+  /// inline vector hosts, and external SVG files use the stricter paint pipeline.
+  private static let effectsKeys: Set<String> = ["opacity", "transform", "filter", "backdropFilter", "boxShadow",
+                                                   "backgroundImage", "clipPath", "maskImage", "mixBlendMode"]
+
+  private static func usesEffects(_ node: RenderNode) -> Bool {
+    if !effectsKeys.isDisjoint(with: node.style.keys) || (node.style["background"]?.string?.contains("gradient(") ?? false) {
+      return true
+    }
+    if node.type == "ms-svg" { return true }
+    if node.type == "img", let src = node.src, !src.hasPrefix("data:"),
+       (try? MediaSource.url(src).pathExtension.lowercased()) == "svg" { return true }
+    return node.children.contains { usesEffects($0) }
+  }
+
   public var backend: Backend { canvas.backend }
   public var pixelWidth: Int { canvas.width }
   public var pixelHeight: Int { canvas.height }
@@ -63,6 +78,7 @@ public final class Renderer {
     guard composition.width == size.0, composition.height == size.1 else {
       throw MotionError("Composition and surface dimensions differ")
     }
+    try canvas.prepareEffects(Self.usesEffects(node))
     canvas.clear()
     boxes = []
     let layout = try LayoutEngine.calculate(

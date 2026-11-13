@@ -56,6 +56,11 @@ public final class Canvas {
 
   deinit { msk_destroy(surface) }
 
+  /// Select the effects renderer before starting a frame, preserving the legacy image path otherwise.
+  public func prepareEffects(_ enabled: Bool) throws {
+    guard msk_effects_precision(surface, enabled) else { throw MotionError("Cannot prepare effects surface") }
+  }
+
   public func clear() { msk_clear(surface) }
 
   public func save(opacity: Double = 1) { msk_save(surface, Float(opacity)) }
@@ -73,9 +78,10 @@ public final class Canvas {
   }
 
   /// Starts an isolated CSS group; restore composites the entire subtree once.
-  public func effects(opacity: Double, blend: Int, filters: [[Double]]) {
+  public func effects(opacity: Double, blend: Int, filters: [[Double]], width: Double? = nil, height: Double? = nil) {
     let entries = filters.flatMap { $0.map(Float.init) }
-    msk_effect_layer(surface, Float(opacity), Int32(blend), entries, filters.count)
+    msk_effect_layer(surface, Float(opacity), Int32(blend), entries, filters.count,
+                     Float(width ?? Double(self.width)), Float(height ?? Double(self.height)))
   }
 
   public func backdrop(width: Double, height: Double, radius: Double, blur: Double) {

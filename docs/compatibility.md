@@ -52,9 +52,9 @@ This verifies image compatibility, not live map services or authorization.
 |---|---|---|
 | `div`, `span`, `p`, `h1`–`h6`, `section`, `header`, `footer`, `main` | ✅ | All are boxes. Text elements get user-agent defaults (margins, font sizes) that match Chrome. |
 | `img` | ✅ | Same path as `<Img>`. |
-| `svg` + `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `g`, `defs`, `linearGradient`, `radialGradient`, `stop`, `clipPath`, `mask` | 🟡 partial | React commits a validated vector island to SkSVG. Only its root has a Yoga/editor box. Rendering works; strict Remotion raster parity is not accepted yet. |
+| `svg` + `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `g`, `defs`, `linearGradient`, `radialGradient`, `stop`, `clipPath`, `mask` | 🟡 partial | React commits a validated vector island to SkSVG. Only its root has a Yoga/editor box. The supported fixture subset passes the strict Remotion raster gate on CPU and Metal; this does not cover arbitrary SVG documents. |
 | Inline SVG `text`, `tspan`, `pattern`, `use`, `image`, `foreignObject`, `filter`, SMIL | ⛔ | Never substitute SVG text for HTML paragraph layout. Legacy XML construction into data-URI images remains separate. |
-| External `.svg` via `<Img src>` | 🟡 partial | `objectFit: contain`, staged/public files or HTTP(S) URLs ending in `.svg`; SkSVG image contract. Strict raster parity remains open. Existing SVG data-URI delivery is preserved. |
+| External `.svg` via `<Img src>` | 🟡 partial | `objectFit: contain`, staged/public files or HTTP(S) URLs ending in `.svg`; SkSVG image contract. The external SVG fixture passes strict raster checks on CPU and Metal. Existing SVG data-URI delivery retains its original raster path. |
 | `canvas` | ⛔ | |
 | R3F elements inside `<ThreeCanvas>` (`mesh`, `group`, `primitive`, `*Geometry`, `mesh*Material`, lights, `color`/`fog` attachments) | 🟡 | Drawn by the native 3D renderer; see [3D support](three-d.md). |
 | `video`, `audio` (raw HTML) | ⛔ | Use `OffthreadVideo` / `Audio` instead. |
@@ -198,54 +198,46 @@ Without `MOTIONSWIFT_FIXTURE_IDS`, `make visual` runs the complete manifest, inc
 maintained effects fixtures. A selected run records its exact fixture IDs in each backend's result
 JSON; it does not establish parity for the other fixtures or the private real-composition corpus.
 
-### Effects verification status (2026-11-13, macOS arm64)
+### Effects verification status (2026-11-14, macOS arm64)
 
-Native archive rebuild and isolated release CLI linking pass, including every new C ABI symbol.
-Six focused Swift tests pass on both CPU and Metal: strict parsing, gradient/transform math,
-filtered/clipped group opacity, inline/external SVG delivery, mask/blend backdrop preservation,
-and backdrop blur sampling. The Node suite passes all 87 tests, including declarations,
-package algorithm parity, strict SVG diagnostics and golden provenance. Focused SwiftLint is clean.
-
-The final dedicated effects run contains 20 samples per backend. All repeats are exact;
-8 CPU samples and 9 Metal samples meet the unchanged 0.3% changed-pixel allowance.
-**Full effects acceptance fails.** Maximum changed-pixel percentages per fixture:
+The complete visual manifest passes on CPU and Metal: 62 samples per backend, comprising
+42 core samples and 20 effects samples. Every repeat is exact. The existing exact RGBA
+comparison and 0.3% changed-pixel allowance are unchanged; no reference PNG was replaced.
+Maximum changed-pixel percentages across the effects samples:
 
 | Fixture | CPU | Metal |
 |---|---:|---:|
-| Gradients | 0.4601% | 0.4184% |
-| Shadows | 12.9826% | 3.3090% |
-| Filters | 13.6181% | 10.2760% |
+| Gradients | 0.1389% | 0.0955% |
+| Shadows | 0.2118% | 0.2604% |
+| Filters | 0.1528% | 0.1528% |
 | Blending | 0% | 0% |
-| Clip / filter / mask / transparency interaction | 13.3455% | 10.8785% |
-| Backdrop blur | 17.9167% | 20.2083% |
-| Flat-plane 3D transforms | 0.7170% | 0.2413% |
-| Inline SVG (maximum across three frames) | 6.1181% | 5.1372% |
-| External SVG | 34.1406% | 33.4878% |
+| Clip / filter / mask / transparency interaction | 0.2378% | 0.2396% |
+| Backdrop blur | 0.2083% | 0.2083% |
+| Flat-plane 3D transforms | 0.1528% | 0.2413% |
+| Inline SVG (maximum across three frames) | 0.1597% | 0.2552% |
+| External SVG | 0.2622% | 0.2622% |
 | Fade transition | 0% | 0% |
-| Slide transition | 0.3125% | 0.3125% |
-| Wipe transition | 0.3125% | 0.3125% |
+| Slide transition | 0% | 0% |
+| Wipe transition | 0% | 0% |
 
-Reviewed expected/actual/difference stills show matching overall geometry but unresolved color
-rounding/dithering, blur kernels and antialias/compositing coverage. The transition failures include
-one full-height seam column. These discrepancies are counted even for a one-channel difference;
-no golden, color tolerance, antialias exclusion or threshold was changed to accept them.
-Gradient precision/dithering reduced its earlier approximately 27% difference, but remains over gate.
-The shader currently compiles per gradient draw; shader caching and external SVG document caching
-also remain performance work. Advanced HTML text effects remain blocked on the paragraph task above.
+The native implementation aligns gradient dithering, Gaussian weights, intermediate color
+rounding, clipping coverage and SVG antialiasing with the pinned Chrome fixtures. Small
+Gaussian blurs use separable runtime filters; larger radii use Skia's native blur on the
+selected backend. Thread-local Rust runtime-effect caches are bounded. SVG shader and
+external-document caching remain performance work. Existing data-URI SVG scenes keep their
+original raster path; a retained renderer can switch between this path and CSS effects.
 
-Artifacts: `tests/reports/visual-effects/{cpu,gpu}/{results.json,index.html}`. Preserve the separately
-verified core run in `tests/reports/visual-core`; its passing results do not cover these effects.
-To keep future effects reports separate, set `MOTIONSWIFT_VISUAL_OUTPUT=tests/reports/visual-effects`
-and select the twelve `effects/*` IDs from the manifest using `MOTIONSWIFT_FIXTURE_IDS`.
+Transition fixtures now declare their incoming background during overlap. All nine freshly
+rendered pinned-Chrome transition references exactly match the existing PNGs; only source
+provenance metadata changed. At 720p, the external SVG video also passes the unchanged 0.98
+SSIM gate on CPU and Metal (0.9970). Benchmark references include the project's public
+assets, and single-frame benchmark fixtures render two frames to form a valid video.
 
-Local verification for the core change: compiler resources rebuilt; 87 Node tests, 15 focused Swift
-layout/runtime/regression tests, and all 42 reference frames on both CPU and Metal passed. Repeated
-renders were exact; maximum pixel difference was 0.2934% (CPU) / 0.2083% (Metal), below the unchanged
-0.3% gate. Strict lint passed for the touched core Swift files. This is a selected core run; the earlier
-unrestricted visual run failed concurrent effects fixtures, and the private real-composition census
-was not rerun. `SWIFT_BUILD_FLAGS` can supply an isolated `--scratch-path` to `make build`/`make visual`;
-set `MOTIONSWIFT_BIN` to that build's CLI path when doing so.
+Artifacts: `tests/reports/visual/{cpu,gpu}/{results.json,index.html}`. These results cover the
+manifest's supported subset, not arbitrary CSS/SVG or private compositions. Advanced HTML
+text effects remain blocked on the paragraph task above.
 
-`MOTIONSWIFT_VISUAL_OUTPUT` isolates report files from concurrent runs. This run's preserved log and
-independently rechecked image metrics are in `tests/reports/visual-core/{run.log,cpu/results.json,gpu/results.json}`
-(gitignored local reports); the shared default reports were overwritten by a separate effects run.
+For isolated builds, `SWIFT_BUILD_FLAGS` can supply a separate `--scratch-path` to
+`make build` / `make visual`; set `MOTIONSWIFT_BIN` to that build's CLI path.
+`MOTIONSWIFT_VISUAL_OUTPUT` isolates reports, and `MOTIONSWIFT_FIXTURE_IDS` selects a subset.
+A selected run establishes parity only for its recorded fixture IDs.

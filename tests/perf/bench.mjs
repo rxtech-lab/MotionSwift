@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-import {median,stdev,geometricMean,sameMachine,parityMetadata} from './metrics.mjs';
+import {median,stdev,geometricMean,sameMachine,parityMetadata,benchmarkRange} from './metrics.mjs';
 
 // Keep GPU + x264 as the render-only comparison; GPU-HW changes only the encoder.
 const ENGINES=['remotion','cpu','gpu','gpu-hw','gpu-shared'];
@@ -134,7 +134,7 @@ try {
   for(const tier of tiers) for(const fixture of fixtures) {
     if(!/^[\w/-]+$/.test(fixture.id)||fixture.id.includes('..'))throw Error('Invalid fixture ID');
     const id=`${fixture.id}@${tier.id}`,slug=`${fixture.id.replaceAll('/','-')}-${tier.id}`;
-    const range=Array.isArray(fixture.frames)?`${Math.min(...fixture.frames)}-${Math.max(...fixture.frames)}`:fixture.frames;
+    const range=benchmarkRange(fixture.frames,config.minimumFrames??1);
     if(!/^\d+-\d+$/.test(range))throw Error('Fixture needs an inclusive frame range');
     const [first,last]=range.split('-').map(Number),expectedFrames=last-first+1;
     if(expectedFrames<1)throw Error('Invalid frame range');

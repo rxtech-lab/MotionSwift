@@ -43,6 +43,24 @@ import Testing
   }
 }
 
+@Test func curvedAndPolygonClipsRenderOnBothBackends() throws {
+  for backend in Backend.allCases {
+    for geometry in ["circle(40px at 60px 60px)", "ellipse(50px 40px at 60px 60px)",
+                     "polygon(60px 4px, 116px 60px, 60px 116px, 4px 60px)"] {
+      let canvas = try Canvas(width: 120, height: 120, backend: backend)
+      canvas.saveState()
+      try canvas.clip(path: #require(try Effects.clip(geometry, width: 120, height: 120)))
+      canvas.save()
+      canvas.rectangle(width: 120, height: 120, radius: 0, color: 0xffff0000)
+      canvas.restore()
+      canvas.restore()
+      let pixels = [UInt8](try canvas.rgba())
+      #expect(Array(pixels[(60 * 120 + 60) * 4..<(60 * 120 + 60) * 4 + 4]) == [255, 0, 0, 255])
+      #expect(pixels[3] == 0)
+    }
+  }
+}
+
 @Test func svgHostAndExternalImageRenderOnBothBackends() throws {
   let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"16\" height=\"16\" fill=\"#ff0000\"/></svg>"
   let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".svg")
@@ -93,5 +111,28 @@ import Testing
     #expect(pixels[(8 * 32 + 1) * 4] == 0)
     #expect(pixels[(8 * 32 + 17) * 4] > 50)
     #expect(pixels[(8 * 32 + 17) * 4] < 200)
+  }
+}
+
+@Test func retainedRendererRestoresLegacySVGAfterEffectsFrame() throws {
+  let svg = """
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+      <defs><linearGradient id="g"><stop stop-color="#ff7744"/>
+        <stop offset="1" stop-color="#4488ff"/></linearGradient></defs>
+      <rect width="24" height="24" rx="5" fill="url(#g)"/>
+    </svg>
+    """
+  let legacy = RenderNode(type: "img", style: ["objectFit": .string("contain")],
+                          src: "data:image/svg+xml;base64," + Data(svg.utf8).base64EncodedString())
+  let effect = RenderNode(type: "div", style: ["backgroundColor": .string("#ffffff"), "filter": .string("invert(1)")])
+  let composition = Composition(id: "Switch", width: 24, height: 24, fps: 30, durationInFrames: 3)
+  for backend in Backend.allCases {
+    let renderer = try Renderer(width: 24, height: 24, backend: backend)
+    try renderer.draw(legacy, composition: composition)
+    let expected = try renderer.pixels()
+    try renderer.draw(effect, composition: composition)
+    #expect(try renderer.pixels() != expected)
+    try renderer.draw(legacy, composition: composition)
+    #expect(try renderer.pixels() == expected)
   }
 }

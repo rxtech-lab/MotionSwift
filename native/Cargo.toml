@@ -9,3 +9,8 @@ crate-type = ["staticlib"]
 
 [dependencies]
 skia-safe = { version = "=0.99.0", features = ["metal", "textlayout", "svg", "webp"] }
+
+[build-dependencies]
+cc = "1"
+# Build the pinned bindings first so their matching Skia headers exist before the C++ bridge.
+skia-bindings = { version = "=0.99.0", features = ["metal", "textlayout", "svg", "webp"] }

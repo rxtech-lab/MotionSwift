@@ -5,6 +5,7 @@ typedef void* MSKSurface;
 MSKSurface msk_create(int32_t width, int32_t height);
 /// Metal-backed surface. device/queue are borrowed id<MTLDevice>/id<MTLCommandQueue>.
 MSKSurface msk_create_gpu(int32_t width, int32_t height, const void* device, const void* queue);
+bool msk_effects_precision(MSKSurface s, bool enabled);
 void msk_clear(MSKSurface s);
 void msk_destroy(MSKSurface s);
 void msk_save(MSKSurface s, float alpha);
@@ -41,7 +42,7 @@ float msk_paragraph_baseline(MSKParagraph paragraph);
 void msk_paragraph_paint(MSKSurface surface, MSKParagraph paragraph, float x, float y);
 
 // CSS compositing. Filter entry: kind + 20 floats (0 blur sigma, 1 4x5 color matrix).
-void msk_effect_layer(MSKSurface s, float alpha, int32_t blend, const float* entries, size_t count);
+void msk_effect_layer(MSKSurface s, float alpha, int32_t blend, const float* entries, size_t count, float width, float height);
 void msk_backdrop(MSKSurface s, float w, float h, float radius, float sigma);
 void msk_concat(MSKSurface s, const float* matrix9);
 bool msk_clip_path(MSKSurface s, const char* svg);

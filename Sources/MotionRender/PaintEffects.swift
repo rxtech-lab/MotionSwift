@@ -77,12 +77,13 @@ final class EffectGroup {
     if effects.filters.isEmpty && effects.blend == 0 && effects.mask == nil {
       canvas.save(opacity: effects.opacity)
     } else {
-      canvas.effects(opacity: effects.opacity, blend: effects.blend, filters: effects.mask == nil ? effects.filters : [])
+      canvas.effects(opacity: effects.opacity, blend: effects.blend, filters: effects.mask == nil ? effects.filters : [],
+                     width: effects.width, height: effects.height)
     }
     layers = 1
     if effects.mask != nil { canvas.clip(width: effects.width, height: effects.height) }
     if effects.mask != nil && !effects.filters.isEmpty {
-      canvas.effects(opacity: 1, blend: 0, filters: effects.filters)
+      canvas.effects(opacity: 1, blend: 0, filters: effects.filters, width: effects.width, height: effects.height)
       layers += 1
     }
   }

@@ -77,11 +77,14 @@ export const InlineSVG = () => {
 export const ExternalSVG = () => <AbsoluteFill style={{backgroundColor:'#182433'}}><Img src={staticFile('effects.svg')} style={{width:320,height:180}}/></AbsoluteFill>;
 function TransitionDemo({kind}: {kind:'fade'|'slide'|'wipe'}) {
   const presentation=kind==='fade'?fade():kind==='slide'?slide({direction:'from-left'}):wipe({direction:'from-left'});
-  return <TransitionSeries>
+  // Keep the reference canvas opaque while the two antialiased transition edges meet.
+  // An implicit transparent page lets Chrome's opaque screenshot backing affect the seam.
+  const frame=useCurrentFrame();
+  return <AbsoluteFill style={{backgroundColor:frame<=10?'transparent':'#3366dd'}}><TransitionSeries>
     <TransitionSeries.Sequence durationInFrames={22}><AbsoluteFill style={{backgroundColor:'#ee6633'}}/></TransitionSeries.Sequence>
     <TransitionSeries.Transition timing={linearTiming({durationInFrames:12})} presentation={presentation}/>
     <TransitionSeries.Sequence durationInFrames={20}><AbsoluteFill style={{backgroundColor:'#3366dd'}}/></TransitionSeries.Sequence>
-  </TransitionSeries>;
+  </TransitionSeries></AbsoluteFill>;
 }
 export const FadeTransition=()=> <TransitionDemo kind="fade"/>;
 export const SlideTransition=()=> <TransitionDemo kind="slide"/>;
