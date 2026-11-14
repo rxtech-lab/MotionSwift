@@ -10,15 +10,18 @@ struct EditPropertySheet: View {
   let key: String?
   let initialValue: JSONValue
   let isThree: Bool
+  /// A typed control for prop-domain keys (for example map props); otherwise from the catalogs.
+  var definition: StylePropertyDefinition?
   let onSave: (JSONValue) -> Void
   var onSaveKey: ((String, JSONValue) -> Void)?
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
 
-  init(key: String?, value: JSONValue, isThree: Bool = false, onSave: @escaping (JSONValue) -> Void,
-       onSaveKey: ((String, JSONValue) -> Void)? = nil) {
+  init(key: String?, value: JSONValue, isThree: Bool = false, definition: StylePropertyDefinition? = nil,
+       onSave: @escaping (JSONValue) -> Void, onSaveKey: ((String, JSONValue) -> Void)? = nil) {
     self.key = key
     self.isThree = isThree
+    self.definition = definition
     initialValue = value
     self.onSave = onSave
     self.onSaveKey = onSaveKey
@@ -38,7 +41,8 @@ struct EditPropertySheet: View {
             .frame(height: 100)
           #endif
         }
-        if let definition = isThree ? StylePropertyDefinition.three(key ?? name) : StylePropertyDefinition.find(key ?? name) {
+        if let definition = definition
+          ?? (isThree ? StylePropertyDefinition.three(key ?? name) : StylePropertyDefinition.find(key ?? name)) {
           PropertyValueForm(definition: definition, initialValue: key == nil ? definition.defaultValue : initialValue) { value in
             if key != nil { onSave(value) } else { onSaveKey?(definition.id, value) }
             dismiss()

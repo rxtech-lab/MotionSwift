@@ -1,5 +1,6 @@
 import React from 'react';
-import {AbsoluteFill, Composition, Img, registerRoot, staticFile} from 'remotion';
+import {MapMarker, MapView} from '@motionswift/map';
+import {AbsoluteFill, Composition, Img, registerRoot} from 'remotion';
 
 
 // SVG lettering uses the renderer's supported text shaping. The image box remains editable.
@@ -66,21 +67,17 @@ const Signal = () => <AbsoluteFill style={{backgroundColor: '#151226', overflow:
 </AbsoluteFill>;
 
 const Atlas = () => <AbsoluteFill style={{backgroundColor: '#112b29', overflow: 'hidden'}}>
-  <Img src={lettering("ATLAS / THE LONG WAY HOME", 16, "#b9d5bd", 360, 30)} style={{position: 'absolute', left: 45, top: 42, width: 360, height: 30}} />
+  <Img src={lettering("ATLAS / SAN FRANCISCO AIRPORT", 16, "#b9d5bd", 360, 30)} style={{position: 'absolute', left: 45, top: 42, width: 360, height: 30}} />
   <Img src={lettering("Every place has a story.", 66, "#f0efd9", 350, 235)} style={{position: 'absolute', left: 45, top: 130, width: 350, height: 235}} />
   <Img src={lettering("Pan the map. Follow the marker. Make the journey yours.", 18, "#b9d5bd", 330, 60)} style={{position: 'absolute', left: 45, top: 420, width: 330, height: 60}} />
   <div style={{position: 'absolute', left: 440, top: 48, width: 472, height: 414,
     borderRadius: 28, overflow: 'hidden', backgroundColor: '#dbe8ce'}}>
-    <div data-ms-timeline={{"from":0,"duration":240,"keyframes":{"left":[{"frame":0,"value":0,"easing":"linear"},{"frame":239,"value":-220,"easing":"linear"}]}}}
-      style={{position: 'absolute', left: 0, top: 0, width: 768, height: 512}}>
-      {[0, 1, 2, 3, 4, 5].map(index => <Img key={index} src={staticFile(`tile-${index}.png`)}
-        style={{position: 'absolute', left: index % 3 * 256, top: Math.floor(index / 3) * 256, width: 256, height: 256}} />)}
-    </div>
-    <div data-ms-timeline={{"from":0,"duration":240,"keyframes":{"top":[{"frame":0,"value":280,"easing":"linear"},{"frame":120,"value":140,"easing":"linear"},{"frame":239,"value":200,"easing":"linear"}]}}}
-      data-ms-properties={{backgroundColor: {label: 'Marker color', group: 'Map'}, width: {label: 'Marker size', group: 'Map'}}}
-      style={{position: 'absolute', left: 220, top: 200, width: 28, height: 28, borderRadius: 14, backgroundColor: '#f56749'}} />
+    <MapView center={[-122.3790, 37.6213]} zoom={13.2} provider="openstreetmap" mapStyle="standard"
+      data-ms-timeline={{"from":0,"duration":240,"keyframes":{"centerLongitude":[{"frame":0,"value":-122.397,"easing":"linear"},{"frame":239,"value":-122.379,"easing":"linear"}]}}}>
+      <MapMarker coordinate={[-122.3790, 37.6213]} color="#f56749" label="SFO Airport" />
+    </MapView>
   </div>
-  <Img src={lettering('OFFLINE / SYNTHETIC TILES / NO LIVE PROVIDER', 12, '#b9d5bd', 472, 30)} style={{position: 'absolute', left: 444, top: 485, width: 472, height: 30}} />
+  <Img src={lettering('SFO AIRPORT / OPENSTREETMAP', 12, '#b9d5bd', 472, 30)} style={{position: 'absolute', left: 444, top: 485, width: 472, height: 30}} />
 </AbsoluteFill>;
 
 registerRoot(() => <>

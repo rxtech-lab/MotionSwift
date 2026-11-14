@@ -9,6 +9,7 @@ import SwiftUI
 @main
 struct ShowcaseApp: App {
   @NSApplicationDelegateAdaptor private var delegate: ShowcaseAppDelegate
+  @StateObject private var updates = ShowcaseUpdater()
 
   var body: some Scene {
     WindowGroup("MotionSwift Showcase") {
@@ -16,6 +17,12 @@ struct ShowcaseApp: App {
         .frame(minWidth: 860, minHeight: 540)
     }
     .windowToolbarStyle(.unified)
+    .commands {
+      CommandGroup(after: .appInfo) {
+        Button("Check for Updates…") { updates.checkForUpdates() }
+          .disabled(!updates.canCheckForUpdates)
+      }
+    }
   }
 }
 
@@ -40,6 +47,10 @@ final class ShowcaseAppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    try? FileManager.default.removeItem(at: EditorWorkspace.root)
+  }
 }
 
 enum ShowcaseDefaults {

@@ -147,14 +147,14 @@ globalThis.__ms_start = function() {
       const scene = typeof node.props.__msScene === 'function' ? node.props.__msScene(node) : null;
       const svg = node.type === "svg" ? shim.__svgHost(node) : null;
       const children = scene !== null || svg !== null ? [] : node.children.map((child,index) => { const id=path+'.'+index; visit(child,id); return id; });
-      const data = {type:svg ? "ms-svg" : node.type,style:svg ? svg.style : node.props.style||{},text:node.text??null,src:svg ? svg.src : node.props.src??null,source:node.props['data-ms-src']??null,media:node.props['data-ms-media']??null,scene};
+      const data = {type:svg ? "ms-svg" : node.type,style:svg ? svg.style : node.props.style||{},text:node.text??null,src:svg ? svg.src : node.props.src??null,source:node.props['data-ms-src']??null,media:node.props['data-ms-media']??null,scene,editor:typeof node.props['data-ms-editor']==='string'?node.props['data-ms-editor']:null};
       const old = retained.get(path);
       // Copy values: style objects may be mutated by user code on a subsequent render.
       const copy = JSON.parse(JSON.stringify(data));
       if (!old || old.data.type !== copy.type) ops.push(['create',path,copy]);
       else {
         const patch={};
-        for (const key of ['text','src','source','media','scene']) if(JSON.stringify(old.data[key])!==JSON.stringify(copy[key])) patch[key]=copy[key];
+        for (const key of ['text','src','source','media','scene','editor']) if(JSON.stringify(old.data[key])!==JSON.stringify(copy[key])) patch[key]=copy[key];
         const style={};
         for(const key of [...new Set([...Object.keys(old.data.style),...Object.keys(copy.style)])].sort()) {
           if(JSON.stringify(old.data.style[key])!==JSON.stringify(copy.style[key])) style[key]=copy.style[key]??null;

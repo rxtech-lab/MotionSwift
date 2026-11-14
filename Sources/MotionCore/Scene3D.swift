@@ -9,6 +9,18 @@ public struct Scene3D: Codable, Sendable, Equatable {
     public let source: String
     public let type: String
     public let properties: [String: JSONValue]
+
+    public init(source: String, type: String, properties: [String: JSONValue]) {
+      self.source = source
+      self.type = type
+      self.properties = properties
+    }
+
+    /// Decodes `{type, properties}` committed by a prop-domain component's `data-ms-editor`.
+    public static func decode(_ json: String, source: String) throws -> Self {
+      let payload = try JSONDecoder().decode(EditorPayload.self, from: Data(json.utf8))
+      return Self(source: source, type: payload.type, properties: payload.properties)
+    }
   }
 
   public var editor: [EditorElement]?
@@ -243,4 +255,9 @@ extension RenderNode {
   public var threeEditorElements: [Scene3D.EditorElement] {
     (scene?.editor ?? []) + children.flatMap(\.threeEditorElements)
   }
+}
+
+private struct EditorPayload: Decodable {
+  let type: String
+  let properties: [String: JSONValue]
 }

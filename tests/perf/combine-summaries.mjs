@@ -13,7 +13,7 @@ const sections=files.filter(([,file])=>fs.existsSync(path.join(out,file))).map((
   const lines=text.split('\n');
   if(file==='three/summary.md') {
     // The 3D table is already compact: Remotion vs each native engine with speedup and SSIM.
-    comments.push(`<details><summary>${title}</summary>\n\n${lines.filter(line=>line.startsWith('|')||/^(Geometric|\*\*)/.test(line)).join('\n')}\n\n</details>`);
+    comments.push(`<details><summary>${title}</summary>\n\n${lines.filter(line=>line.startsWith('|')||/^(Geometric|\*\*|❌|Error:)/.test(line)).join('\n')}\n\n</details>`);
     return text.replace(/^## .*$/m,`## ${title}`);
   }
   const start=lines.findIndex(line=>line.startsWith('| Fixture | Size |'));

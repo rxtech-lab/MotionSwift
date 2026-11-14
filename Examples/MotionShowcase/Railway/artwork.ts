@@ -2,35 +2,37 @@ import {basemap} from './basemap';
 import {path, route, stations} from './route';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const offsets = [[-6, 35], [-36, 48], [-40, -38], [-38, 45], [-62, 48], [-76, 40], [-105, -24]];
 
-// Prepare static cartography once. Playback computes the train's geographic path.
+// All names sit outside the geographic track, with leaders instead of overlapping labels.
 export function artwork() {
-  const labels = stations.map((station, index) => {
-    const [x, y] = station.point;
-    const [dx, dy] = offsets[index];
-    const width = Math.max(100, station.name.length * 7 + 18);
-    const labelY = y + dy;
-    return `<path d="M${x},${y} L${x + dx + 12},${labelY}" stroke="#667a81" stroke-width="1"/>` +
-      `<circle cx="${x}" cy="${y}" r="6" fill="#ffffff" stroke="#007dc5" stroke-width="2"/>` +
-      `<rect x="${x + dx}" y="${labelY - 18}" width="${width}" height="36" rx="5" fill="#ffffff" fill-opacity="0.94"/>` +
-      `<text x="${x + dx + 9}" y="${labelY - 3}" font-size="12" fill="#163747">${escape(station.name)}</text>` +
-      `<text x="${x + dx + 9}" y="${labelY + 11}" font-size="10" fill="#58727a">${escape(station.localName)}</text>`;
+  const left = stations.filter((_, index) => index >= 8 && index <= 21).sort((a, b) => a.point[1] - b.point[1]);
+  const right = stations.filter((_, index) => index < 8 || index > 21).sort((a, b) => a.point[1] - b.point[1]);
+  const labels = stations.map(station => {
+    const onLeft = left.includes(station), column = onLeft ? left : right;
+    const row = column.indexOf(station);
+    const y = 185 + row * (onLeft ? 55 : 49);
+    const [sx, sy] = station.point;
+    const edge = onLeft ? 414 : 1008, x = onLeft ? 400 : 1022;
+    const anchor = onLeft ? 'end' : 'start';
+    return `<path d="M${sx},${sy} L${edge},${y}" fill="none" stroke="#9cac9a" stroke-width="1"/>` +
+      `<circle cx="${sx}" cy="${sy}" r="5.5" fill="#ffffff" stroke="#5a9229" stroke-width="2.5"/>` +
+      `<text x="${x}" y="${y - 4}" text-anchor="${anchor}" font-size="18" font-weight="600" fill="#233c2d">${escape(station.localName)}</text>` +
+      `<text x="${x}" y="${y + 17}" text-anchor="${anchor}" font-size="16" fill="#526953">${escape(station.code)} · ${escape(station.name)}</text>`;
   }).join('');
-  const content = `<image href="${basemap}" width="960" height="540"/>` +
-    `<path d="${path(route)}" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>` +
-    `<path d="${path(route)}" fill="none" stroke="#007dc5" stroke-width="5" stroke-linecap="round"/>` + labels +
-    '<rect width="960" height="94" fill="#112f38"/>' +
-    '<text x="36" y="29" font-size="12" letter-spacing="3" fill="#90c9d4">HONG KONG / ISLAND LINE</text>' +
-    '<text x="34" y="65" font-size="30" fill="#f6f4e9">Across the island.</text>' +
-    '<text x="660" y="38" font-size="12" fill="#b3d3d9">7 STATIONS · EASTBOUND</text>' +
-    '<text x="660" y="62" font-size="12" fill="#b3d3d9">Real OpenStreetMap streets &amp; track</text>' +
-    '<text x="360" y="148" font-size="14" letter-spacing="4" fill="#527e8c">VICTORIA HARBOUR</text>' +
-    '<rect x="0" y="470" width="960" height="70" fill="#112f38"/>' +
-    '<text x="36" y="496" font-size="11" fill="#90c9d4">FOLLOW THE TRAIN / ISLAND LINE</text>' +
-    '<text x="36" y="523" font-size="19" fill="#f6f4e9">Sheung Wan → Fortress Hill</text>' +
-    '<text x="620" y="498" font-size="11" fill="#b3d3d9">© OpenStreetMap contributors · ODbL</text>' +
-    '<text x="620" y="519" font-size="10" fill="#b3d3d9">openstreetmap.org/copyright · geographic data extract</text>';
+  const content = `<image href="${basemap}" width="1440" height="1080"/>` +
+    `<path d="${path(route)}" fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${path(route)}" fill="none" stroke="#85b348" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>` + labels +
+    '<rect width="1440" height="106" fill="#173d2b"/>' +
+    '<text x="44" y="36" font-size="15" letter-spacing="4" fill="#b5d68d">TOKYO, JAPAN / JR YAMANOTE LINE</text>' +
+    '<text x="42" y="80" font-size="34" font-weight="600" fill="#f6f6eb">A whole journey around Tokyo.</text>' +
+    '<text x="1396" y="40" text-anchor="end" font-size="16" fill="#c9dfb4">30 STATIONS · CLOCKWISE / 外回り</text>' +
+    '<text x="1396" y="74" text-anchor="end" font-size="16" fill="#c9dfb4">Tokyo → Tokyo · Complete loop</text>' +
+    '<text x="724" y="448" text-anchor="middle" font-size="46" font-weight="600" fill="#36553b">山手線</text>' +
+    '<text x="724" y="480" text-anchor="middle" font-size="15" letter-spacing="3" fill="#62775e">YAMANOTE LINE</text>' +
+    '<rect x="0" y="1008" width="1440" height="72" fill="#173d2b"/>' +
+    '<text x="44" y="1037" font-size="15" fill="#d6e9c2">Real railway geometry · All 30 stations · Illustrative timing</text>' +
+    '<text x="44" y="1062" font-size="13" fill="#a9c69b">© OpenStreetMap contributors · ODbL · openstreetmap.org/copyright</text>' +
+    '<text x="1396" y="1050" text-anchor="end" font-size="15" fill="#d6e9c2">BUNDLED MAP / OFFLINE PLAYBACK</text>';
   return 'data:image/svg+xml,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" font-family="Helvetica Neue, sans-serif">${content}</svg>`);
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" font-family="Helvetica Neue, Hiragino Sans, sans-serif">${content}</svg>`);
 }

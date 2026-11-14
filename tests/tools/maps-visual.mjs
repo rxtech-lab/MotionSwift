@@ -1,4 +1,4 @@
-// Compare real Remotion with both native backends. No live tiles, SDKs or tokens.
+// Compare Remotion with both native backends. Railway uses live/cached OSM tiles; synthetic fixtures are offline.
 import fs from 'node:fs';
 import path from 'node:path';
 import {bundle} from '@remotion/bundler';
@@ -18,11 +18,15 @@ let failed = false;
 try {
   const browser = await browserOptions();
   const bin = nativeBin();
-  const serveUrl = await bundle({entryPoint: path.join(project, entry), publicDir: path.join(project, 'public')});
+  const serveUrl = await bundle({entryPoint: path.join(project, entry), publicDir: path.join(project, 'public'),
+    webpackOverride: config => ({...config, resolve: {...config.resolve, alias: {...config.resolve?.alias,
+      '@motionswift/map': path.join(testRoot, 'tools/map-browser-reference.cjs'),
+    }}}),
+  });
   for (const id of railway ? ['IslandRailway'] : ['OpenStreetMapTiles', 'MapKitSnapshot']) {
     const composition = await selectComposition({...browser, serveUrl, id});
     // Seeking backwards and repeating each native frame catches state leakage.
-    for (const frame of railway ? [180, 0, 359] : [15, 0, 7]) {
+    for (const frame of railway ? [750, 0, 1499] : [15, 0, 7]) {
       const directory = path.join(output, id, String(frame));
       fs.mkdirSync(directory, {recursive: true});
       const expected = path.join(directory, 'remotion.png');
@@ -33,7 +37,7 @@ try {
         for (let offset = 0; offset < image.data.length; offset += 4) {
           if (image.data[offset] === 255 && image.data[offset + 1] === 103 && image.data[offset + 2] === 76) markerPixels++;
         }
-        if (image.width !== 960 || image.height !== 540 || markerPixels < 20) throw Error('Missing railway map or train marker');
+        if (image.width !== 1920 || image.height !== 1080 || markerPixels < 20) throw Error('Missing railway map or train marker');
       } else {
         const markerOffset = (72 * image.width + 120 + frame * 2) * 4;
         if (image.width !== 320 || image.height !== 180 ||
@@ -66,7 +70,7 @@ try {
   console.error(error);
 }
 writeJSON(path.join(output, 'results.json'), {
-  scope: railway ? 'real OSM geographic extract; no live service validation' : 'offline image compatibility; no live provider validation',
+  scope: railway ? 'real OSM tiles and bundled Yamanote track; native tile cache and browser network required' : 'offline image compatibility; no live provider validation',
   pass: !failed, results,
 });
 process.exitCode = failed ? 1 : 0;

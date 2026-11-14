@@ -4,8 +4,11 @@ import MotionCore
 /// The showcase editor works on a writable copy of the MotionStudio sample project, so edits never
 /// touch the repository's golden fixtures. Other projects are edited in place after confirmation.
 enum EditorWorkspace {
-  static var root: URL {
-    URL.applicationSupportDirectory.appendingPathComponent("MotionSwiftShowcase/Editor", isDirectory: true)
+  /// Shared by every window for this process, but never reused by another launch.
+  static let root = makeSessionRoot()
+
+  static func makeSessionRoot(in directory: URL = FileManager.default.temporaryDirectory) -> URL {
+    directory.appendingPathComponent("MotionSwiftShowcase-\(UUID().uuidString)", isDirectory: true)
   }
 
   static var sample: URL { root.appendingPathComponent("Sample", isDirectory: true) }

@@ -1,8 +1,10 @@
 # Map compatibility regression
 
 The showcase also includes [a real OpenStreetMap railway composition](../../Examples/MotionShowcase/Railway/README.md),
-with actual Hong Kong roads, track geometry and bilingual station labels. `make maps-visual`
+with Tokyo roads, the entire Yamanote track loop and all 30 bilingual station labels. `make maps-visual`
 checks that composition against Remotion on both backends, in addition to these synthetic image fixtures.
+The Yamanote composition uses live/cached street tiles and a zooming camera that follows the train;
+its first render needs tile access. The image fixtures below remain offline.
 
 Run `make maps-visual` on macOS ARM64. `make ci` runs this gate on every push;
 `npm test --prefix tests` also checks the native compiler's map-package boundary.

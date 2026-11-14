@@ -18,8 +18,17 @@ public struct MotionFrame: @unchecked Sendable {
   public let tree: RenderNode
   /// Whether preview overrides were applied (such frames are never cached).
   public let overridden: Bool
+  /// Whether any map tiles were still loading asynchronously while painting this frame.
+  let incomplete: Bool
 
   var byteCount: Int { image.bytesPerRow * image.height }
+}
+
+private struct LastRendered {
+  let tree: RenderNode
+  let layout: [LayoutBox]
+  let image: CGImage
+  let incomplete: Bool
 }
 
 /// Renders preview frames on one dedicated thread that owns a JavaScriptCore runtime and a Skia
@@ -34,6 +43,8 @@ final class FrameRenderWorker: Sendable {
        publicDirectory: URL? = nil) {
     let queue = queue
     let thread = Thread {
+      // Previews never wait long for a routing service; they redraw once the route resolves.
+      MapServices.setInteractivePreviewThread()
       MediaSource.withPublicDirectory(publicDirectory) {
         Self.run(
           queue: queue, bundle: bundle, composition: composition, props: props, scale: scale,
@@ -74,6 +85,8 @@ final class FrameRenderWorker: Sendable {
     }
     // Override frames reuse the last evaluated tree: gestures re-layout and re-paint only.
     var lastTree: (frame: Int, tree: RenderNode)?
+    // Identical consecutive trees (for example holds/dwells) reuse the painted image and layout.
+    var lastRendered: LastRendered?
     while let job = queue.next() {
       let result = autoreleasepool {
         Result { () throws -> MotionFrame in
@@ -85,13 +98,31 @@ final class FrameRenderWorker: Sendable {
             tree = try runtime.frame(composition: composition, number: job.frame, props: props)
             lastTree = (job.frame, tree)
           }
-          let layout = try renderer.draw(tree.applying(job.overrides), composition: composition)
+          if job.overrides.isEmpty, let lastRendered, !lastRendered.incomplete,
+            tree.activeMedia.isEmpty, tree == lastRendered.tree {
+            let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
+            return MotionFrame(
+              frame: job.frame, image: lastRendered.image, layout: lastRendered.layout,
+              renderMs: elapsed, tree: tree, overridden: false, incomplete: false)
+          }
+          var drawn = tree
+          // Maps re-render from props; CSS and 3D overrides patch the evaluated tree natively.
+          let mapOverrides = tree.propOverrides(job.overrides)
+          if !mapOverrides.isEmpty {
+            drawn = try runtime.frame(composition: composition, number: job.frame, props: props, propOverrides: mapOverrides)
+          }
+          _ = MapServices.consumeThreadPendingTiles()
+          let layout = try renderer.draw(drawn.applying(job.overrides), composition: composition)
+          let incomplete = MapServices.consumeThreadPendingTiles()
           let image = try makeImage(
             try renderer.pixels(), width: renderer.pixelWidth, height: renderer.pixelHeight)
+          if job.overrides.isEmpty {
+            lastRendered = LastRendered(tree: drawn, layout: layout, image: image, incomplete: incomplete)
+          }
           let elapsed = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1_000_000
           return MotionFrame(
-            frame: job.frame, image: image, layout: layout, renderMs: elapsed, tree: tree,
-            overridden: !job.overrides.isEmpty)
+            frame: job.frame, image: image, layout: layout, renderMs: elapsed, tree: drawn,
+            overridden: !job.overrides.isEmpty, incomplete: incomplete)
         }
       }
       job.completion(result)

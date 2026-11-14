@@ -134,9 +134,9 @@ Runs `motionswift render` for fixtures that include `"video"` in `checks`:
 Specified in [docs/benchmark.md](../docs/benchmark.md).
 
 - `tests/perf/bench.mjs` renders the `bench.config.json` fixtures with both Remotion and `motionswift`, checks SSIM parity between the two outputs, and compares the native time with the latest `main` run.
-- Runs on **every pull request** (`benchmark.yml`) and **posts or updates one sticky PR comment** with the comparison table. Results are uploaded as the `bench-results` artifact, and `main` runs serve as the baseline for PRs.
-- Runner: the `vars.BENCH_RUNNER` repository variable (a self-hosted Apple Silicon runner is recommended), falling back to `macos-15`.
-- Informational until Phase 5. After that, a native slowdown of more than 15% fails the check.
+- Runs on **every pull request** (`benchmark.yml`) and **posts or updates one sticky PR comment** with the comparison table. Results are uploaded as the `bench-results` artifact.
+- Four parallel jobs cover short clips, sustained throughput, Test Film, and 3D scenes on `[self-hosted, macOS, ARM64]` runners. The final `benchmark` job combines their reports, posts the comment, and fails if any measurement or reporting step fails. Require only this final benchmark check in branch protection.
+- Synthetic performance deltas remain informational unless `--fail-on-regression` is enabled. Render/parity failures and the 3D speed gate fail the check. Optional baselines come from historical `main` push runs; the current workflow only runs on PRs.
 
 ### Determinism checks (run with layer 3)
 
@@ -162,7 +162,7 @@ Specified in [docs/benchmark.md](../docs/benchmark.md).
 |---|---|---|---|
 | `output-check.yml` | PR, push to `main` | `macos-15` (CPU raster backend), `ubuntu-latest` (CPU raster) | compiler + type fixtures → lint fixtures → `check` on all compositions → layer 1 → layer 2 → layer 3 → layer 4 (`--backend=cpu`) |
 | `output-check-gpu.yml` | push to `main`, nightly | self-hosted Apple Silicon | layers 3–4 on Graphite-Metal |
-| `benchmark.yml` | every PR, push to `main` | `vars.BENCH_RUNNER` or `macos-15` | layer 5: Remotion vs native → sticky PR comment + `bench-results` artifact ([spec](../docs/benchmark.md)) |
+| `benchmark.yml` | every PR | self-hosted macOS ARM64 | four parallel measurements → one `benchmark` gate, sticky PR comment + `bench-results` artifact ([spec](../docs/benchmark.md)) |
 | `regenerate-goldens.yml` | manual (`workflow_dispatch`) | `ubuntu-latest` | Remotion goldens → PR with visual diff |
 | `skia-build.yml` | changes to `third_party/skia.lock` | macOS + Linux | builds and publishes `CSkia` artifacts |
 

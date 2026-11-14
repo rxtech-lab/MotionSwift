@@ -181,6 +181,7 @@ public final class Renderer {
     if style.string("overflow") == "hidden" { canvas.clip(width: width, height: height) }
     try paintMedia(node, style: style, width: width, height: height)
     if let paragraph = layout.paragraph {
+      paragraph.layout(width: layout.textWidth)
       canvas.paragraph(paragraph, x: layout.textX, y: layout.textY)
     }
     if !onlySelf { try paintChildren(layout, id: id, origin: origin) }

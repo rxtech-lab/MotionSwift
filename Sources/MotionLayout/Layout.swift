@@ -13,6 +13,7 @@ public struct LayoutNode {
   public var paragraph: Paragraph?
   public var textX: Double = 0
   public var textY: Double = 0
+  public var textWidth: Double = 0
 }
 
 /// Yoga nodes and their config belong to one calculation; no C handles escape into the painter.
@@ -81,8 +82,8 @@ public enum LayoutEngine {
         throw MotionError("ms/unsupported-css-value: inline text requires paragraph layout")
       }
       if input.type == "#text" || (!input.children.isEmpty && input.children.allSatisfy(TextLayout.isInline)) {
-        let paragraph = Paragraph(runs: try TextLayout.runs(input), fonts: fonts,
-                                  alignment: input.style["textAlign"]?.string ?? "left")
+        let paragraph = fonts.paragraph(runs: try TextLayout.runs(input),
+                                        alignment: input.style["textAlign"]?.string ?? "left")
         paragraphs[node] = paragraph
         YGNodeSetContext(node, Unmanaged.passUnretained(paragraph).toOpaque())
         YGNodeSetMeasureFunc(node, { node, width, mode, _, _ in
@@ -118,12 +119,13 @@ public enum LayoutEngine {
     let left = Double(YGNodeLayoutGetPadding(handle, YGEdge.left))
     let right = Double(YGNodeLayoutGetPadding(handle, YGEdge.right))
     let width = Double(YGNodeLayoutGetWidth(handle))
-    paragraph?.layout(width: max(0, width - left - right))
+    let contentWidth = max(0, width - left - right)
+    paragraph?.layout(width: contentWidth)
     return LayoutNode(
       node: input, x: Double(YGNodeLayoutGetLeft(handle)), y: Double(YGNodeLayoutGetTop(handle)),
       width: width, height: Double(YGNodeLayoutGetHeight(handle)),
       children: children, paragraph: paragraph, textX: left,
-      textY: Double(YGNodeLayoutGetPadding(handle, YGEdge.top)))
+      textY: Double(YGNodeLayoutGetPadding(handle, YGEdge.top)), textWidth: contentWidth)
   }
 
   private static func dimension(

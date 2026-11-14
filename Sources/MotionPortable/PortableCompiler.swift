@@ -169,6 +169,10 @@ public struct EditError: Error, CustomStringConvertible, Sendable {
 public struct EditOperation: Codable, Sendable, Equatable {
   public enum Kind: String, Codable, Sendable {
     case setStyle, removeStyle, insertStyle, setTimeline, setText, setThreeProperty, setCameraRigKey
+    /// A `<MapView>`, `<MapRoute>` or `<MapMarker>` prop (inverse of a map `setStyle`).
+    case setMapProperty
+    /// Adds (`insert`) or removes (`remove`) a map route/marker; `restore` is the inverse.
+    case setMapChildren
   }
 
   public var op: Kind
@@ -232,7 +236,12 @@ public enum StylePropertyKind: String, Decodable, Sendable {
 
 public struct StyleSummary: Decodable, Sendable, Equatable {
   public let domain: String?
+  /// The component of a prop domain, such as `MapView` or `MapRoute`.
+  public let type: String?
   public var isThree: Bool { domain == "three" }
+  public var isMap: Bool { domain == "map" }
+  /// Editor keys are component props (3D or maps), not CSS styles.
+  public var isPropDomain: Bool { isThree || isMap }
   public struct Declaration: Decodable, Sendable, Equatable {
     public let key: String
     public let label: String?
@@ -268,6 +277,15 @@ public struct StyleSummary: Decodable, Sendable, Equatable {
 
   public func group(for key: String) -> String {
     if let group = declarations?.last(where: { $0.key == key })?.group { return group }
+    if isMap {
+      switch key {
+      case "centerLongitude", "centerLatitude", "zoom", "bearing": return "Camera"
+      case "provider", "mapStyle", "attribution": return "Map Provider"
+      case "fromLongitude", "fromLatitude", "toLongitude", "toLatitude", "mode": return "Route"
+      case "longitude", "latitude", "label": return "Marker"
+      default: return "Appearance"
+      }
+    }
     if isThree {
       if key.hasPrefix("camera") { return "Camera" }
       if ["position", "rotation", "scale"].contains(where: { key.hasPrefix($0) }) { return "3D Transform" }

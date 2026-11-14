@@ -3,6 +3,7 @@ import Foundation
 import MotionCore
 @testable import MotionEditor
 import MotionSwiftUI
+import SwiftUI
 import Testing
 
 private func target(_ style: [String: JSONValue], box: CGRect = CGRect(x: 48, y: 48, width: 220, height: 140))
@@ -77,6 +78,69 @@ private func target(_ style: [String: JSONValue], box: CGRect = CGRect(x: 48, y:
     // maxY 150 is 2 px from the sibling's midY 152 (closer than its minY 147).
     #expect(result.translation.height == 2)
     #expect(result.guides.contains(SnapGuide(axis: .horizontal, position: 152)))
+  }
+}
+
+@Suite struct CanvasViewportTests {
+  private let viewportSize = CGSize(width: 1000, height: 600)
+  private let canvasSize = CGSize(width: 800, height: 450)
+
+  @Test func panZoomAndRotateKeepAnchorPinnedAndResetToIdentity() {
+    var viewport = CanvasViewport()
+    #expect(viewport.isIdentity)
+
+    // Panning moves every canvas point by the exact screen delta.
+    let sample = CGPoint(x: 200, y: 120)
+    let initialScreen = viewport.canvasToViewport(sample, viewportSize: viewportSize, canvasSize: canvasSize)
+    viewport.pan(by: CGSize(width: 80, height: -45), viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(!viewport.isIdentity)
+    let pannedScreen = viewport.canvasToViewport(sample, viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(pannedScreen.x - (initialScreen.x + 80)) < 1e-6)
+    #expect(abs(pannedScreen.y - (initialScreen.y - 45)) < 1e-6)
+
+    // Zooming around `pannedScreen` keeps `sample` pinned under the fingers.
+    viewport.zoom(by: 2.2, anchor: pannedScreen, viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(viewport.zoom - 2.2) < 1e-6)
+    let zoomedScreen = viewport.canvasToViewport(sample, viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(zoomedScreen.x - pannedScreen.x) < 1e-6)
+    #expect(abs(zoomedScreen.y - pannedScreen.y) < 1e-6)
+
+    // Rotating around `zoomedScreen` while zoomed and panned also keeps `sample` pinned.
+    viewport.rotate(to: 37, anchor: zoomedScreen, viewportSize: viewportSize, canvasSize: canvasSize)
+    let rotatedScreen = viewport.canvasToViewport(sample, viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(rotatedScreen.x - zoomedScreen.x) < 1e-6)
+    #expect(abs(rotatedScreen.y - zoomedScreen.y) < 1e-6)
+
+    // Panning after rotation still translates directly in screen space.
+    viewport.pan(by: CGSize(width: -30, height: 25), viewportSize: viewportSize, canvasSize: canvasSize)
+    let finalScreen = viewport.canvasToViewport(sample, viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(finalScreen.x - (rotatedScreen.x - 30)) < 1e-6)
+    #expect(abs(finalScreen.y - (rotatedScreen.y + 25)) < 1e-6)
+  }
+
+  @Test func snappingNormalizationAndBoundsBehavePredictably() {
+    #expect(CanvasViewport.snappedRotation(1.4) == (0, 0))
+    #expect(CanvasViewport.snappedRotation(-89.1) == (-90, -90))
+    #expect(CanvasViewport.snappedRotation(23.5).snapped == nil)
+    #expect(CanvasViewport.snappedRotation(23.5, shiftPressed: true) == (30, 30))
+
+    var viewport = CanvasViewport(zoom: 1, pan: .zero, rotation: .degrees(350))
+    viewport.normalizeRotation()
+    #expect(abs(viewport.rotation.degrees - (-10)) < 1e-6)
+
+    var fullTurn = CanvasViewport(zoom: 1, pan: .zero, rotation: .degrees(360))
+    fullTurn.normalizeRotation()
+    #expect(fullTurn.isIdentity)
+
+    // Extreme pans and zooms clamp within bounds.
+    var clamped = CanvasViewport()
+    clamped.zoom(by: 100, anchor: CGPoint(x: 500, y: 300), viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(clamped.zoom == CanvasViewport.maxZoom)
+    clamped.zoom(by: 0.001, anchor: CGPoint(x: 500, y: 300), viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(clamped.zoom == CanvasViewport.minZoom)
+    clamped.pan(by: CGSize(width: 100_000, height: -100_000), viewportSize: viewportSize, canvasSize: canvasSize)
+    #expect(abs(clamped.pan.width) <= viewportSize.width)
+    #expect(abs(clamped.pan.height) <= viewportSize.height)
   }
 }
 

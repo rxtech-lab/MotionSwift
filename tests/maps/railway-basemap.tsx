@@ -2,5 +2,5 @@
 import React from 'react';
 import {Composition, Img, registerRoot} from 'remotion';
 import {artwork} from '../../Examples/MotionShowcase/Railway/artwork';
-const Map = () => <Img src={artwork()} style={{width: 960, height: 540}} />;
-registerRoot(() => <Composition id="RailwayBasemap" component={Map} width={960} height={540} fps={30} durationInFrames={1} />);
+const Map = () => <Img src={artwork()} style={{width: 1440, height: 1080}} />;
+registerRoot(() => <Composition id="RailwayBasemap" component={Map} width={1440} height={1080} fps={30} durationInFrames={1} />);

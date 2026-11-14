@@ -15,7 +15,7 @@ struct GalleryView: View {
         Divider().padding(.vertical, 12)
         Text("Explore the toolkit").font(.title2.bold())
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
-          destination("Maps", subtitle: "Hong Kong railway · Real OpenStreetMap geography and station names",
+          destination("Maps", subtitle: "Yamanote full loop · SFO Airport cameras and markers",
                       icon: "map", color: .green, item: .maps)
           destination("Media Composition", subtitle: "Nested clips, audio, video and timeline",
                       icon: "rectangle.stack.fill", color: .teal, item: .media)
@@ -27,16 +27,18 @@ struct GalleryView: View {
                       icon: "cursorarrow.motionlines", color: .purple, item: .editor)
         }
         Text("Rendering essentials").font(.title2.bold())
-        if let bundle = player.bundle {
+        if let source = player.compiledSource {
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
             ForEach(player.compositions, id: \.id) { composition in
               Button { open(.composition(composition.id)) } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                  MotionCompositionView(
-                    source: .bundle(bundle), compositionID: composition.id,
-                    configuration: settings.render)
-                    .id("\(settings.render.backend.rawValue)-\(settings.render.scale)")
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                  StableTile {
+                    MotionCompositionView(
+                      source: source, compositionID: composition.id,
+                      configuration: settings.render)
+                      .id("\(settings.render.backend.rawValue)-\(settings.render.scale)")
+                  }
+                  .clipShape(RoundedRectangle(cornerRadius: 10))
                   Text(composition.id).font(.headline)
                   Text(composition.summary).font(.caption).foregroundStyle(.secondary)
                 }
@@ -71,5 +73,19 @@ struct GalleryView: View {
     }
     .buttonStyle(.plain)
     .help("Open \(title)")
+  }
+}
+
+/// A fixed 16:9 frame that letterboxes its preview. Previews only learn their composition's aspect
+/// ratio after loading, and lazy grid tiles load (and reset) as they scroll into view; without a
+/// fixed frame those height changes resize the scroll content mid-scroll and the gallery jumps
+/// back to the top before reaching the bottom.
+struct StableTile<Content: View>: View {
+  @ViewBuilder let content: Content
+
+  var body: some View {
+    Color.black
+      .aspectRatio(16 / 9, contentMode: .fit)
+      .overlay { content }
   }
 }

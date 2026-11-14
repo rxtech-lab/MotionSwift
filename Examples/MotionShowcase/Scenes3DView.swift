@@ -69,12 +69,12 @@ struct Scenes3DView: View {
         VStack(alignment: .leading, spacing: 16) {
           Text("Remotion three.js scenes rendered by MotionSwift's native Metal 3D renderer.")
             .foregroundStyle(.secondary)
-          if let bundle = player.bundle {
+          if let source = player.compiledSource {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 20)], spacing: 20) {
               ForEach(Showcase3D.scenes) { scene in
                 NavigationLink(value: scene.id) {
                   VStack(alignment: .leading, spacing: 8) {
-                    MotionCompositionView(source: .bundle(bundle), compositionID: scene.id,
+                    MotionCompositionView(source: source, compositionID: scene.id,
                                           configuration: .init(scale: 1, backend: .gpu))
                       .clipShape(RoundedRectangle(cornerRadius: 10))
                     Label(scene.title, systemImage: scene.icon).font(.headline)
@@ -110,7 +110,7 @@ struct Scenes3DView: View {
 }
 
 /// One scene opened directly in the visual editor: canvas with the camera overlay, timeline with
-/// the camera and object tracks, and the inspector. Edits go to a saved working copy.
+/// the camera and object tracks, and the inspector. Edits go to a session working copy.
 struct Scene3DPlayerView: View {
   let player: MotionPlayer
   let sceneID: String

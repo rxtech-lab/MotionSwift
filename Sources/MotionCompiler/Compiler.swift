@@ -175,6 +175,7 @@ public struct Compiler {
         "@remotion/transitions/slide": [shim.appendingPathComponent("transition-slide.d.ts").path],
         "@remotion/transitions/wipe": [shim.appendingPathComponent("transition-wipe.d.ts").path],
         "@remotion/three": [shim.appendingPathComponent("remotion-three.d.ts").path],
+        "@motionswift/map": [shim.appendingPathComponent("map.d.ts").path],
         "react": [modules.appendingPathComponent("@types/react/index.d.ts").path],
         "react/jsx-runtime": [modules.appendingPathComponent("@types/react/jsx-runtime.d.ts").path]],
     ]

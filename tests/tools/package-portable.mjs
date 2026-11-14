@@ -51,7 +51,7 @@ fs.writeFileSync(path.join(output, 'vendor.json'), JSON.stringify({
     '@motionswift/remotion/jsx-runtime', 'remotion', 'remotion/jsx-runtime', 'three',
     'three/addons/loaders/USDLoader.js', 'three/examples/jsm/loaders/USDLoader.js', 'three/addons/loaders/USDZLoader.js',
     'three/examples/jsm/loaders/USDZLoader.js', '@react-three/fiber', '@remotion/three', '@remotion/paths', '@remotion/shapes', '@remotion/transitions',
-    '@remotion/transitions/fade', '@remotion/transitions/slide', '@remotion/transitions/wipe'],
+    '@remotion/transitions/fade', '@remotion/transitions/slide', '@remotion/transitions/wipe', '@motionswift/map'],
   compiler: {sucrase: version('sucrase'), '@babel/parser': version('@babel/parser')},
 }, null, 2) + '\n');
 const licenses = [['@jridgewell/sourcemap-codec', 'LICENSE'], ['@remotion/paths', 'LICENSE.md'], ['@remotion/shapes', 'LICENSE.md'], ['react', 'LICENSE'], ['react-reconciler', 'LICENSE'], ['scheduler', 'LICENSE'], ['sucrase', 'LICENSE'],

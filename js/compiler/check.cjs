@@ -19,7 +19,7 @@ function check(project,entry) {
       remotion:['../js/remotion-shim/index.d.ts'],three:['../js/remotion-shim/three.d.ts'],
       'three/addons/loaders/USDLoader.js':['../js/remotion-shim/usd-loader.d.ts'],'three/examples/jsm/loaders/USDLoader.js':['../js/remotion-shim/usd-loader.d.ts'],
       'three/addons/loaders/USDZLoader.js':['../js/remotion-shim/usd-loader.d.ts'],'three/examples/jsm/loaders/USDZLoader.js':['../js/remotion-shim/usd-loader.d.ts'],
-      '@react-three/fiber':['../js/remotion-shim/fiber.d.ts'],'@remotion/three':['../js/remotion-shim/remotion-three.d.ts'],react:['node_modules/@types/react/index.d.ts'],
+      '@react-three/fiber':['../js/remotion-shim/fiber.d.ts'],'@remotion/three':['../js/remotion-shim/remotion-three.d.ts'],'@motionswift/map':['../js/remotion-shim/map.d.ts'],react:['node_modules/@types/react/index.d.ts'],
       'react/jsx-runtime':['node_modules/@types/react/jsx-runtime.d.ts'],
     }};
   const program=ts.createProgram([path.resolve(project,entry)],options);

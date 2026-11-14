@@ -602,7 +602,7 @@ extension EditorModel {
     angle + (2 * .pi) * ((reference - angle) / (2 * .pi)).rounded()
   }
 
-  static func rounded(_ value: Double) -> Double { (value * 10_000).rounded() / 10_000 }
+  nonisolated static func rounded(_ value: Double) -> Double { (value * 10_000).rounded() / 10_000 }
 
   static func literal(_ value: Double) -> String {
     let rounded = rounded(value)

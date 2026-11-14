@@ -11,6 +11,8 @@ test('PR benchmark summary puts actual-project timings before synthetic results 
   try {
     fs.mkdirSync(path.join(out,'test-film'));
     fs.mkdirSync(path.join(out,'long'));
+    fs.mkdirSync(path.join(out,'three'));
+    fs.writeFileSync(path.join(out,'three/summary.md'),'<!-- motionswift-bench -->\n## 3D\n❌ Setup or build failed before measurements. See the workflow logs.\n');
     fs.writeFileSync(path.join(out,'summary.md'),'<!-- motionswift-bench -->\n## Short\nSynthetic short table\n<details>large raw data</details>');
     fs.writeFileSync(path.join(out,'long/summary.md'),'<!-- motionswift-bench -->\n## Long\nSynthetic long table\n');
     fs.writeFileSync(path.join(out,'test-film/summary.md'),'<!-- motionswift-bench -->\n## Real\nReal project timing table\nLong methodology explanation\n| Fixture | Size | Remotion | CPU | GPU | HW | Shared | HW speedup | Shared speedup | FFmpeg speedup | SSIM | Delta |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| film | 1080p | 10 s | 8 s | 6 s | 5 s | 4 s | 1.2× | 1.5× | 1.25× | 0.99 ✅ | -2% |\n### Sampled peak memory\nMemory measurements\n❌ parity failed\n<details>large real raw data</details>');
@@ -21,12 +23,15 @@ test('PR benchmark summary puts actual-project timings before synthetic results 
     assert.ok(summary.indexOf('Real project timing table') < summary.indexOf('Synthetic short table'));
     assert.ok(summary.includes('Synthetic long table'));
     assert.ok(summary.includes('❌ parity failed'));
+    assert.ok(summary.includes('❌ Setup or build failed before measurements.'));
     assert.ok(summary.includes('test-film/results.json'));
     assert.ok(!summary.includes('<details>'));
     const comment=fs.readFileSync(path.join(out,'comment.md'),'utf8');
     assert.ok(comment.startsWith('<!-- motionswift-bench -->\n## Benchmark'));
     assert.ok(comment.includes('| film | 10 s | 8 s | 6 s | 5 s | 4 s | 0.99 ✅ | -2% |'));
     assert.ok(comment.includes('❌ parity failed'));
+    assert.ok(comment.includes('<details><summary>3D scenes (three.js)</summary>'));
+    assert.ok(comment.includes('❌ Setup or build failed before measurements.'));
     assert.ok(comment.includes('<details><summary>30-frame clips</summary>'));
     assert.ok(comment.includes('<details><summary>300-frame clips</summary>'));
     assert.ok(!comment.includes('Long methodology explanation'));

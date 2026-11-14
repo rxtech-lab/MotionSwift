@@ -16,6 +16,9 @@ app="$stage/MotionSwift Showcase.app"
 resources="$app/Contents/Resources"
 mkdir -p "$app/Contents/MacOS" "$resources"
 cp "$bin/motionswift-showcase" "$app/Contents/MacOS/"
+mkdir -p "$app/Contents/Frameworks"
+ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework \
+  "$app/Contents/Frameworks/Sparkle.framework"
 # These are the only SwiftPM bundles used by the portable showcase.
 for name in MotionPortable MotionRuntime motionswift-showcase; do
   ditto "$bin/MotionSwift_$name.bundle" "$resources/MotionSwift_$name.bundle"
@@ -25,6 +28,7 @@ mkdir -p "$projects/tests/compositions" "$projects/tests/three" \
   "$projects/tests/fixtures/test-film" "$projects/Examples/MotionStudio"
 ditto tests/compositions/src "$projects/tests/compositions/src"
 ditto tests/compositions/visuals "$projects/tests/compositions/visuals"
+ditto tests/compositions/public "$projects/tests/compositions/public"
 ditto tests/three/src "$projects/tests/three/src"
 ditto tests/maps "$projects/tests/maps"
 ditto tests/three/public "$projects/tests/three/public"
@@ -37,7 +41,7 @@ xcrun actool Examples/AppIcon.icon --compile "$resources" --platform macosx \
   --output-partial-info-plist "$stage/icon-info.plist" --output-format human-readable-text
 python3 - "$app" "$version" "$build" "$stage/icon-info.plist" <<'PY'
 from pathlib import Path
-import plistlib, sys
+import base64, os, plistlib, sys
 app, version, build, icon = sys.argv[1:]
 info = dict(CFBundleIdentifier='app.rxlab.MotionSwift.Showcase', CFBundleName='MotionSwift Showcase',
             CFBundleDisplayName='MotionSwift Showcase', CFBundleExecutable='motionswift-showcase',
@@ -45,13 +49,16 @@ info = dict(CFBundleIdentifier='app.rxlab.MotionSwift.Showcase', CFBundleName='M
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSPrincipalClass='NSApplication')
 info.update(plistlib.loads(Path(icon).read_bytes()))
+key = os.environ.get('SPARKLE_PUBLIC_KEY', '').strip()
+if key and len(base64.b64decode(key, validate=True)) != 32:
+    raise ValueError('SPARKLE_PUBLIC_KEY must encode a 32-byte Ed25519 public key')
+info.update(SUFeedURL='https://update.motion.rxfilm.app/appcast.xml',
+            SUPublicEDKey=key, SUEnableAutomaticChecks=True)
 (Path(app) / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
 PY
 python3 scripts/bundle-showcase-tools.py "$app" "${FFMPEG_PATH:-$(command -v ffmpeg)}"
 # Make local packages launchable after rewriting dylib load commands. Release signing replaces this.
-while IFS= read -r -d '' binary; do
-  codesign --force --sign - "$binary"
-done < <(find "$app/Contents/Frameworks" "$app/Contents/Helpers" -type f -print0)
+bash scripts/sign-showcase-embedded.sh "$app" -
 codesign --force --sign - --entitlements Examples/Showcase.entitlements "$app"
 codesign --verify --deep --strict "$app"
 # A unique output avoids destroying a previous local package.

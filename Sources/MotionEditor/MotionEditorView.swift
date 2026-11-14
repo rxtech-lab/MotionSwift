@@ -6,7 +6,8 @@ import SwiftUI
 /// write-back conflicts) appears as overlays; edits use dedicated sheets and confirmations.
 public struct MotionEditorView: View {
   @Bindable private var model: EditorModel
-  @State private var zoom = 1.0
+  @State private var viewport = CanvasViewport()
+  @State private var fitFeedback = 0
   @State private var showsInspector: Bool
 
   public init(model: EditorModel) {
@@ -20,6 +21,7 @@ public struct MotionEditorView: View {
 
   public var body: some View {
     editorPanes
+    .background { PlayheadObserver(model: model) }
     .overlay(alignment: .top) { StatusBadge(model: model).padding(.top, 10) }
     .overlay(alignment: .bottom) { NoticeOverlay(notice: model.notice).padding(.bottom, 14) }
     .overlay { FailureOverlay(model: model) }
@@ -35,10 +37,9 @@ public struct MotionEditorView: View {
       if model.player.composition == nil, model.status == .idle { await model.open() }
     }
     .onChange(of: model.player.composition?.id) { model.resetTimelineSelection() }
-    .onChange(of: model.player.currentFrame) { model.observeKeyframePlayhead() }
-    .onChange(of: model.player.displayedFrame?.frame) { model.observeTimelineFrame() }
     .animation(.snappy, value: model.notice)
     .sensoryFeedback(.selection, trigger: model.selectionFeedback)
+    .sensoryFeedback(.selection, trigger: fitFeedback)
     .sensoryFeedback(.alignment, trigger: model.snapFeedback)
     .sensoryFeedback(.impact(weight: .medium), trigger: model.commitFeedback)
     .sensoryFeedback(.error, trigger: model.refusalFeedback)
@@ -63,7 +64,7 @@ public struct MotionEditorView: View {
 
   private var preview: some View {
     VStack(spacing: 0) {
-      EditorCanvas(model: model, zoom: $zoom)
+      EditorCanvas(model: model, viewport: $viewport)
       MotionTransportBar(player: model.player)
         .padding(.horizontal, 12).padding(.vertical, 8).background(.bar)
     }
@@ -92,12 +93,29 @@ public struct MotionEditorView: View {
         .help(model.redoActionName.map { "Redo \($0)" } ?? "Redo")
       Toggle(isOn: $model.snapsToGuides) { Label("Snap", systemImage: "square.and.line.vertical.and.square") }
         .help("Snap to canvas and sibling edges and centers")
-      Button("Fit", systemImage: "arrow.down.right.and.arrow.up.left") { withAnimation { zoom = 1 } }
-        .disabled(zoom == 1)
-        .help("Reset zoom")
+      Button("Fit", systemImage: "arrow.down.right.and.arrow.up.left") {
+        viewport.normalizeRotation()
+        withAnimation { viewport = CanvasViewport() }
+        fitFeedback += 1
+      }
+      .disabled(viewport.isIdentity)
+      .help("Reset zoom, pan and rotation")
       Button("Inspector", systemImage: "sidebar.trailing") { showsInspector.toggle() }
         .help("Show or hide the inspector")
     }
+  }
+}
+
+/// Isolates per-frame playhead observation so `MotionEditorView.body` stays static during playback.
+private struct PlayheadObserver: View {
+  let model: EditorModel
+
+  var body: some View {
+    Color.clear
+      .frame(width: 0, height: 0)
+      .allowsHitTesting(false)
+      .onChange(of: model.player.currentFrame) { model.observeKeyframePlayhead() }
+      .onChange(of: model.player.displayedFrame?.frame) { model.observeTimelineFrame() }
   }
 }
 

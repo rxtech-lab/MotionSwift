@@ -10,7 +10,14 @@ enum SVGImage {
   /// (no letter-spacing offsets or per-glyph font fallback spans); geometry is unaffected.
   static func prepare(_ data: Data) throws -> Data { data }
   #else
+  private static let textTag = Data("<text".utf8)
+  private static let namespacedTextTag = Data(":text".utf8)
+
   static func prepare(_ data: Data) throws -> Data {
+    // Route overlays and geometric SVGs contain no <text> nodes; skip XML DOM parsing on the hot path.
+    guard data.range(of: textTag) != nil || data.range(of: namespacedTextTag) != nil else {
+      return data
+    }
     let document = try XMLDocument(data: data, options: [.nodePreserveAll])
     for case let element as XMLElement in try document.nodes(forXPath: "//*[local-name()='text']") {
       // Nested text/tspan positioning is left to Skia. This normalization covers

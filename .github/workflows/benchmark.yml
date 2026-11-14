@@ -8,7 +8,28 @@ concurrency:
   group: benchmark-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  benchmark:
+  measure:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: short
+            name: Render and encoder combinations
+            config: tests/perf/bench.config.json
+            out: tests/reports/bench
+            baseline: results.json
+          - id: sustained
+            name: Sustained native throughput (300 frames)
+            config: tests/perf/bench.long.config.json
+            out: tests/reports/bench/long
+            baseline: long/results.json
+          - id: test-film
+            name: Test Film (full clip)
+            out: tests/reports/bench/test-film
+          - id: three
+            name: 3D scenes (parity and speed)
+            out: tests/reports/bench/three
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 90
     permissions:
@@ -22,7 +43,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make bootstrap build
       - name: Download last successful main baseline
-        if: github.ref != 'refs/heads/main'
+        if: (matrix.id == 'short' || matrix.id == 'sustained') && github.ref != 'refs/heads/main'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -30,66 +51,92 @@ jobs:
         run: |
           run_id=$(gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -n "$run_id" ] && [ "$run_id" != null ]; then
-            gh run download "$run_id" --name bench-results --dir "$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID"
+            gh run download "$run_id" --name bench-results --dir "$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID-${{ matrix.id }}"
           fi
-      - name: Measure render and encoder combinations and check video parity
+      - name: Measure render throughput and check video parity
+        if: matrix.id == 'short' || matrix.id == 'sustained'
+        env:
+          BENCH_CONFIG: ${{ matrix.config }}
+          BENCH_OUT: ${{ matrix.out }}
+          BENCH_BASELINE: ${{ matrix.baseline }}
         run: |
           args=()
-          baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/results.json"
+          baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID-${{ matrix.id }}/$BENCH_BASELINE"
           if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
-          node tests/perf/bench.mjs --allow-unavailable-hardware --work-dir "$RUNNER_TEMP" "${args[@]}"
-      - name: Measure sustained native throughput (300 frames)
-        if: ${{ !cancelled() }}
-        run: |
-          args=()
-          baseline="$RUNNER_TEMP/motionswift-baseline-$GITHUB_RUN_ID/long/results.json"
-          if [ -f "$baseline" ]; then args+=(--baseline "$baseline"); fi
-          node tests/perf/bench.mjs --allow-unavailable-hardware --config tests/perf/bench.long.config.json --out tests/reports/bench/long --work-dir "$RUNNER_TEMP" "${args[@]}"
+          node tests/perf/bench.mjs --allow-unavailable-hardware --config "$BENCH_CONFIG" --out "$BENCH_OUT" --work-dir "$RUNNER_TEMP" "${args[@]}"
       - name: Benchmark actual Test Film project (full clip)
-        if: ${{ !cancelled() }}
+        if: matrix.id == 'test-film'
         run: node tests/perf/test-film.mjs --allow-unavailable-hardware --work-dir "$RUNNER_TEMP"
-      - name: Benchmark complex 3D scenes against Remotion three.js (parity + speed gate)
-        if: ${{ !cancelled() }}
+      - name: Benchmark complex 3D scenes against Remotion three.js
+        if: matrix.id == 'three'
         run: node tests/perf/three.mjs --allow-unavailable-hardware
-      - name: Combine synthetic and Test Film benchmark tables
-        if: always()
-        run: node tests/perf/combine-summaries.mjs
       - name: Report setup or build failures
         if: always()
+        env:
+          BENCH_OUT: ${{ matrix.out }}
         run: |
-          if [ ! -f tests/reports/bench/summary.md ]; then
-            mkdir -p tests/reports/bench
-            printf '%s\n' '<!-- motionswift-bench -->' '## MotionSwift benchmark failed' '' 'Setup or build failed before measurements. See the workflow logs.' > tests/reports/bench/summary.md
+          if [ ! -f "$BENCH_OUT/summary.md" ]; then
+            mkdir -p "$BENCH_OUT"
+            printf '%s\n' '<!-- motionswift-bench -->' '## MotionSwift benchmark failed' '' '❌ Setup or build failed before measurements. See the workflow logs.' > "$BENCH_OUT/summary.md"
           fi
       - name: Job summary
         if: always()
-        run: |
-          if [ -f tests/reports/bench/summary.md ]; then cat tests/reports/bench/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+        env:
+          BENCH_OUT: ${{ matrix.out }}
+        run: cat "$BENCH_OUT/summary.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: bench-results
+          name: bench-${{ matrix.id }}
           path: tests/reports/bench/
           if-no-files-found: error
           retention-days: 30
-  comment:
-    needs: benchmark
-    if: always() && !cancelled() && github.event_name == 'pull_request'
+  benchmark:
+    name: benchmark
+    needs: measure
+    if: always()
     runs-on: [self-hosted, macOS, ARM64]
     permissions:
+      contents: read
       actions: read
       pull-requests: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
+          pattern: bench-*
+          merge-multiple: true
+          path: tests/reports/bench
+      - name: Combine all benchmark tables
+        run: node tests/perf/combine-summaries.mjs
+      - name: Include measurement status
+        env:
+          MEASUREMENT_RESULT: ${{ needs.measure.result }}
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const result = process.env.MEASUREMENT_RESULT;
+            const status = result === "success" ? "✅ All benchmark jobs passed." : "❌ Benchmark jobs: " + result + ". See the workflow logs for failed, cancelled, or missing measurements.";
+            for (const file of ["summary.md", "comment.md"]) {
+              fs.appendFileSync("tests/reports/bench/" + file, "\n" + status + "\n");
+            }
+          '
+      - name: Combined job summary
+        run: cat tests/reports/bench/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
           name: bench-results
-          path: benchmark-comment
+          path: tests/reports/bench/
+          retention-days: 30
       - uses: actions/github-script@v9
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         with:
           script: |
             const fs = require('fs');
-            const report = 'benchmark-comment/comment.md';
-            const summary = fs.readFileSync(fs.existsSync(report) ? report : 'benchmark-comment/summary.md', 'utf8');
+            const report = 'tests/reports/bench/comment.md';
+            const summary = fs.readFileSync(fs.existsSync(report) ? report : 'tests/reports/bench/summary.md', 'utf8');
             const marker = '<!-- motionswift-bench -->';
             // GitHub limits comment bodies; preserve the comparison table and artifact link.
             const raw = summary.indexOf('<details>');
@@ -112,3 +159,12 @@ jobs:
             } else {
               await github.rest.issues.createComment({...context.repo, issue_number, body: linkedBody});
             }
+      - name: Require all benchmark jobs to pass
+        if: always()
+        env:
+          MEASUREMENT_RESULT: ${{ needs.measure.result }}
+        run: |
+          if [ "$MEASUREMENT_RESULT" != success ]; then
+            printf 'Benchmark measurements did not all succeed: %s\n' "$MEASUREMENT_RESULT"
+            exit 1
+          fi

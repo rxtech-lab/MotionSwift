@@ -19,7 +19,10 @@ let package = Package(
     .executable(name: "motionswift", targets: ["motionswift-cli"]),
     .executable(name: "motionswift-showcase", targets: ["motionswift-showcase"]),
   ],
-  dependencies: [.package(url: "https://github.com/facebook/yoga.git", exact: "3.2.1")],
+  dependencies: [
+    .package(url: "https://github.com/facebook/yoga.git", exact: "3.2.1"),
+    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
+  ],
   targets: [
     .systemLibrary(name: "CSkia"),
     // Built by `make native` (macOS) or `make native-ios` (adds iOS device and simulator slices).
@@ -47,7 +50,10 @@ let package = Package(
     ]),
     .executableTarget(name: "motionswift-showcase", dependencies: [
       "MotionCore", "MotionRender", "MotionEncode", "MotionSwiftUI", "MotionEditor", "MotionPortable",
-    ], path: "Examples/MotionShowcase", resources: [.copy("Media"), .copy("Designs"), .copy("Railway"), .copy("Film")]),
+      .product(name: "Sparkle", package: "Sparkle", condition: macOnly),
+    ], path: "Examples/MotionShowcase", resources: [.copy("Media"), .copy("Designs"), .copy("Railway"), .copy("MapStudio"), .copy("Film")],
+      linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
+        .when(platforms: [.macOS]))]),
     .executableTarget(name: "motionswift-cli", dependencies: [
       "MotionCompiler", "MotionPortable", "MotionRuntime", "MotionRender", "MotionEncode",
     ]),

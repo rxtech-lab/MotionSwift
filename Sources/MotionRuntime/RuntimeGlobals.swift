@@ -1,5 +1,6 @@
 import Foundation
 import JavaScriptCore
+import MotionCore
 
 /// Host operations return values on the owning JS thread; URLSession callbacks never touch JSC.
 enum RuntimeGlobals {
@@ -59,6 +60,11 @@ enum RuntimeGlobals {
       return result.lock.withLock { result.value }
     }
     context.setObject(fetch, forKeyedSubscript: "__ms_fetch" as NSString)
+    // @motionswift/map: provider availability and cached road/rail route geometry.
+    let mapCapabilities: @convention(block) () -> String = { MapServices.capabilitiesJSON() }
+    let mapRoute: @convention(block) (String) -> String = { MapServices.route($0) }
+    context.setObject(mapCapabilities, forKeyedSubscript: "__ms_mapCapabilities" as NSString)
+    context.setObject(mapRoute, forKeyedSubscript: "__ms_mapRoute" as NSString)
     if let url = Bundle.module.url(forResource: "globals", withExtension: "js", subdirectory: "JavaScript"),
       let script = try? String(contentsOf: url, encoding: .utf8) { context.evaluateScript(script) }
   }

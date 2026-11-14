@@ -81,8 +81,12 @@ func allAdditionalStudiesOpenRenderEditAndUndo() async throws {
   let directory = FileManager.default.temporaryDirectory.appendingPathComponent("additional-studies-\(UUID())")
   defer { try? FileManager.default.removeItem(at: directory) }
   #expect(Set(MotionStudy.all.map(\.id)).count == MotionStudy.all.count)
-  #expect(MotionStudy.maps.count == 3)
-  #expect(MotionStudy.all.count == 8)
+  #expect(MotionStudy.maps.count == 4)
+  #expect(MotionStudy.all.count == 9)
+  // The map studio draws placeholder tiles instead of downloading them.
+  MapServices.isOffline = true
+  MapServices.cacheDirectory = directory.appendingPathComponent("map-cache")
+  defer { MapServices.isOffline = false; MapServices.resetCacheDirectory() }
   for study in MotionStudy.maps + [MotionStudy.film] {
     let location = try study.example.prepare(root: directory)
     let model = EditorModel(project: location.project, entry: location.entry, configuration: .init(scale: 0.5, backend: .gpu))
@@ -98,7 +102,9 @@ func allAdditionalStudiesOpenRenderEditAndUndo() async throws {
     }
     _ = try #require(model.player.displayedFrame, "\(study.id) needs its first displayed frame")
     model.observeTimelineFrame()
-    let track = try #require(model.timelineTracks.first { $0.reason == nil }, "\(study.id) needs an editable layer")
+    let track = try #require(model.timelineTracks.first { track in
+      track.reason == nil && track.keyframes.values.allSatisfy { $0.allSatisfy { $0.frame < 20 } }
+    }, "\(study.id) needs an editable layer")
     let file = try #require(SourceStamp(track.src)?.file)
     let url = location.project.appendingPathComponent(file)
     let original = try String(contentsOf: url, encoding: .utf8)

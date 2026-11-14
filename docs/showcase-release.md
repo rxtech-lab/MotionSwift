@@ -14,7 +14,9 @@ Notarization results and rejection logs are retained as Actions artifacts. Faile
 never falls back to uploading an unsigned/unnotarized DMG.
 
 CI stamps `CFBundleShortVersionString` from the newly published tag with its `v` prefix removed
-(for example, `v1.2.3` becomes `1.2.3`), and `CFBundleVersion` from `GITHUB_RUN_NUMBER`.
+(for example, `v1.2.3` becomes `1.2.3`), and `CFBundleVersion` from `GITHUB_RUN_ID`. Run IDs
+increase across the direct release workflow and the reusable workflow's callers, so their
+independent workflow run numbers cannot produce conflicting update versions.
 The package verifier checks both fields against those expected values before distribution signing
 and notarization, so a stale app version fails the release job.
 
@@ -32,11 +34,66 @@ and able to reach Apple's notarization service. Add these Actions secrets:
 | `APPLE_ID` | Apple ID used for notarization |
 | `APPLE_ID_PWD` | Apple app-specific password |
 | `APPLE_TEAM_ID` | Developer team ID |
+| `SPARKLE_KEY` | Shared organization Sparkle Ed25519 private signing key, as used by Scanner Buddy/Lumik |
 
-No provisioning profile is needed for this app's capabilities. No personal GitHub token is needed.
+The secret names match Scanner Buddy (`rxtech-lab/lumik`). Ensure the organization secret's
+repository access includes `rxtech-lab/MotionSwift`; organization secrets may restrict access.
+No provisioning profile is needed for this app's capabilities. The DMG workflow uses `GITHUB_TOKEN`.
 CI imports the certificate into a temporary keychain, restores the prior keychain search list,
 and deletes the certificate/keychain even when a build fails. Configure secrets in repository
 settings or with `gh secret set`; do not put their values in source control or chat.
+
+## Sparkle automatic updates
+
+The showcase links Sparkle 2.10.1 and uses its standard native update dialogs, progress and
+installation UI. **MotionSwift Showcase → Check for Updates…** starts a manual check;
+Sparkle manages automatic checks and its native consent prompt. Bare `swift run` builds and
+local packages without `SPARKLE_PUBLIC_KEY` leave the updater disabled.
+
+CI derives `SUPublicEDKey` from `SPARKLE_KEY` using the same resolver as Scanner Buddy.
+An optional `SPARKLE_PUBLIC_KEY` Actions variable (or secret) is checked for consistency.
+Keep the existing signing key stable after distributing the app. No private key is embedded.
+The framework is copied with symlinks intact and its XPC services, updater app, executable and
+framework are signed inside out before the host app is notarized.
+
+Stable releases attach `appcast.xml` after the notarized DMG and checksum are uploaded,
+then deploy it to GitHub Pages. The embedded feed is
+`https://update.motion.rxfilm.app/appcast.xml`.
+Each entry downloads the DMG from its immutable release-tag URL. Sparkle's `generate_appcast`
+signs the final stapled DMG; publication verifies its signature against the app's embedded public
+key, download URL, byte length, build/marketing versions and actual minimum macOS version.
+Prereleases receive DMGs but no stable appcast. Release jobs are serialized.
+
+The previous Pages feed stays available while a new release builds. Deployment happens after
+the release assets are uploaded and the new feed is validated.
+The feed contains the latest build only; Macs below that build's minimum OS do not receive it.
+
+### GitHub Pages and DNS
+
+Set this repository's Pages source to **GitHub Actions** and its custom domain to
+`update.motion.rxfilm.app`. The workflow publishes `appcast.xml`, `.nojekyll`, and a `CNAME`
+file containing that domain. For Actions deployments, GitHub's Pages custom-domain setting is
+required; the `CNAME` file alone does not configure the domain.
+
+In the `rxfilm.app` DNS zone, add:
+
+| Type | Name | Target |
+|---|---|---|
+| `CNAME` | `update.motion` | `rxtech-lab.github.io` |
+
+The full record name is `update.motion.rxfilm.app`. Do not include `/MotionSwift` in the target.
+Once DNS resolves and GitHub provisions the certificate, enable **Enforce HTTPS** in Pages settings.
+
+For local pipeline checks, install `cryptography>=46,<47` in a Python virtual environment and run:
+
+```sh
+python3 scripts/sparkle/test_resolve_key.py
+python3 scripts/sparkle/test_appcast.py
+```
+
+For end-to-end release verification, install an older signed/notarized app in `/Applications`,
+publish a newer stable release, then use **Check for Updates…** to download, install and relaunch.
+Source checks and local ad-hoc packages do not establish that production upgrade path.
 
 ## Local package checks
 

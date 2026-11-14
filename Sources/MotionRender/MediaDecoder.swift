@@ -36,7 +36,11 @@ final class MediaDecoder {
     }
     if let image = images.object(forKey: source as NSString) { return image }
     let data: Data
-    if source.hasPrefix("data:") { data = try MediaSource.data(source) } else {
+    if source.hasPrefix("data:") { data = try MediaSource.data(source) } else if source.hasPrefix("motionmap:") {
+      // @motionswift/map tiles: disk cached provider rasters or MapKit snapshots.
+      guard let tile = try MapServices.tileDataForRendering(source) else { return nil }
+      data = tile
+    } else {
       let url = try MediaSource.url(source)
       guard url.isFileURL else { throw MotionError("Stage remote images locally before rendering") }
       data = try Data(contentsOf: url)
