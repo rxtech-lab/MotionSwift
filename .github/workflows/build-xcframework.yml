@@ -64,11 +64,7 @@ jobs:
           path: ${{ runner.temp }}/xcframework-release/*
           if-no-files-found: error
           retention-days: 1
-      - name: Remove signing keychain
-        if: always()
-        run: |
-          keychain="$HOME/Library/Keychains/xcframework-${{ github.run_id }}-${{ github.run_attempt }}.keychain-db"
-          if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
+      # import-codesign-certs removes its keychain during post-job cleanup.
 
   publish:
     needs: build
