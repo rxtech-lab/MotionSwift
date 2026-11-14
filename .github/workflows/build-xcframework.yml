@@ -1,0 +1,95 @@
+name: Build XCFramework
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag to build and upload
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xcframework-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 120
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
+      - name: Validate published release and signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
+          [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == false ]]
+          test -n "$SIGNING_CERTIFICATE_NAME"
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Build macOS, iOS device and simulator slices
+        run: bash tests/tools/build-native.sh --ios
+      - name: Import signing certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          keychain: xcframework-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Sign and verify XCFramework
+        run: |
+          codesign --force --timestamp --sign "$SIGNING_CERTIFICATE_NAME" native/MotionSwiftNative.xcframework
+          codesign --verify --strict --verbose=2 native/MotionSwiftNative.xcframework
+      - name: Package and checksum XCFramework
+        run: bash scripts/package-xcframework.sh "$RELEASE_TAG" "$RUNNER_TEMP/xcframework-release"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: xcframework-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/xcframework-release/*
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          keychain="$HOME/Library/Keychains/xcframework-${{ github.run_id }}-${{ github.run_attempt }}.keychain-db"
+          if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: xcframework-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets
+      - name: Verify and upload release assets
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          archive="MotionSwiftNative-$RELEASE_TAG.xcframework.zip"
+          sha256sum --check "$archive.sha256"
+          [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == false ]]
+          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" --clobber

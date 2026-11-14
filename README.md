@@ -167,6 +167,9 @@ The macOS showcase can also be packaged as a standalone app with `make showcase-
 Published releases build a Developer ID signed, notarized DMG once the required credentials are
 configured. See [showcase release setup and icon source](docs/showcase-release.md).
 
+Releases also build and sign the native XCFramework for macOS and iOS, with a
+SwiftPM checksum. See [XCFramework release setup](docs/xcframework-release.md).
+
 ## License
 
 MotionSwift's original source code is available under the [MIT License](LICENSE).
