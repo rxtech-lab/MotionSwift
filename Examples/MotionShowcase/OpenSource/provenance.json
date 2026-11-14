@@ -1,0 +1,274 @@
+{
+  "repositories": [
+    {
+      "id": "agentic-product-demo",
+      "name": "Agentic Product Demo",
+      "slug": "Alexwtlf/agentic-product-demo",
+      "url": "https://github.com/Alexwtlf/agentic-product-demo",
+      "commit": "907b7b7fa603caf23c43a9ee20a0f55d5ad0c92b",
+      "copyright": "Copyright (c) 2026 Alex Ibragimov",
+      "license": "MIT",
+      "summary": "Multi-beat SaaS product launch video with word-masked title card, live typing, animated cursor clicks, channel revenue bars, filter chips, and publish toast."
+    },
+    {
+      "id": "swiftclip",
+      "name": "SwiftClip",
+      "slug": "zz41354899/SwiftClip",
+      "url": "https://github.com/zz41354899/SwiftClip",
+      "commit": "1ab39033ea0aa254b80371dbaea902e7bb15fe62",
+      "copyright": "Copyright (c) 2026 SwiftClip contributors",
+      "license": "MIT",
+      "summary": "Apple-styled Remotion motion templates listed on remotion.dev/docs/resources, exercising spring physics, backdrop blur, glass cards, and crisp display typography."
+    },
+    {
+      "id": "free-remotion-templates",
+      "name": "RenderComp Templates",
+      "slug": "RenderComp/free-remotion-templates",
+      "url": "https://github.com/RenderComp/free-remotion-templates",
+      "commit": "f648980e528defb7594e24c6447055f0540f340b",
+      "copyright": "Copyright (c) 2026 Trimora Inc.",
+      "license": "MIT",
+      "summary": "Production broadcast overlays, data charts, and particle bokeh templates from RenderComp (listed on remotion.dev/docs/resources)."
+    },
+    {
+      "id": "remotion-scenes",
+      "name": "Remotion Scenes",
+      "slug": "lifeprompt-team/remotion-scenes",
+      "url": "https://github.com/lifeprompt-team/remotion-scenes",
+      "commit": "02c7a84241da7010b5f59c420b0110aafd1d6f0d",
+      "copyright": "Copyright (c) 2026 lifeprompt-team",
+      "license": "MIT",
+      "summary": "Modular motion scenes exercising SVG gradient gauges, radial aurora blurs with deterministic seeded stars, and circular progress indicators."
+    }
+  ],
+  "compositions": [
+    {
+      "id": "ProductDemo",
+      "title": "Acme Studio Product Demo",
+      "repositoryId": "agentic-product-demo",
+      "sourcePath": "AgenticDemo/ProductDemo.tsx",
+      "upstreamPath": "src/Root.tsx + src/compositions/Demo.tsx",
+      "width": 1600,
+      "height": 1000,
+      "fps": 30,
+      "durationInFrames": 480,
+      "previewFrame": 265,
+      "unmodified": false,
+      "highlights": [
+        "Word-masked cold open + Sequence handoff",
+        "True CSS Color 4 OKLab token ramps",
+        "Choreographed SVG cursor + press physics"
+      ],
+      "adaptation": "Inlines theme.css oklch() palette into sRGB constants with exact premultiplied OKLab interpolation in mixToken(), offline system font stack, and flex-compatible box wrappers."
+    },
+    {
+      "id": "DynamicIsland",
+      "title": "Dynamic Island Call Pill",
+      "repositoryId": "swiftclip",
+      "sourcePath": "SwiftClip/DynamicIsland.tsx",
+      "upstreamPath": "remotion/DynamicIsland.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 150,
+      "previewFrame": 75,
+      "unmodified": true,
+      "highlights": [
+        "Three chained Remotion springs (pop, expand, collapse)",
+        "135deg linear-gradient avatar + pill clipping",
+        "100% unmodified upstream TSX"
+      ],
+      "adaptation": "None — upstream TSX runs unchanged."
+    },
+    {
+      "id": "MetricDashboard",
+      "title": "Apple Glass Metric Cards",
+      "repositoryId": "swiftclip",
+      "sourcePath": "SwiftClip/MetricDashboard.tsx",
+      "upstreamPath": "remotion/MetricDashboard.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 240,
+      "previewFrame": 60,
+      "unmodified": true,
+      "highlights": [
+        "Three flex: 1 glass cards with blur(40px) backdropFilter",
+        "-0.04em em-unit display tracking",
+        "100% unmodified upstream TSX"
+      ],
+      "adaptation": "None — upstream TSX runs unchanged."
+    },
+    {
+      "id": "DataViz",
+      "title": "System Load Glass Card",
+      "repositoryId": "swiftclip",
+      "sourcePath": "SwiftClip/DataViz.tsx",
+      "upstreamPath": "remotion/DataViz.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 600,
+      "previewFrame": 75,
+      "unmodified": true,
+      "highlights": [
+        "Combined opacity ramp + backdropFilter: blur(40px)",
+        "Cubic-eased progress bar fill",
+        "100% unmodified upstream TSX"
+      ],
+      "adaptation": "None — upstream TSX runs unchanged."
+    },
+    {
+      "id": "CountdownTimer",
+      "title": "Event Countdown Tiles",
+      "repositoryId": "swiftclip",
+      "sourcePath": "SwiftClip/CountdownTimer.tsx",
+      "upstreamPath": "remotion/CountdownTimer.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 210,
+      "previewFrame": 60,
+      "unmodified": true,
+      "highlights": [
+        "Uppercase em-tracked eyebrow + numeric glass tiles",
+        "Soft elevation shadows + 40px backdrop blur",
+        "100% unmodified upstream TSX"
+      ],
+      "adaptation": "None — upstream TSX runs unchanged."
+    },
+    {
+      "id": "BarChartAnim",
+      "title": "Quarterly Revenue Bar Chart",
+      "repositoryId": "free-remotion-templates",
+      "sourcePath": "RenderComp/BarChartAnim.tsx",
+      "upstreamPath": "src/components/bar-chart-anim/BarChartAnim.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 150,
+      "previewFrame": 90,
+      "unmodified": true,
+      "highlights": [
+        "Staggered spring bars with 4-corner borderRadius ('8px 8px 0 0')",
+        "Resolution-scaled flex layout",
+        "100% unmodified upstream TSX"
+      ],
+      "adaptation": "None — upstream TSX runs unchanged."
+    },
+    {
+      "id": "LineChartAnim",
+      "title": "Monthly Active Users Line Chart",
+      "repositoryId": "free-remotion-templates",
+      "sourcePath": "RenderComp/LineChartAnim.tsx",
+      "upstreamPath": "src/components/line-chart-anim/LineChartAnim.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 150,
+      "previewFrame": 115,
+      "unmodified": false,
+      "highlights": [
+        "SVG strokeDasharray / strokeDashoffset polyline reveal",
+        "Back-eased data node pop-ins",
+        "HTML paragraph axis labels"
+      ],
+      "adaptation": "Renders X-axis month labels as HTML spans over the SVG vector island and expresses 8% white grid stroke as #ffffff14."
+    },
+    {
+      "id": "LowerThirdGlassCard",
+      "title": "Broadcast Lower-Third Glass Card",
+      "repositoryId": "free-remotion-templates",
+      "sourcePath": "RenderComp/LowerThirdGlassCard.tsx",
+      "upstreamPath": "src/components/lower-third-glass-card/LowerThirdGlassCard.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 120,
+      "previewFrame": 60,
+      "unmodified": false,
+      "highlights": [
+        "Frosted glass card with WebkitBackdropFilter + blur(14px)",
+        "Pulsing radial-gradient inner glow + top sheen",
+        "Spring entrance and gentle terminal fade"
+      ],
+      "adaptation": "Replaces CSS textShadow on the speaker name with an equivalent CSS filter: drop-shadow(...)."
+    },
+    {
+      "id": "BokehCircles",
+      "title": "Floating Screen-Blended Bokeh",
+      "repositoryId": "free-remotion-templates",
+      "sourcePath": "RenderComp/BokehCircles.tsx",
+      "upstreamPath": "src/components/bokeh-circles/BokehCircles.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 150,
+      "previewFrame": 75,
+      "unmodified": false,
+      "highlights": [
+        "24 radial-gradient bokeh orbs with blur(20px)",
+        "mixBlendMode: 'screen' additive compositing",
+        "Deterministic trigonometric drift"
+      ],
+      "adaptation": "Replaces CSS textShadow on the centered title with an equivalent CSS filter: drop-shadow(...)."
+    },
+    {
+      "id": "DataGauge",
+      "title": "Performance Speedometer Gauge",
+      "repositoryId": "remotion-scenes",
+      "sourcePath": "RemotionScenes/DataGauge.tsx",
+      "upstreamPath": "src/scenes/DataAnimations/DataGauge.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 90,
+      "previewFrame": 65,
+      "unmodified": false,
+      "highlights": [
+        "SVG arc path with multi-stop linearGradient stroke",
+        "Rotating needle anchored at bottom-center pivot",
+        "Animated integer score readout"
+      ],
+      "adaptation": "Uses offline system font stack, full-bounds SVG viewBox, and HTML spans for numeric tick labels."
+    },
+    {
+      "id": "BackgroundAurora",
+      "title": "Northern Lights Aurora",
+      "repositoryId": "remotion-scenes",
+      "sourcePath": "RemotionScenes/BackgroundAurora.tsx",
+      "upstreamPath": "src/scenes/BackgroundAnimations/BackgroundAurora.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 120,
+      "previewFrame": 60,
+      "unmodified": false,
+      "highlights": [
+        "Three rotating radial-gradient aurora curtains (blur 60–80px)",
+        "30 twinkling stars placed with Remotion random(seed)",
+        "Glowing title typography"
+      ],
+      "adaptation": "Uses offline system font stack and replaces CSS textShadow glow with filter: drop-shadow(...)."
+    },
+    {
+      "id": "ShapeCircularProgress",
+      "title": "Gradient Circular Progress",
+      "repositoryId": "remotion-scenes",
+      "sourcePath": "RemotionScenes/ShapeCircularProgress.tsx",
+      "upstreamPath": "src/scenes/ShapeAnimations/ShapeCircularProgress.tsx",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "durationInFrames": 90,
+      "previewFrame": 65,
+      "unmodified": false,
+      "highlights": [
+        "Rotated SVG circle with animated strokeDashoffset",
+        "Indigo-to-pink SVG linearGradient stroke",
+        "Mixed-size inline span percentage readout"
+      ],
+      "adaptation": "Uses offline system font stack and omits aria-hidden on the inline <svg>."
+    }
+  ]
+}

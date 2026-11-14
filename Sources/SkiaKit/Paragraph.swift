@@ -8,6 +8,7 @@ public final class FontCollection {
   private struct ParagraphKey: Hashable {
     let runs: [TextRun]
     let alignment: String
+    let nowrap: Bool
   }
 
   let handle: UnsafeMutableRawPointer
@@ -30,12 +31,12 @@ public final class FontCollection {
     paragraphs.removeAll()
   }
 
-  /// Returns a cached shaped paragraph for identical runs and alignment on this worker's collection.
-  public func paragraph(runs: [TextRun], alignment: String = "left") -> Paragraph {
-    let key = ParagraphKey(runs: runs, alignment: alignment)
+  /// Returns a cached shaped paragraph for identical runs, alignment and wrap mode on this worker's collection.
+  public func paragraph(runs: [TextRun], alignment: String = "left", nowrap: Bool = false) -> Paragraph {
+    let key = ParagraphKey(runs: runs, alignment: alignment, nowrap: nowrap)
     if let cached = paragraphs[key] { return cached }
     if paragraphs.count >= 512 { paragraphs.removeAll(keepingCapacity: true) }
-    let created = Paragraph(runs: runs, fonts: self, alignment: alignment)
+    let created = Paragraph(runs: runs, fonts: self, alignment: alignment, nowrap: nowrap)
     paragraphs[key] = created
     return created
   }
@@ -71,9 +72,11 @@ public final class Paragraph {
   let handle: UnsafeMutableRawPointer
   private unowned let fonts: FontCollection
   private var laidOutWidth: Float = .nan
+  public let nowrap: Bool
 
-  public init(runs: [TextRun], fonts: FontCollection, alignment: String = "left") {
+  public init(runs: [TextRun], fonts: FontCollection, alignment: String = "left", nowrap: Bool = false) {
     self.fonts = fonts
+    self.nowrap = nowrap
     let alignment = ["center": 1, "right": 2, "end": 2, "justify": 3][alignment] ?? 0
     let builder = msk_paragraph_builder(fonts.handle, Int32(alignment))!
     for run in runs {
@@ -83,6 +86,7 @@ public final class Paragraph {
     handle = msk_paragraph_build(builder)!
   }
   deinit { msk_paragraph_destroy(handle) }
+  public var hasLaidOut: Bool { !laidOutWidth.isNaN }
   public func layout(width: Double) {
     let clamped = Float(max(0, width))
     guard clamped != laidOutWidth else { return }

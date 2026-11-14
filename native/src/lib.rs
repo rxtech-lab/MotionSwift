@@ -26,7 +26,7 @@ extern "C" {
 }
 
 // Shader compilation is independent of the target backend. A bounded per-worker
-// cache keeps retained video renders from recompiling identical programs each frame.
+// cache keeps retained video renders from recompiling identical programs each frame.\
 thread_local! {
     static SHADER_EFFECTS:std::cell::RefCell<std::collections::HashMap<String,RuntimeEffect>>=std::cell::RefCell::new(std::collections::HashMap::new());
     static COLOR_EFFECTS:std::cell::RefCell<std::collections::HashMap<String,RuntimeEffect>>=std::cell::RefCell::new(std::collections::HashMap::new());
@@ -67,7 +67,7 @@ pub struct Target {
     surface: Surface,
     failed: bool,
     effects_precision: bool,
-    backdrop_group: bool,
+    backdrop_group: Option<(f32, f32, f32, f32)>,
     pending_clip: Option<skia_safe::Shader>,
     dither_origin: (f32, f32),
     layers: Vec<EffectSurface>,
@@ -225,7 +225,7 @@ fn boxed(mut surface: Surface, context: Option<gpu::DirectContext>) -> *mut Targ
     } else {
         None
     };
-    Box::into_raw(Box::new(Target { surface, failed:false, effects_precision:false, backdrop_group:false, pending_clip:None, dither_origin:(0.,0.), layers: Vec::new(), depth: 0, context, solid, resolve:None, byte_blend:RuntimeEffect::make_for_blender("uniform float sourceQuantize;half4 main(half4 source,half4 destination){float4 src=float4(source);if(sourceQuantize>0.5)src=floor(src*255.0+0.5)/255.0;float4 dst=floor(float4(destination)*255.0+0.5)/255.0;return half4(floor((src+dst*(1.0-src.a))*255.0+0.5)/255.0);}",None).ok() }))
+    Box::into_raw(Box::new(Target { surface, failed:false, effects_precision:false, backdrop_group:None, pending_clip:None, dither_origin:(0.,0.), layers: Vec::new(), depth: 0, context, solid, resolve:None, byte_blend:RuntimeEffect::make_for_blender("uniform float sourceQuantize;half4 main(half4 source,half4 destination){float4 src=float4(source);if(sourceQuantize>0.5)src=floor(src*255.0+0.5)/255.0;float4 dst=floor(float4(destination)*255.0+0.5)/255.0;return half4(floor((src+dst*(1.0-src.a))*255.0+0.5)/255.0);}",None).ok() }))
 }
 
 #[no_mangle]
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn msk_effects_precision(s: *mut Target, enabled: bool) ->
     }
     target.effects_precision = enabled;
     target.pending_clip = None;
-    target.backdrop_group = false;
+    target.backdrop_group = None;
     true
 }
 #[no_mangle]
@@ -343,17 +343,9 @@ pub unsafe extern "C" fn msk_save(s: *mut Target, alpha: f32) {
         );
         return;
     }
-    if (*s).backdrop_group {
-        (*s).backdrop_group = false;
+    if let Some((w, h, radius, sigma)) = (*s).backdrop_group.take() {
         (*s).depth -= 1;
-        let background = (*s).surface.image_snapshot();
-        paint.set_blend_mode(skia_safe::BlendMode::Src);
-        (*s).effect_surface(paint, ColorType::RGBA8888, 1., false);
-        let canvas = (*s).surface.canvas();
-        canvas.save();
-        canvas.reset_matrix();
-        canvas.draw_image(background, (0, 0), None);
-        canvas.restore();
+        effects::apply_backdrop(&mut *s, w, h, radius, sigma, alpha);
         return;
     }
     if alpha >= 1. && (*s).pending_clip.is_none() {
@@ -421,10 +413,11 @@ fn axis_bands(start: f32, end: f32) -> Vec<(f32, f32, f32)> {
         bands.push((start.ceil(), end.floor(), 1.));
     }
     if end.fract() != 0. {
-        bands.push((end.floor(), end.ceil(), end - end.floor()));
+        bands.push((end.floor(), end.ceil(), end.fract()));
     }
     bands
 }
+#[allow(clippy::too_many_arguments)]
 fn draw_quad(
     canvas: &skia_safe::Canvas,
     rect: Rect,
@@ -434,18 +427,18 @@ fn draw_quad(
     precise: bool,
     effects_precision: bool,
 ) -> bool {
+    if rect.width() <= 0. || rect.height() <= 0. {
+        return true;
+    }
     let matrix = canvas.local_to_device_as_3x3();
-    if !matrix.is_scale_translate() {
-        if !effects_precision || solid.is_some() {
-            return false;
-        }
+    if !matrix.has_perspective() && !matrix.rect_stays_rect() && effects_precision {
         let mut points = [
             skia_safe::Point::new(rect.left, rect.top),
             skia_safe::Point::new(rect.right, rect.top),
             skia_safe::Point::new(rect.right, rect.bottom),
             skia_safe::Point::new(rect.left, rect.bottom),
         ];
-        matrix.map_points_inplace(&mut points);
+        matrix.map_points(&mut points.clone(), &mut points);
         let center = points
             .iter()
             .fold((0., 0.), |p, q| (p.0 + q.x / 4., p.1 + q.y / 4.));
@@ -491,6 +484,9 @@ fn draw_quad(
         canvas.draw_rect(bounds, &paint);
         canvas.restore();
         return true;
+    }
+    if matrix.has_perspective() || !matrix.rect_stays_rect() {
+        return false;
     }
     let (device, _) = matrix.map_rect(rect);
     let horizontal = axis_bands(device.left, device.right);
@@ -641,17 +637,27 @@ pub unsafe extern "C" fn msk_svg(
         child.canvas().clear(Color::TRANSPARENT);
         child
             .canvas()
-            .draw_image((*s).surface.image_snapshot(), (0, 0), None);
+            .set_matrix(&(*s).surface.canvas().local_to_device());
+        std::mem::replace(&mut (*s).surface, child)
+    } else {
+        let info = ImageInfo::new(
+            ((*s).surface.width(), (*s).surface.height()),
+            ColorType::RGBA8888,
+            AlphaType::Premul,
+            None,
+        );
+        let Some(mut child) = (*s).surface.new_surface(&info) else {
+            return false;
+        };
+        child.canvas().clear(Color::TRANSPARENT);
         child
             .canvas()
             .set_matrix(&(*s).surface.canvas().local_to_device());
-        Some(std::mem::replace(&mut (*s).surface, child))
-    } else {
-        None
+        std::mem::replace(&mut (*s).surface, child)
     };
     let canvas = (*s).surface.canvas();
     canvas.save();
-    canvas.clip_rect(Rect::from_xywh(0., 0., w, h), None, true);
+    canvas.clip_rect(Rect::from_wh(w, h), None, true);
     let intrinsic = dom.root().intrinsic_size();
     if intrinsic.width > 0. && intrinsic.height > 0. {
         let scale = (w / intrinsic.width).min(h / intrinsic.height);
@@ -661,23 +667,17 @@ pub unsafe extern "C" fn msk_svg(
         ));
         canvas.scale((scale, scale));
     }
-
-    let proxy = msk_svg_paint_canvas(canvas as *const skia_safe::Canvas as *const c_void);
-    dom.render(&*(proxy as *const skia_safe::Canvas));
-    msk_svg_paint_canvas_destroy(proxy);
-
+    let wrapper = msk_svg_paint_canvas(canvas as *const skia_safe::Canvas as *const c_void);
+    dom.render(&*(wrapper as *const skia_safe::Canvas));
+    msk_svg_paint_canvas_destroy(wrapper);
     canvas.restore();
-    if let Some(parent) = parent {
-        let image = (*s).surface.image_snapshot();
-        (*s).surface = parent;
-        let canvas = (*s).surface.canvas();
-        canvas.save();
-        canvas.reset_matrix();
-        let mut paint = Paint::default();
-        paint.set_blend_mode(skia_safe::BlendMode::Src);
-        canvas.draw_image(image, (0, 0), Some(&paint));
-        canvas.restore();
-    }
+    let image = (*s).surface.image_snapshot();
+    (*s).surface = parent;
+    let canvas = (*s).surface.canvas();
+    canvas.save();
+    canvas.reset_matrix();
+    canvas.draw_image(&image, (0, 0), None);
+    canvas.restore();
     true
 }
 #[no_mangle]
@@ -690,13 +690,11 @@ pub unsafe extern "C" fn msk_text(
     x: f32,
     y: f32,
 ) -> bool {
-    let Ok(text) = CStr::from_ptr(text).to_str() else {
+    let (Ok(text), Ok(family)) = (CStr::from_ptr(text).to_str(), CStr::from_ptr(family).to_str())
+    else {
         return false;
     };
-    let Ok(family) = CStr::from_ptr(family).to_str() else {
-        return false;
-    };
-    let Some(face) = FontMgr::new().match_family_style(family, FontStyle::normal()) else {
+    let Some(face) = FontMgr::default().match_family_style(family, FontStyle::normal()) else {
         return false;
     };
     let font = Font::new(face, size);

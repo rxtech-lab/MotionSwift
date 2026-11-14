@@ -55,11 +55,15 @@ public final class Renderer {
 
   /// Legacy data-URI SVGs retain their original SkSVG raster contract. CSS effects,
   /// inline vector hosts, and external SVG files use the stricter paint pipeline.
-  private static let effectsKeys: Set<String> = ["opacity", "transform", "filter", "backdropFilter", "boxShadow",
-                                                   "backgroundImage", "clipPath", "maskImage", "mixBlendMode"]
+  private static let effectsKeys: Set<String> = [
+    "opacity", "transform", "filter", "backdropFilter", "WebkitBackdropFilter",
+    "boxShadow", "backgroundImage", "clipPath", "maskImage", "mixBlendMode",
+  ]
 
   private static func usesEffects(_ node: RenderNode) -> Bool {
-    if !effectsKeys.isDisjoint(with: node.style.keys) || (node.style["background"]?.string?.contains("gradient(") ?? false) {
+    if !effectsKeys.isDisjoint(with: node.style.keys)
+      || (node.style["background"]?.string?.contains("gradient(") ?? false)
+      || (node.style["borderRadius"]?.string?.contains(where: \.isWhitespace) ?? false) {
       return true
     }
     if node.type == "ms-svg" { return true }
@@ -133,7 +137,7 @@ public final class Renderer {
       for (index, child) in parent.children.enumerated() {
         let style = child.node.style
         let context = style["zIndex"]?.number != nil || (style["opacity"]?.number ?? 1) < 1
-          || ["transform", "filter", "backdropFilter", "clipPath", "maskImage"].contains {
+          || ["transform", "filter", "backdropFilter", "WebkitBackdropFilter", "clipPath", "maskImage"].contains {
             let value = style[$0]?.string ?? "none"
             return !value.isEmpty && value != "none"
           } || (style["mixBlendMode"]?.string ?? "normal") != "normal"
@@ -174,18 +178,34 @@ public final class Renderer {
     try transform(style, width: width, height: height)
     let group = try EffectGroup(effects, on: canvas)
     defer { group.restore() }
-    let roundedBox = effects.gradient == nil && effects.shadows.isEmpty
+    let roundedBox = effects.gradient == nil && effects.shadows.isEmpty && effects.cornerClip == nil
       ? try BorderPainter.paintsOpaqueRoundedBox(style, radius: effects.radius) : false
     try effects.drawBackground(on: canvas, fill: !roundedBox)
     try BorderPainter.draw(style, canvas: canvas, width: width, height: height, radius: effects.radius, paintBackground: roundedBox)
-    if style.string("overflow") == "hidden" { canvas.clip(width: width, height: height) }
-    try paintMedia(node, style: style, width: width, height: height)
+    try paintContent(layout, id: id, origin: origin, style: style, effects: effects, onlySelf: onlySelf)
+    try group.finish()
+  }
+
+  private func paintContent(
+    _ layout: LayoutNode, id: String, origin: (Double, Double),
+    style: Style, effects: PaintEffects, onlySelf: Bool
+  ) throws {
+    var clippedCorner = false
+    if style.string("overflow") == "hidden" {
+      canvas.clip(width: layout.width, height: layout.height)
+      if let cornerClip = effects.cornerClip {
+        try canvas.clip(path: cornerClip)
+        canvas.save(opacity: 1)
+        clippedCorner = true
+      }
+    }
+    defer { if clippedCorner { canvas.restore() } }
+    try paintMedia(layout.node, style: style, width: layout.width, height: layout.height)
     if let paragraph = layout.paragraph {
       paragraph.layout(width: layout.textWidth)
       canvas.paragraph(paragraph, x: layout.textX, y: layout.textY)
     }
     if !onlySelf { try paintChildren(layout, id: id, origin: origin) }
-    try group.finish()
   }
 
   private func paintChildren(_ layout: LayoutNode, id: String, origin: (Double, Double)) throws {

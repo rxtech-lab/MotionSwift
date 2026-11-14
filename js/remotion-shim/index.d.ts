@@ -6,7 +6,7 @@ export interface MotionCSSProperties {
   flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
   flexWrap?: 'wrap' | 'nowrap';
   justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly';
-  alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
+  alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch' | 'baseline';
   alignSelf?: MotionCSSProperties['alignItems'];
   width?: number | string; height?: number | string;
   minWidth?: number | string; maxWidth?: number | string; minHeight?: number | string; maxHeight?: number | string;
@@ -23,12 +23,12 @@ export interface MotionCSSProperties {
   borderTopStyle?: 'solid' | 'none' | 'hidden'; borderRightStyle?: 'solid' | 'none' | 'hidden'; borderBottomStyle?: 'solid' | 'none' | 'hidden'; borderLeftStyle?: 'solid' | 'none' | 'hidden';
   flexGrow?: number; flexShrink?: number; flexBasis?: number | string; aspectRatio?: number;
   /** Effects accept only the grammar documented in docs/compatibility.md; runtime validates values. */
-  backgroundImage?: string; boxShadow?: string; filter?: string; backdropFilter?: string;
+  backgroundImage?: string; boxShadow?: string; filter?: string; backdropFilter?: string; WebkitBackdropFilter?: string;
   mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity';
   clipPath?: string; maskImage?: string;
   backgroundColor?: string; background?: string; color?: string;
   opacity?: number; borderRadius?: number | string; overflow?: 'hidden' | 'visible';
-  transform?: string; transformOrigin?: string; fontSize?: number; fontFamily?: string; fontWeight?: number | string; fontStyle?: "normal" | "italic"; lineHeight?: number | string; letterSpacing?: number; textAlign?: "left" | "center" | "right" | "start" | "end" | "justify"; whiteSpace?: "normal" | "pre" | "pre-wrap"; textTransform?: "none" | "uppercase" | "lowercase";
+  transform?: string; transformOrigin?: string; fontSize?: number; fontFamily?: string; fontWeight?: number | string; fontStyle?: "normal" | "italic"; lineHeight?: number | string; letterSpacing?: number | string; textAlign?: "left" | "center" | "right" | "start" | "end" | "justify"; whiteSpace?: "normal" | "nowrap" | "pre" | "pre-wrap"; textTransform?: "none" | "uppercase" | "lowercase";
   objectFit?: 'contain' | 'cover' | 'fill';
 }
 export interface MotionKeyframe {frame: number; value: number; easing: 'linear' | 'hold'}

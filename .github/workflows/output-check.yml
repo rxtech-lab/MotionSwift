@@ -9,7 +9,7 @@ concurrency:
 jobs:
   test:
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,7 +48,7 @@ jobs:
       # Finish the macOS visual checks before building those slices.
       - name: Build MotionStudio for iOS and iPadOS (simulator + device, Debug + Release)
         run: make ios
-      - name: Upload visual comparisons
+      - name: Upload visual comparisons and showcase UI test results
         if: always()
         uses: actions/upload-artifact@v7
         with:

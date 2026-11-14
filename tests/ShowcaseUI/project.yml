@@ -1,0 +1,26 @@
+name: ShowcaseUI
+options:
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  ShowcaseUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [ShowcaseUITests.swift]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.rxlab.MotionSwift.ShowcaseUITests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+schemes:
+  ShowcaseUI:
+    build:
+      targets:
+        ShowcaseUITests: all
+    test:
+      targets: [ShowcaseUITests]
+      parallelizable: false
+      environmentVariables:
+        SHOWCASE_UI_APP: $(SHOWCASE_UI_APP)

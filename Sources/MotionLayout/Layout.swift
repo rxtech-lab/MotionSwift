@@ -67,40 +67,52 @@ public enum LayoutEngine {
   }
 
   private static func build(_ input: RenderNode, config: YGConfigRef, fonts: FontCollection,
-                            paragraphs: inout [YGNodeRef: Paragraph], flexItem: Bool = false) throws -> YGNodeRef {
+                            paragraphs: inout [YGNodeRef: Paragraph], flexItem: Bool = false,
+                            hasParent: Bool = false) throws -> YGNodeRef {
     guard let node = YGNodeNewWithConfig(config) else {
       throw MotionError("Cannot allocate Yoga node")
     }
     do {
+      if hasParent && !flexItem && input.style["flexShrink"] == nil {
+        YGNodeStyleSetFlexShrink(node, 0)
+      }
       try apply(input.style, to: node)
       if ["inline", "inline-block"].contains(input.style["display"]?.string ?? "") {
         guard flexItem, input.children.allSatisfy(TextLayout.isInline) else {
           throw MotionError("ms/unsupported-css-value: inline/inline-block supports only leaf or paragraph flex items")
         }
       }
+      let isFlex = ["flex", "inline-flex"].contains(input.style["display"]?.string ?? "")
       if input.style["display"]?.string == "inline-flex" && input.children.contains(where: { $0.type == "#text" }) {
         throw MotionError("ms/unsupported-css-value: inline text requires paragraph layout")
       }
-      if input.type == "#text" || (!input.children.isEmpty && input.children.allSatisfy(TextLayout.isInline)) {
+      if input.type == "#text" || (!isFlex && !input.children.isEmpty && input.children.allSatisfy(TextLayout.isInline)) {
         let paragraph = fonts.paragraph(runs: try TextLayout.runs(input),
-                                        alignment: input.style["textAlign"]?.string ?? "left")
+                                        alignment: input.style["textAlign"]?.string ?? "left",
+                                        nowrap: input.style["whiteSpace"]?.string == "nowrap")
         paragraphs[node] = paragraph
         YGNodeSetContext(node, Unmanaged.passUnretained(paragraph).toOpaque())
         YGNodeSetMeasureFunc(node, { node, width, mode, _, _ in
           let paragraph = Unmanaged<Paragraph>.fromOpaque(YGNodeGetContext(node)!).takeUnretainedValue()
-          paragraph.layout(width: mode == YGMeasureMode.undefined ? 1_000_000 : Double(width))
-          return YGSize(width: Float(mode == YGMeasureMode.exactly ? Double(width) : min(paragraph.intrinsicWidth,
-                            mode == YGMeasureMode.undefined ? 1_000_000 : Double(width))), height: Float(paragraph.height))
+          let available = (paragraph.nowrap || mode == YGMeasureMode.undefined) ? 1_000_000 : Double(width) + 1e-3
+          paragraph.layout(width: available)
+          // SkParagraph floors layout width to whole pixels by default (fApplyRoundingHack = true),
+          // so intrinsic boxes must reserve ceil(maxIntrinsicWidth) to keep single-line runs intact.
+          let intrinsic = ceil(paragraph.intrinsicWidth)
+          let limit = mode == YGMeasureMode.undefined ? 1_000_000 : Double(width)
+          return YGSize(width: Float(mode == YGMeasureMode.exactly ? Double(width) : min(intrinsic, limit)),
+                        height: Float(paragraph.height))
         })
         YGNodeSetBaselineFunc(node, { node, width, _ in
           let paragraph = Unmanaged<Paragraph>.fromOpaque(YGNodeGetContext(node)!).takeUnretainedValue()
-          paragraph.layout(width: Double(width))
+          paragraph.layout(width: paragraph.nowrap ? max(Double(width), ceil(paragraph.intrinsicWidth)) : Double(width) + 1e-3)
           return Float(paragraph.baseline)
         })
       } else {
         for (index, child) in input.children.enumerated() {
           YGNodeInsertChild(node, try build(child, config: config, fonts: fonts, paragraphs: &paragraphs,
-            flexItem: ["flex", "inline-flex"].contains(input.style["display"]?.string ?? "")), index)
+            flexItem: isFlex,
+            hasParent: true), index)
         }
       }
       return node
@@ -120,15 +132,26 @@ public enum LayoutEngine {
     let right = Double(YGNodeLayoutGetPadding(handle, YGEdge.right))
     let width = Double(YGNodeLayoutGetWidth(handle))
     let contentWidth = max(0, width - left - right)
-    paragraph?.layout(width: contentWidth)
+    let textWidth: Double
+    if let paragraph {
+      if paragraph.nowrap, !paragraph.hasLaidOut { paragraph.layout(width: 1_000_000) }
+      textWidth = paragraph.nowrap
+        ? max(contentWidth + 1e-3, ceil(paragraph.intrinsicWidth))
+        : (contentWidth > 0 ? contentWidth + 1e-3 : 0)
+      paragraph.layout(width: textWidth)
+    } else {
+      textWidth = contentWidth
+    }
     return LayoutNode(
       node: input, x: Double(YGNodeLayoutGetLeft(handle)), y: Double(YGNodeLayoutGetTop(handle)),
       width: width, height: Double(YGNodeLayoutGetHeight(handle)),
       children: children, paragraph: paragraph, textX: left,
-      textY: Double(YGNodeLayoutGetPadding(handle, YGEdge.top)), textWidth: contentWidth)
+      textY: Double(YGNodeLayoutGetPadding(handle, YGEdge.top)), textWidth: textWidth)
   }
+}
 
-  private static func dimension(
+extension LayoutEngine {
+  fileprivate static func dimension(
     _ value: JSONValue, points: (Float) -> Void, percent: (Float) -> Void
   ) throws {
     if let number = value.number, number.isFinite, Float(number).isFinite {
@@ -136,6 +159,10 @@ public enum LayoutEngine {
       return
     }
     if let string = value.string {
+      if string == "0" || string == "-0" {
+        points(0)
+        return
+      }
       if string.hasSuffix("%"), let number = Float(string.dropLast()), number.isFinite {
         percent(number)
         return
@@ -148,7 +175,7 @@ public enum LayoutEngine {
     throw MotionError("Unsupported layout length: \(value)")
   }
 
-  private static func apply(_ style: [String: JSONValue], to node: YGNodeRef) throws {
+  fileprivate static func apply(_ style: [String: JSONValue], to node: YGNodeRef) throws {
     try applyDimensions(style, to: node)
     if style["boxSizing"]?.string == "content-box" {
       YGNodeStyleSetBoxSizing(node, YGBoxSizing.contentBox)
@@ -172,6 +199,8 @@ public enum LayoutEngine {
             try dimension(
               value, points: { YGNodeStyleSetPadding(node, edge, $0) },
               percent: { YGNodeStyleSetPaddingPercent(node, edge, $0) })
+          } else if value.string == "auto" {
+            YGNodeStyleSetMarginAuto(node, edge)
           } else {
             try dimension(
               value, points: { YGNodeStyleSetMargin(node, edge, $0) },
@@ -198,6 +227,10 @@ public enum LayoutEngine {
         setter(node, Float(number))
       }
     }
+    try applyFlexAndAlignment(style, to: node)
+  }
+
+  fileprivate static func applyFlexAndAlignment(_ style: [String: JSONValue], to node: YGNodeRef) throws {
     if let direction = style["flexDirection"]?.string {
       let choices = [
         "row": YGFlexDirection.row, "column": YGFlexDirection.column,
@@ -207,6 +240,9 @@ public enum LayoutEngine {
         throw MotionError("Invalid flexDirection: \(direction)")
       }
       YGNodeStyleSetFlexDirection(node, value)
+    } else if style["display"] == nil {
+      // HTML block elements stack vertically unless display: flex/inline-flex or flexDirection is set.
+      YGNodeStyleSetFlexDirection(node, YGFlexDirection.column)
     }
     if let value = style["position"]?.string {
       YGNodeStyleSetPositionType(
@@ -236,7 +272,7 @@ public enum LayoutEngine {
     }
   }
 
-  private static func applyDimensions(_ style: [String: JSONValue], to node: YGNodeRef) throws {
+  fileprivate static func applyDimensions(_ style: [String: JSONValue], to node: YGNodeRef) throws {
     let dimensions: [String: ((YGNodeRef, Float) -> Void, (YGNodeRef, Float) -> Void)] = [
       "width": (YGNodeStyleSetWidth, YGNodeStyleSetWidthPercent),
       "height": (YGNodeStyleSetHeight, YGNodeStyleSetHeightPercent),
@@ -253,5 +289,4 @@ public enum LayoutEngine {
       }
     }
   }
-
 }

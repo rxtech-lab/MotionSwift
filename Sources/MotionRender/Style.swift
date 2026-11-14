@@ -12,7 +12,8 @@ struct Style {
     "paddingLeft", "paddingRight", "paddingTop", "paddingBottom", "marginLeft", "marginRight",
     "marginTop", "marginBottom", "backgroundColor", "background", "opacity",
     "borderRadius", "overflow", "transform", "transformOrigin", "color", "fontSize", "fontFamily",
-    "backgroundImage", "boxShadow", "filter", "backdropFilter", "mixBlendMode", "clipPath", "maskImage",
+    "backgroundImage", "boxShadow", "filter", "backdropFilter", "WebkitBackdropFilter",
+    "mixBlendMode", "clipPath", "maskImage",
     "objectFit", "flex", "zIndex", "boxSizing", "pointerEvents", "userSelect", "cursor",
     "border", "borderTop", "borderRight", "borderBottom", "borderLeft",
     "borderWidth", "borderColor", "borderStyle",
@@ -35,7 +36,7 @@ struct Style {
       "cursor", "borderColor", "borderStyle", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
       "borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle",
       "backgroundColor", "fontFamily", "objectFit", "backgroundImage", "boxShadow", "filter",
-      "backdropFilter", "mixBlendMode", "clipPath", "maskImage",
+      "backdropFilter", "WebkitBackdropFilter", "mixBlendMode", "clipPath", "maskImage",
     ]
     let numbers: Set<String> = ["opacity", "fontSize", "flexGrow", "flexShrink", "aspectRatio"]
     for (key, value) in values {
@@ -87,10 +88,59 @@ struct Style {
     guard let value = values[key] else { return fallback }
     if let number = value.number { return number }
     if let text = value.string {
+      if text == "0" || text == "-0" { return 0 }
       if text.hasSuffix("%"), let number = Double(text.dropLast()) { return number * parent / 100 }
       if text.hasSuffix("px"), let number = Double(text.dropLast(2)) { return number }
     }
     throw MotionError("Unsupported length for \(key): \(value)")
+  }
+
+  func cornerRadii(width: Double, height: Double) throws -> (uniform: Double, clipPath: String?) {
+    guard let text = values["borderRadius"]?.string, text.contains(where: \.isWhitespace) else {
+      return (try length("borderRadius", relativeTo: min(width, height)), nil)
+    }
+    let parts = text.split(whereSeparator: \.isWhitespace).map(String.init)
+    guard (2...4).contains(parts.count) else {
+      throw MotionError("Unsupported borderRadius: \(text)")
+    }
+    let expanded = [
+      parts[0], parts[1],
+      parts.count > 2 ? parts[2] : parts[0],
+      parts.count > 3 ? parts[3] : parts[1],
+    ]
+    func axis(_ token: String, span: Double) throws -> Double {
+      if token == "0" || token == "-0" { return 0 }
+      if token.hasSuffix("%"), let pct = Double(token.dropLast()), pct.isFinite, pct >= 0 {
+        return span * pct / 100
+      }
+      if token.hasSuffix("px"), let px = Double(token.dropLast(2)), px.isFinite, px >= 0 {
+        return px
+      }
+      throw MotionError("Unsupported borderRadius token: \(token)")
+    }
+    let rx = try expanded.map { try axis($0, span: width) }
+    let ry = try expanded.map { try axis($0, span: height) }
+    let scale = min(
+      1.0,
+      width > 0 ? width / max(0.0001, rx[0] + rx[1]) : 0,
+      width > 0 ? width / max(0.0001, rx[3] + rx[2]) : 0,
+      height > 0 ? height / max(0.0001, ry[0] + ry[3]) : 0,
+      height > 0 ? height / max(0.0001, ry[1] + ry[2]) : 0)
+    let hx = rx.map { $0 * max(0, scale) }
+    let vy = ry.map { $0 * max(0, scale) }
+    if hx.allSatisfy({ $0 == hx[0] }) && vy.allSatisfy({ $0 == hx[0] }) {
+      return (hx[0], nil)
+    }
+    let path = "M\(hx[0]) 0H\(max(hx[0], width - hx[1]))"
+      + (hx[1] > 0 || vy[1] > 0 ? "A\(hx[1]) \(vy[1]) 0 0 1 \(width) \(vy[1])" : "")
+      + "V\(max(vy[1], height - vy[2]))"
+      + (hx[2] > 0 || vy[2] > 0 ? "A\(hx[2]) \(vy[2]) 0 0 1 \(max(0, width - hx[2])) \(height)" : "")
+      + "H\(hx[3])"
+      + (hx[3] > 0 || vy[3] > 0 ? "A\(hx[3]) \(vy[3]) 0 0 1 0 \(max(0, height - vy[3]))" : "")
+      + "V\(vy[0])"
+      + (hx[0] > 0 || vy[0] > 0 ? "A\(hx[0]) \(vy[0]) 0 0 1 \(hx[0]) 0" : "")
+      + "Z"
+    return (0, path)
   }
 
   static func color(_ value: String) throws -> UInt32 { try CSSColor.parse(value) }

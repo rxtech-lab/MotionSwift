@@ -1,9 +1,10 @@
 import Foundation
 
-/// Shared expansion keeps Yoga's border widths identical to the painter's widths.
+/// Shared expansion keeps Yoga's border and box-spacing shorthands deterministic.
 public enum BoxStyle {
   public static func normalized(_ input: [String: JSONValue]) throws -> [String: JSONValue] {
     var style = input
+    try expandSpacingShorthands(from: input, into: &style)
     if let flex = input["flex"] {
       let values = try flexValues(flex)
       style["flexGrow"] = input["flexGrow"] ?? .number(values.grow)
@@ -63,6 +64,26 @@ public enum BoxStyle {
       style["border" + side + "Color"] = .string(color)
     }
     return style
+  }
+
+  private static func expandSpacingShorthands(from input: [String: JSONValue], into style: inout [String: JSONValue]) throws {
+    for prefix in ["padding", "margin"] {
+      guard let text = input[prefix]?.string, text.contains(where: \.isWhitespace) else { continue }
+      let parts = text.split(whereSeparator: \.isWhitespace).map(String.init)
+      guard (1...4).contains(parts.count) else {
+        throw MotionError("ms/unsupported-css-value: \(prefix) shorthand")
+      }
+      let expanded: [String: String] = [
+        "Top": parts[0],
+        "Right": parts.count > 1 ? parts[1] : parts[0],
+        "Bottom": parts.count > 2 ? parts[2] : parts[0],
+        "Left": parts.count > 3 ? parts[3] : (parts.count > 1 ? parts[1] : parts[0]),
+      ]
+      style.removeValue(forKey: prefix)
+      for (side, token) in expanded where input[prefix + side] == nil {
+        style[prefix + side] = .string(token)
+      }
+    }
   }
 
   private struct FlexValues {

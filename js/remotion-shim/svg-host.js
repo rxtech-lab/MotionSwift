@@ -108,7 +108,12 @@ function serialize(node, root = true) {
 function host(node) {
   const src = serialize(node);
   const style = {...node.props.style};
-  for (const key of ['width','height']) if (style[key] == null && node.props[key] != null) style[key] = node.props[key];
+  for (const key of ['width','height']) {
+    if (style[key] == null && node.props[key] != null) {
+      const raw = node.props[key];
+      style[key] = typeof raw === 'string' && !raw.endsWith('px') && !raw.endsWith('%') ? Number(raw) : raw;
+    }
+  }
   if (style.width == null) style.width = 300;
   if (style.height == null) style.height = 150;
   return {src,style};

@@ -32,7 +32,17 @@ public struct MotionView: View {
     .aspectRatio(ratio, contentMode: .fit)
     .overlay { StatusOverlay(player: player) }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(composition.map { "\($0.id) preview, frame \(player.currentFrame)" } ?? "Preview")
+    .accessibilityLabel((composition.map { "\($0.id) preview, frame \(player.currentFrame)" } ?? "Preview")
+      + ", " + previewStatus)
+    .accessibilityIdentifier(composition.map { "preview-\($0.id)" } ?? "preview")
+    .accessibilityValue(previewStatus)
+  }
+
+  private var previewStatus: String {
+    if let error = player.renderError { return "Render failed: \(error)" }
+    if case .failed(let error) = player.status { return "Load failed: \(error)" }
+    if let frame = player.displayedFrame { return "Rendered frame \(frame.frame)" }
+    return "Loading"
   }
 }
 

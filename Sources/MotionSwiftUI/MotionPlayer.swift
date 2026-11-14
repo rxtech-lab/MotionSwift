@@ -11,7 +11,7 @@ import SkiaKit
 
 /// Where a player gets its compiled JavaScript bundle.
 public enum MotionSource: Sendable, Equatable {
-  /// An already compiled bundle, for example one shared from another player.
+  /// An already compiled bundle, for example one shared from another player. Pass its asset folder when it uses `staticFile()`.
   case bundle(String, publicDirectory: URL? = nil)
   /// A module graph from the portable compiler, a Mac (`motionswift graph`) or the cloud, linked
   /// with the precompiled vendor graph. Works on every platform.
@@ -27,7 +27,7 @@ public enum MotionSource: Sendable, Equatable {
   case project(repository: URL, project: URL, entry: String)
   #endif
 
-  /// The project's `public/` folder for `staticFile()` assets, when the source is a project directory.
+  /// The source's asset folder for `staticFile()` lookups.
   var publicDirectory: URL? {
     switch self {
     case .bundle(_, let directory): return directory

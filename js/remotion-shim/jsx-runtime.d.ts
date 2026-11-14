@@ -11,7 +11,10 @@ export namespace JSX {
   interface IntrinsicAttributes {key?: React.Key | null}
   // Inline SVG is an atomic vector island; descendants have no Yoga/editor boxes.
   interface IntrinsicElements extends ThreeElements {
-    div: BoxProps; span: BoxProps;
+    div: BoxProps; span: BoxProps; p: BoxProps;
+    h1: BoxProps; h2: BoxProps; h3: BoxProps; h4: BoxProps; h5: BoxProps; h6: BoxProps;
+    br: BoxProps; section: BoxProps; header: BoxProps; footer: BoxProps; main: BoxProps;
+    strong: BoxProps; b: BoxProps; em: BoxProps; i: BoxProps;
     img: BoxProps & {src: string};
     /** XML construction only (for existing data-URI serializers); rejected as inline hosts. */
     text: React.SVGProps<SVGTextElement>; pattern: React.SVGProps<SVGPatternElement>;
@@ -33,7 +36,7 @@ export interface SVGHostProps {
   d?: string; points?: string; fill?: string; fillRule?: 'nonzero' | 'evenodd'; fillOpacity?: number;
   stroke?: string; strokeWidth?: number | string; strokeOpacity?: number;
   strokeLinecap?: 'butt' | 'round' | 'square'; strokeLinejoin?: 'miter' | 'round' | 'bevel';
-  strokeMiterlimit?: number; strokeDasharray?: string; strokeDashoffset?: number | string;
+  strokeMiterlimit?: number; strokeDasharray?: number | string; strokeDashoffset?: number | string;
   opacity?: number; transform?: string; clipPath?: string; clipRule?: 'nonzero' | 'evenodd';
   clipPathUnits?: 'userSpaceOnUse' | 'objectBoundingBox'; mask?: string;
   maskUnits?: 'userSpaceOnUse' | 'objectBoundingBox'; maskContentUnits?: 'userSpaceOnUse' | 'objectBoundingBox';

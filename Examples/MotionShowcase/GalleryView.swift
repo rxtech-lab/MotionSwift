@@ -15,6 +15,9 @@ struct GalleryView: View {
         Divider().padding(.vertical, 12)
         Text("Explore the toolkit").font(.title2.bold())
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 20)], spacing: 20) {
+          destination("Open-Source Examples",
+                      subtitle: "12 MIT-licensed Remotion templates rendered natively in SwiftUI",
+                      icon: "sparkles.tv", color: .orange, item: .openSource)
           destination("Maps", subtitle: "Yamanote full loop · SFO Airport cameras and markers",
                       icon: "map", color: .green, item: .maps)
           destination("Media Composition", subtitle: "Nested clips, audio, video and timeline",

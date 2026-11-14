@@ -96,7 +96,9 @@ public struct EditorCanvas: View {
         content(scale: scale)
           .frame(width: fitted.width, height: fitted.height)
           .accessibilityElement(children: .contain)
-          .accessibilityLabel("Editor canvas")
+          .accessibilityLabel((composition.map { "Editor canvas, \($0.id)" } ?? "Editor canvas")
+            + ", " + (model.player.renderError.map { "Render failed: \($0)" }
+              ?? model.player.displayedFrame.map { "Rendered frame \($0.frame)" } ?? "Loading"))
           .accessibilityIdentifier("editor-canvas")
           .scaleEffect(viewport.zoom)
           .rotationEffect(viewport.rotation)

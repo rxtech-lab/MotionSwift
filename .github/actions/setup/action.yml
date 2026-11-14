@@ -19,6 +19,7 @@ runs:
         packages=()
         command -v swiftlint >/dev/null || packages+=(swiftlint)
         command -v pkg-config >/dev/null || packages+=(pkgconf)
+        command -v xcodegen >/dev/null || packages+=(xcodegen)
         if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
           packages+=(ffmpeg)
         fi

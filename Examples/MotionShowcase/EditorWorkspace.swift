@@ -5,7 +5,12 @@ import MotionCore
 /// touch the repository's golden fixtures. Other projects are edited in place after confirmation.
 enum EditorWorkspace {
   /// Shared by every window for this process, but never reused by another launch.
-  static let root = makeSessionRoot()
+  static let root: URL = {
+    if let path = ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_WORKSPACE"] {
+      return URL(fileURLWithPath: path, isDirectory: true)
+    }
+    return makeSessionRoot()
+  }()
 
   static func makeSessionRoot(in directory: URL = FileManager.default.temporaryDirectory) -> URL {
     directory.appendingPathComponent("MotionSwiftShowcase-\(UUID().uuidString)", isDirectory: true)
