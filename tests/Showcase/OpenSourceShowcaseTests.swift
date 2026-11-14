@@ -1,7 +1,9 @@
+import AppKit
 import Foundation
 import MotionCore
 @testable import MotionEditor
 import MotionSwiftUI
+import SwiftUI
 import Testing
 @testable import motionswift_showcase
 
@@ -49,9 +51,52 @@ func allOpenSourceCompositionsRenderAnimateAndOpenInVisualEditor() async throws 
   defer { try? FileManager.default.removeItem(at: directory) }
   let location = try ShowcaseExample.project(OpenSourceCatalog.project, entry: "index.tsx").prepare(root: directory)
   let editor = EditorModel(project: location.project, entry: location.entry,
-                           configuration: .init(scale: 0.25, backend: .gpu))
-  await editor.open(compositionID: "DynamicIsland")
+                           configuration: .init(scale: 0.5, backend: .gpu))
+  await editor.open(compositionID: "ProductDemo")
   #expect(editor.status == .idle)
-  #expect(editor.player.composition?.id == "DynamicIsland")
+  #expect(editor.player.composition?.id == "ProductDemo")
   #expect(!editor.objectTracks.isEmpty)
+  editor.player.seek(to: 265)
+  for _ in 0..<50 where editor.player.displayedFrame?.frame != 265 {
+    try await Task.sleep(for: .milliseconds(50))
+  }
+  #expect(editor.player.displayedFrame?.frame == 265)
+  editor.select(at: CGPoint(x: 1310, y: 910))
+  try await Task.sleep(for: .milliseconds(150))
+
+  if let outputPath = ProcessInfo.processInfo.environment["MOTIONSWIFT_OPEN_SOURCE_SNAPSHOT"] {
+    try writeEditorSnapshot(model: editor, to: URL(fileURLWithPath: outputPath))
+  }
+}
+
+@MainActor
+private func writeEditorSnapshot(model: EditorModel, to output: URL) throws {
+  let rootView = NavigationStack {
+    MotionEditorView(model: model)
+      .navigationTitle("Acme Studio Product Demo")
+      .navigationSubtitle("Alexwtlf/agentic-product-demo · SwiftUI + Skia Metal")
+  }
+  .environment(\.colorScheme, .light)
+  .frame(width: 1200, height: 780)
+
+  let window = NSWindow(
+    contentRect: NSRect(x: 0, y: 0, width: 1200, height: 780),
+    styleMask: [.titled, .closable, .resizable],
+    backing: .buffered, defer: false)
+  window.appearance = NSAppearance(named: .aqua)
+  let hosting = NSHostingView(rootView: rootView)
+  hosting.frame = NSRect(x: 0, y: 0, width: 1200, height: 780)
+  window.contentView = hosting
+  hosting.layoutSubtreeIfNeeded()
+  RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+  hosting.layoutSubtreeIfNeeded()
+
+  guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+    throw MotionError("Cannot allocate SwiftUI hosting bitmap")
+  }
+  hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+  guard let png = bitmap.representation(using: .png, properties: [:]) else {
+    throw MotionError("Cannot encode SwiftUI snapshot PNG")
+  }
+  try png.write(to: output)
 }

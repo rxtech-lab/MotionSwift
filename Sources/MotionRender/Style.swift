@@ -95,6 +95,25 @@ struct Style {
     throw MotionError("Unsupported length for \(key): \(value)")
   }
 
+  static func uniformCornerPath(radius: Double, width: Double, height: Double) -> String? {
+    let clamped = min(radius, width / 2, height / 2)
+    guard clamped > 0, width > 0, height > 0 else { return nil }
+    return roundedRectPath(hx: [clamped, clamped, clamped, clamped], vy: [clamped, clamped, clamped, clamped],
+                           width: width, height: height)
+  }
+
+  private static func roundedRectPath(hx: [Double], vy: [Double], width: Double, height: Double) -> String {
+    "M\(hx[0]) 0H\(max(hx[0], width - hx[1]))"
+      + (hx[1] > 0 || vy[1] > 0 ? "A\(hx[1]) \(vy[1]) 0 0 1 \(width) \(vy[1])" : "")
+      + "V\(max(vy[1], height - vy[2]))"
+      + (hx[2] > 0 || vy[2] > 0 ? "A\(hx[2]) \(vy[2]) 0 0 1 \(max(0, width - hx[2])) \(height)" : "")
+      + "H\(hx[3])"
+      + (hx[3] > 0 || vy[3] > 0 ? "A\(hx[3]) \(vy[3]) 0 0 1 0 \(max(0, height - vy[3]))" : "")
+      + "V\(vy[0])"
+      + (hx[0] > 0 || vy[0] > 0 ? "A\(hx[0]) \(vy[0]) 0 0 1 \(hx[0]) 0" : "")
+      + "Z"
+  }
+
   func cornerRadii(width: Double, height: Double) throws -> (uniform: Double, clipPath: String?) {
     guard let text = values["borderRadius"]?.string, text.contains(where: \.isWhitespace) else {
       return (try length("borderRadius", relativeTo: min(width, height)), nil)
@@ -131,16 +150,7 @@ struct Style {
     if hx.allSatisfy({ $0 == hx[0] }) && vy.allSatisfy({ $0 == hx[0] }) {
       return (hx[0], nil)
     }
-    let path = "M\(hx[0]) 0H\(max(hx[0], width - hx[1]))"
-      + (hx[1] > 0 || vy[1] > 0 ? "A\(hx[1]) \(vy[1]) 0 0 1 \(width) \(vy[1])" : "")
-      + "V\(max(vy[1], height - vy[2]))"
-      + (hx[2] > 0 || vy[2] > 0 ? "A\(hx[2]) \(vy[2]) 0 0 1 \(max(0, width - hx[2])) \(height)" : "")
-      + "H\(hx[3])"
-      + (hx[3] > 0 || vy[3] > 0 ? "A\(hx[3]) \(vy[3]) 0 0 1 0 \(max(0, height - vy[3]))" : "")
-      + "V\(vy[0])"
-      + (hx[0] > 0 || vy[0] > 0 ? "A\(hx[0]) \(vy[0]) 0 0 1 \(hx[0]) 0" : "")
-      + "Z"
-    return (0, path)
+    return (0, Self.roundedRectPath(hx: hx, vy: vy, width: width, height: height))
   }
 
   static func color(_ value: String) throws -> UInt32 { try CSSColor.parse(value) }

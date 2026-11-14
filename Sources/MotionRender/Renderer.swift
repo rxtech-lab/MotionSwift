@@ -63,7 +63,8 @@ public final class Renderer {
   private static func usesEffects(_ node: RenderNode) -> Bool {
     if !effectsKeys.isDisjoint(with: node.style.keys)
       || (node.style["background"]?.string?.contains("gradient(") ?? false)
-      || (node.style["borderRadius"]?.string?.contains(where: \.isWhitespace) ?? false) {
+      || (node.style["borderRadius"]?.string?.contains(where: \.isWhitespace) ?? false)
+      || (node.style["overflow"]?.string == "hidden" && node.style["borderRadius"] != nil) {
       return true
     }
     if node.type == "ms-svg" { return true }
@@ -193,8 +194,10 @@ public final class Renderer {
     var clippedCorner = false
     if style.string("overflow") == "hidden" {
       canvas.clip(width: layout.width, height: layout.height)
-      if let cornerClip = effects.cornerClip {
-        try canvas.clip(path: cornerClip)
+      if let overflowPath = effects.cornerClip ?? Style.uniformCornerPath(
+        radius: effects.radius, width: layout.width, height: layout.height
+      ) {
+        try canvas.clip(path: overflowPath)
         canvas.save(opacity: 1)
         clippedCorner = true
       }

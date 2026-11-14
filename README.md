@@ -93,6 +93,44 @@ Or render from the command line after `make bootstrap && make build`:
   ReadmeMotion /tmp/motion.mp4 --backend=gpu --encoder=videotoolbox-shared --concurrency=2
 ```
 
+## Open-source Remotion examples in SwiftUI
+
+The macOS showcase bundles **12 MIT-licensed open-source Remotion compositions** from four community repositories ([`Alexwtlf/agentic-product-demo`](https://github.com/Alexwtlf/agentic-product-demo), [`zz41354899/SwiftClip`](https://github.com/zz41354899/SwiftClip), [`RenderComp/free-remotion-templates`](https://github.com/RenderComp/free-remotion-templates), and [`lifeprompt-team/remotion-scenes`](https://github.com/lifeprompt-team/remotion-scenes)) — including five compositions whose upstream TSX runs unchanged. Launch directly into the gallery with `MOTIONSWIFT_SHOWCASE_START=open-source make showcase`.
+
+![Four open-source MIT Remotion compositions rendered natively by MotionSwift with Metal](docs/images/rendering/OpenSourceSwiftUI.gif)
+
+Opening any card loads a working copy into SwiftUI's `MotionEditorView`, with live Metal playback, canvas hit-testing, inline text and style inspection, and a scrubbable multitrack timeline:
+
+![MotionEditorView inspecting Acme Studio Product Demo in SwiftUI on macOS](docs/images/rendering/OpenSourceShowcaseSwiftUI.png)
+
+### Visual comparison: Remotion (Chrome) vs. MotionSwift (SwiftUI + Metal)
+
+Full-resolution frames rendered from the same `Examples/MotionShowcase/OpenSource/index.tsx` entry by Chrome Remotion (`@remotion/renderer`) and MotionSwift (`Skia Metal`):
+
+| Composition | Remotion (Chrome) | MotionSwift (SwiftUI + Metal) |
+|---|---|---|
+| **Acme Studio Product Demo**<br>`Alexwtlf/agentic-product-demo` · 1600×1000<br>OKLab token ramps, typing, SVG cursor, press physics | ![ProductDemo in Remotion](docs/images/rendering/OpenSource-ProductDemo-remotion.png) | ![ProductDemo in MotionSwift](docs/images/rendering/OpenSource-ProductDemo-motionswift.png) |
+| **Dynamic Island Call Pill** *(unmodified TSX)*<br>`zz41354899/SwiftClip` · 1920×1080<br>Chained springs, 135° gradient avatar, drop shadow | ![DynamicIsland in Remotion](docs/images/rendering/OpenSource-DynamicIsland-remotion.png) | ![DynamicIsland in MotionSwift](docs/images/rendering/OpenSource-DynamicIsland-motionswift.png) |
+| **Broadcast Lower-Third Glass Card**<br>`RenderComp/free-remotion-templates` · 1920×1080<br>`backdropFilter: blur(14px)`, radial glow, rounded clip | ![LowerThirdGlassCard in Remotion](docs/images/rendering/OpenSource-LowerThirdGlassCard-remotion.png) | ![LowerThirdGlassCard in MotionSwift](docs/images/rendering/OpenSource-LowerThirdGlassCard-motionswift.png) |
+| **Quarterly Revenue Bar Chart** *(unmodified TSX)*<br>`RenderComp/free-remotion-templates` · 1920×1080<br>Staggered spring bars, 4-corner `borderRadius` | ![BarChartAnim in Remotion](docs/images/rendering/OpenSource-BarChartAnim-remotion.png) | ![BarChartAnim in MotionSwift](docs/images/rendering/OpenSource-BarChartAnim-motionswift.png) |
+| **Northern Lights Aurora**<br>`lifeprompt-team/remotion-scenes` · 1920×1080<br>Rotating blurred radial curtains, `random(seed)` stars | ![BackgroundAurora in Remotion](docs/images/rendering/OpenSource-BackgroundAurora-remotion.png) | ![BackgroundAurora in MotionSwift](docs/images/rendering/OpenSource-BackgroundAurora-motionswift.png) |
+| **Gradient Circular Progress**<br>`lifeprompt-team/remotion-scenes` · 1920×1080<br>Rotated SVG `strokeDashoffset` ring + `linearGradient` | ![ShapeCircularProgress in Remotion](docs/images/rendering/OpenSource-ShapeCircularProgress-remotion.png) | ![ShapeCircularProgress in MotionSwift](docs/images/rendering/OpenSource-ShapeCircularProgress-motionswift.png) |
+
+### Open-source clip export speed & parity
+
+End-to-end full-resolution H.264 exports on an Apple M4 Max (8 workers per engine, cold start including bundling/compilation and encoding):
+
+| Open-source clip | Resolution · Frames | Remotion (x264) | MotionSwift (Metal + Shared VideoToolbox) | Video SSIM | Peak RSS (Remotion → MotionSwift) |
+|---|---|---:|---:|---:|---:|
+| `BarChartAnim` *(unmodified)* | 1920×1080 · 150f | 19.94 s | **2.04 s** (9.78× faster) | 0.9965 | 3,335 MiB → 778 MiB (−76.7%) |
+| `BackgroundAurora` | 1920×1080 · 120f | 15.36 s | **1.87 s** (8.21× faster) | 0.9947 | 3,457 MiB → 194 MiB (−94.4%) |
+| `DynamicIsland` *(unmodified)* | 1920×1080 · 150f | 19.84 s | **2.68 s** (7.40× faster) | 0.9995 | 3,401 MiB → 573 MiB (−83.1%) |
+| `LowerThirdGlassCard` | 1920×1080 · 120f | 16.91 s | **2.43 s** (6.95× faster) | 0.9963 | 3,547 MiB → 368 MiB (−89.6%) |
+| `ShapeCircularProgress` | 1920×1080 · 90f | 13.79 s | **2.09 s** (6.61× faster) | 0.9980 | 2,608 MiB → 147 MiB (−94.4%) |
+| `ProductDemo` (`200-319`) | 1600×1000 · 120f | 17.64 s | **11.20 s** (1.58× faster) | 0.9529 | 3,271 MiB → 554 MiB (−83.1%) |
+
+Across all 6 clips, MotionSwift exported **5.92× faster** (geometric mean; **7.71×** across the five 1080p templates) while using **76.7%–94.4% less process-tree memory**. See [full 12-composition parity & reproduction](docs/benchmarks/2026-11-14-open-source.md) and bundled MIT notices in [`Examples/MotionShowcase/OpenSource/THIRD-PARTY-LICENSES.txt`](Examples/MotionShowcase/OpenSource/THIRD-PARTY-LICENSES.txt).
+
 ## Performance compared with Remotion
 
 MotionSwift exported **17.24× faster with Metal + x264** and **18.89× faster with CPU + x264** across 12 short synthetic cases (geometric means).
@@ -106,7 +144,7 @@ MotionSwift exported **17.24× faster with Metal + x264** and **18.89× faster w
 
 Measured on an Apple M4 Max (16 cores, 128 GB), eight workers per engine, one run without warmup. Export times include startup, compilation/bundling and encoding. All cases passed SSIM ≥ 0.98; hardware/software quality settings differ. These short synthetic results do not establish full-film or 4K speedups over Remotion. RSS is sampled and excludes separate GPU/media-engine accounting.
 
-[Comparison results and reproduction](docs/benchmarks/2026-11-12-remotion-comparison.md) · [Memory measurements](docs/benchmarks/2026-11-12-memory.md).
+[Comparison results and reproduction](docs/benchmarks/2026-11-12-remotion-comparison.md) · [Memory measurements](docs/benchmarks/2026-11-12-memory.md) · [Open-source examples benchmark](docs/benchmarks/2026-11-14-open-source.md).
 
 ### 3D scenes with three.js and USDZ
 
