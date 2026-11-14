@@ -1,9 +1,7 @@
 name: Showcase signed DMG
 
 on:
-  release:
-    types: [published]
-  # semantic-release uses GITHUB_TOKEN, whose release event cannot start another workflow.
+  # Create Release invokes this once after semantic-release publishes the tag.
   workflow_call:
     inputs:
       release_tag:
@@ -11,9 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: showcase-release
@@ -23,11 +19,10 @@ jobs:
   dmg:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 120
-    environment:
-      name: github-pages
-      url: https://update.motion.rxfilm.app
+    outputs:
+      publish_appcast: ${{ steps.release.outputs.publish_appcast }}
     env:
-      RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
       BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
       P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
       SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
@@ -40,10 +35,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag || github.event.release.tag_name }}
+          ref: ${{ inputs.release_tag }}
           lfs: true
           persist-credentials: false
       - name: Validate release and credentials
+        id: release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,6 +56,7 @@ jobs:
           prerelease=$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)
           if [[ "$prerelease" == false && "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo 'PUBLISH_APPCAST=true' >> "$GITHUB_ENV"
+            echo 'publish_appcast=true' >> "$GITHUB_OUTPUT"
           fi
       - uses: ./.github/actions/setup
       - name: Prepare Sparkle signing tools
@@ -119,6 +116,73 @@ jobs:
             ".build/showcase/MotionSwift-Showcase-$VERSION-$BUILD_NUMBER.app" \
             "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg" \
             "$RELEASE_OUTPUT/appcast.xml"
+      - name: Hand off verified release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: showcase-release-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            ${{ env.RELEASE_OUTPUT }}/*.dmg
+            ${{ env.RELEASE_OUTPUT }}/*.dmg.sha256
+            ${{ env.RELEASE_OUTPUT }}/appcast.xml
+      - name: Preserve notarization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: showcase-notarization-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RELEASE_OUTPUT }}/*.json
+          if-no-files-found: ignore
+      - name: Remove signing credentials and restore keychain search list
+        if: always()
+        shell: bash
+        run: |
+          cleanup() {
+            if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then security delete-keychain "$SIGNING_KEYCHAIN"; fi
+            if [[ -n "${SIGNING_P12:-}" ]]; then rm -f "$SIGNING_P12"; fi
+          }
+          trap cleanup EXIT
+          python3 - "$RUNNER_TEMP/showcase-keychains-$GITHUB_RUN_ID.txt" <<'PY'
+          from pathlib import Path
+          import shlex, subprocess, sys
+          record = Path(sys.argv[1])
+          if record.exists():
+              subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *shlex.split(record.read_text())], check=True)
+              record.unlink()
+          PY
+
+  publish:
+    needs: dmg
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://update.motion.rxfilm.app
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      PUBLISH_APPCAST: ${{ needs.dmg.outputs.publish_appcast }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Set release download directory
+        run: echo "RELEASE_OUTPUT=$RUNNER_TEMP/showcase-release" >> "$GITHUB_ENV"
+      - name: Download verified release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: showcase-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RELEASE_OUTPUT }}
+      - name: Verify release handoff
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_OUTPUT"
+          test -s "MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg"
+          sha256sum --check "MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg.sha256"
+          if [[ "${PUBLISH_APPCAST:-}" == true ]]; then
+            test -s appcast.xml
+          fi
       - name: Upload verified release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -145,27 +209,3 @@ jobs:
       - name: Deploy update feed to GitHub Pages
         if: env.PUBLISH_APPCAST == 'true'
         uses: actions/deploy-pages@v4
-      - name: Preserve notarization diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: showcase-notarization-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.RELEASE_OUTPUT }}/*.json
-          if-no-files-found: ignore
-      - name: Remove signing credentials and restore keychain search list
-        if: always()
-        shell: bash
-        run: |
-          cleanup() {
-            if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then security delete-keychain "$SIGNING_KEYCHAIN"; fi
-            if [[ -n "${SIGNING_P12:-}" ]]; then rm -f "$SIGNING_P12"; fi
-          }
-          trap cleanup EXIT
-          python3 - "$RUNNER_TEMP/showcase-keychains-$GITHUB_RUN_ID.txt" <<'PY'
-          from pathlib import Path
-          import shlex, subprocess, sys
-          record = Path(sys.argv[1])
-          if record.exists():
-              subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *shlex.split(record.read_text())], check=True)
-              record.unlink()
-          PY
