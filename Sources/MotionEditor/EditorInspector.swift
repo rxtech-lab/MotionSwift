@@ -2,8 +2,8 @@ import MotionCore
 import MotionPortable
 import SwiftUI
 
-/// Properties of the selection, classified from source. Static values open the Edit Property
-/// sheet; animated, bound and computed values are read-only with an explanation.
+/// Properties of the selection, classified from source. Static values and map props open the Edit
+/// Property sheet; other animated, bound and computed values are read-only with an explanation.
 struct EditorInspector: View {
   let model: EditorModel
   @State private var editing: StyleSummary.Property?
@@ -28,6 +28,9 @@ struct EditorInspector: View {
           }
           if let box = model.selectedBox {
             LabeledContent("Box", value: "\(format(box.x)), \(format(box.y)) · \(format(box.width))×\(format(box.height))")
+          } else if model.styles?.isMap == true {
+            Text("Map props use degrees (longitude, latitude) and Web Mercator zoom.")
+              .font(.caption).foregroundStyle(.secondary)
           } else if model.styles?.isThree == true {
             Text("Select 3D objects and materials in the timeline. Position uses scene units; rotation uses radians. "
                  + "Repeated instances share source edits.")
@@ -52,6 +55,7 @@ struct EditorInspector: View {
             }
           }
         }
+        MapInspectorSection(model: model)
         Section {
           if let styles = model.styles {
             if !styles.editable {
@@ -62,11 +66,11 @@ struct EditorInspector: View {
           }
         } header: {
           HStack {
-            Text(model.styles?.isThree == true ? "3D Properties" : "Style")
+            Text(model.styles?.isMap == true ? "Map Properties" : model.styles?.isThree == true ? "3D Properties" : "Style")
             Spacer()
             Button("Add Property", systemImage: "plus") { adding = true }
               .labelStyle(.iconOnly)
-              .disabled(model.styles?.editable != true || model.styles?.isThree == true)
+              .disabled(model.styles?.editable != true || model.styles?.isPropDomain == true)
               .accessibilityIdentifier("add-property")
           }
         }
@@ -89,7 +93,7 @@ struct EditorInspector: View {
     }
     .sheet(item: $editing) { property in
       EditPropertySheet(key: property.key, value: model.currentStyleValue(property.key) ?? property.value ?? .string(""),
-                        isThree: model.styles?.isThree == true) { value in
+                        isThree: model.styles?.isThree == true, definition: mapDefinition(property.key)) { value in
         Task { await model.setStyle(property.key, value) }
       }
     }
@@ -110,18 +114,18 @@ struct EditorInspector: View {
 
   @ViewBuilder private func row(_ property: StyleSummary.Property) -> some View {
     let animated = model.selectedTrack?.keyframes[property.key] != nil
-    let definition = model.styles?.isThree == true
-      ? StylePropertyDefinition.three(property.key) : StylePropertyDefinition.find(property.key)
-    let editable = property.kind == .static && definition != nil
+    let definition = mapDefinition(property.key) ?? (model.styles?.isThree == true
+      ? StylePropertyDefinition.three(property.key) : StylePropertyDefinition.find(property.key))
+    let editable = (property.kind == .static || model.styles?.isMap == true) && definition != nil
     Button {
       if editable { editing = property }
     } label: {
       HStack {
-        Text(model.styles?.label(for: property.key) ?? property.key)
+        Text(model.styles?.isMap == true ? MapCatalog.label(for: property.key) : model.styles?.label(for: property.key) ?? property.key)
         Spacer()
         Text(valueText(property))
           .font(.callout.monospaced()).lineLimit(1).foregroundStyle(.secondary)
-        if !editable || animated {
+        if !editable || animated || property.kind != .static {
           Text(animated ? "keyframes" : property.kind == .static ? "code" : property.kind.rawValue)
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -132,25 +136,34 @@ struct EditorInspector: View {
     }
     .buttonStyle(.plain)
     .disabled(!editable)
-    .help(help(property))
+    .help(help(property, definition: definition))
     .contextMenu {
       if editable {
         Button("Edit…", systemImage: "pencil") { editing = property }
-        if !animated && model.styles?.isThree != true {
+        if !animated && model.styles?.isPropDomain != true {
           Button("Remove…", systemImage: "trash", role: .destructive) { removing = property }
         }
       }
     }
     .swipeActions {
-      if editable && !animated && model.styles?.isThree != true {
+      if editable && !animated && model.styles?.isPropDomain != true {
         Button("Remove", systemImage: "trash", role: .destructive) { removing = property }
       }
     }
   }
 
-  private func help(_ property: StyleSummary.Property) -> String {
-    if property.kind == .static, StylePropertyDefinition.find(property.key) == nil {
+  private func mapDefinition(_ key: String) -> StylePropertyDefinition? {
+    guard model.styles?.isMap == true else { return nil }
+    let provider = model.mapView(containing: model.selection ?? "")?.properties["provider"]?.string
+    return StylePropertyDefinition.map(key, provider: provider)
+  }
+
+  private func help(_ property: StyleSummary.Property, definition: StylePropertyDefinition?) -> String {
+    if definition == nil {
       return "This property has no visual control yet; edit its value in code"
+    }
+    if model.styles?.isMap == true, property.kind != .static {
+      return "Controlled by code — click to override on the map (Undo restores the expression)"
     }
     switch property.kind {
     case .static: return "Edit the literal in source"

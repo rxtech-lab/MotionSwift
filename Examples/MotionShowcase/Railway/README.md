@@ -1,42 +1,41 @@
-# OpenStreetMap · Island Line
+# Yamanote Line · Complete clockwise loop
 
-Real OpenStreetMap geography, rendered natively as a Remotion composition. Roads,
-parks and coastline form the map; the blue animated route follows the actual
-eastbound railway through Sheung Wan, Central, Admiralty, Wan Chai, Causeway Bay,
-Tin Hau and Fortress Hill. Station labels use OSM English and Chinese names.
+A 50-second 16:9 (`1920×1080`) continuous journey through all 30 stations on Tokyo's
+Yamanote Line, starting at Tokyo, gliding clockwise through Shinagawa, Shibuya,
+Shinjuku, Ikebukuro and Ueno without intermediate stops, and returning from Kanda
+to Tokyo. Includes Takanawa Gateway. All 30 stations are geographic markers on an
+OpenStreetMap tile map, with bilingual Japanese and English labels on major hubs
+and nearby stations along the active leg.
 
-The train advances by distance along the track. It is an illustrative 12-second
-journey, not a timetable or a driving route. Map and labels share a Web Mercator
-projection. Preview, editing and export use the same bundled data with no network
-dependency or tile-service API key. The sample is a geographic snapshot, not a
-live map browser; no synthetic streets or straight-line station connections are used.
+The train follows the real, continuous outer-loop railway geometry from
+[OpenStreetMap relation 1972920](https://www.openstreetmap.org/relation/1972920).
+The 904-point track is closed on the same node; station names and coordinates come
+from its 30 unique stop positions. Track and roads use the same Web Mercator projection.
+Station order can also be checked against [JR East's numbering map](https://www.jreast.co.jp/e/downloads/pdf/numbering_e.pdf).
 
-Data retrieved 2026-11-13 from OpenStreetMap API 0.6, bounded extracts:
+The train travels continuously by distance along the railway polyline: 2 seconds
+before departure at Tokyo, 46 seconds of uninterrupted clockwise travel around all
+30 stations, and 2 seconds upon returning to Tokyo. The JR East-inspired `JY` HUD
+cards show the approaching station badge (`JY01`–`JY30`), current leg, visited
+station count and loop progress. Backward seeks and repeated frames compute the
+same state.
 
-- `114.15,22.274,114.165,22.291`
-- `114.165,22.274,114.18,22.291`
-- `114.18,22.274,114.195,22.291`
+The camera starts with the full loop in view (zoom 13), smoothly zooms in over
+3 seconds, then follows the train at zoom 15. At the final return to Tokyo it
+zooms out to the whole loop again. The `<MapView>` camera, zoom, provider, style
+and markers can also be panned, overridden or keyframed directly in the MotionSwift
+editor.
 
-Route: [OSM relation 4432666](https://www.openstreetmap.org/relation/4432666).
-Data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright),
-available under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/).
-Attribution remains visible in every rendered frame and export. The included
-`map-data.ts` is the derived route/station dataset; `public/map.svg` is the vector
-basemap and `public/map.png` its prepared raster. Both renderers use the same PNG
-to avoid differences in antialiasing thousands of street edges and labels. The
-prepared image includes the drawn route and station labels; train positioning and
-the journey progress indicator remain frame-driven native elements.
+The composition ID remains `IslandRailway` for existing navigation. The showcase
+creates a fresh `Yamanote-v3` working copy, preserving earlier edited examples.
+`artwork.ts` and `public/map.png` retain the previous static overview as a reference;
+they are not used by the playback composition.
 
-To update, save those three XML responses from
-`https://www.openstreetmap.org/api/0.6/map?bbox=…`, then run:
+Data retrieved 2026-11-14. © OpenStreetMap contributors, ODbL-1.0; attribution is
+visible throughout. Regenerate reference provenance after updating `route.ts` or
+`artwork.ts`:
 
 ```sh
-python3 tests/tools/import-osm-railway.py west.osm central.osm east.osm
-node tests/tools/generate-railway-basemap.mjs
+python3 Tests/tools/import-yamanote.py route.json roads.json
+node Tests/tools/generate-railway-basemap.mjs
 ```
-
-The importer rejects discontinuous railway geometry. Review regenerated maps and
-station names before committing. Raw OSM user and changeset metadata is discarded.
-Native rendering/staging is covered by `RailwayShowcaseTests`; route/projection and
-portable compilation checks run with the ordinary Node suite in push CI. The real
-map composition also runs against Remotion in `make maps-visual`, on CPU and GPU.

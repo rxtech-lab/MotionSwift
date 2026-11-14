@@ -12,7 +12,7 @@ import SkiaKit
 /// Where a player gets its compiled JavaScript bundle.
 public enum MotionSource: Sendable, Equatable {
   /// An already compiled bundle, for example one shared from another player.
-  case bundle(String)
+  case bundle(String, publicDirectory: URL? = nil)
   /// A module graph from the portable compiler, a Mac (`motionswift graph`) or the cloud, linked
   /// with the precompiled vendor graph. Works on every platform.
   case graph(ModuleGraph)
@@ -30,6 +30,7 @@ public enum MotionSource: Sendable, Equatable {
   /// The project's `public/` folder for `staticFile()` assets, when the source is a project directory.
   var publicDirectory: URL? {
     switch self {
+    case .bundle(_, let directory): return directory
     case .portable(let project, _, _): return project.appendingPathComponent("public")
     #if os(macOS)
     case .project(_, let project, _): return project.appendingPathComponent("public")
@@ -40,7 +41,7 @@ public enum MotionSource: Sendable, Equatable {
 
   func compile() throws -> String {
     switch self {
-    case .bundle(let bundle): return bundle
+    case .bundle(let bundle, _): return bundle
     case .graph(let graph): return try GraphLinker.link(graph)
     case .portable(let project, let entry, let stamp):
       return try GraphLinker.link(PortableCompiler().compile(project: project, entry: entry, stamp: stamp))
@@ -102,7 +103,7 @@ public final class MotionPlayer {
   }
   public private(set) var configuration: Configuration
   public private(set) var props = "{}"
-  /// The compiled bundle, reusable through `MotionSource.bundle` without recompiling.
+  /// The compiled JavaScript. Use `compiledSource` to also preserve its asset folder.
   public private(set) var bundle: String?
   public var loops = true
   public var isMuted = false {
@@ -121,9 +122,14 @@ public final class MotionPlayer {
   @ObservationIgnored private var playbackRate = PlaybackRate()
   @ObservationIgnored private let cache = NSCache<NSNumber, CachedFrame>()
 
+  @ObservationIgnored private var mapObserver: NotificationObservation?
+  @ObservationIgnored private var mapTileObserver: NotificationObservation?
+
   public init(configuration: Configuration = Configuration()) {
     self.configuration = configuration
     cache.totalCostLimit = configuration.cacheBytes
+    mapObserver = observeMapRoutes()
+    mapTileObserver = observeMapTiles()
   }
 
   // MARK: Loading
@@ -291,7 +297,7 @@ public final class MotionPlayer {
 
   // MARK: Rendering
 
-  private func restartWorker() {
+  fileprivate func restartWorker() {
     renderGeneration += 1
     cache.removeAllObjects()
     renderError = nil
@@ -335,7 +341,7 @@ public final class MotionPlayer {
       if frame.overridden {
         // A late override frame must not replace the picture after the gesture ended.
         guard !previewOverrides.isEmpty else { return }
-      } else {
+      } else if !frame.incomplete {
         cache.setObject(CachedFrame(frame), forKey: frame.frame as NSNumber, cost: frame.byteCount)
       }
       // Within this epoch uncached frames finish in request order, so keep
@@ -365,6 +371,11 @@ public final class MotionPlayer {
 }
 
 extension MotionPlayer {
+  /// Shares compiled code and its asset folder with another preview without recompiling.
+  public var compiledSource: MotionSource? {
+    bundle.map { .bundle($0, publicDirectory: publicDirectory) }
+  }
+
   /// Runs `body` on a thread with an 8 MiB stack; bundle evaluation recurses deeply.
   private static func onLargeStack<T: Sendable>(
     _ body: @escaping @Sendable () throws -> T
@@ -396,4 +407,42 @@ extension MotionPlayer {
     }
   }
 
+}
+
+extension MotionPlayer {
+  fileprivate func observeMapTiles() -> NotificationObservation {
+    NotificationObservation(NotificationCenter.default.addObserver(
+      forName: MapServices.tilesDidResolve, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, self.status == .ready else { return }
+        // Incomplete frames are never cached; keep complete frames warm and only redraw when needed.
+        guard !self.isPlaying, self.displayedFrame?.incomplete != false else { return }
+        self.renderGeneration += 1
+        self.show(self.currentFrame)
+      }
+    })
+  }
+
+  /// Map routes resolved in the background replace their placeholder lines.
+  fileprivate func observeMapRoutes() -> NotificationObservation {
+    NotificationObservation(NotificationCenter.default.addObserver(
+      forName: MapServices.routesDidResolve, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.refreshMapData() }
+    })
+  }
+
+  /// Re-renders with fresh map data (resolved routes, a new Mapbox token) without recompiling.
+  public func refreshMapData() {
+    guard status == .ready, composition != nil, bundle != nil else { return }
+    restartWorker()
+  }
+}
+
+/// Removes a block-based notification observer with its owner.
+private final class NotificationObservation: @unchecked Sendable {
+  private let token: any NSObjectProtocol
+  init(_ token: any NSObjectProtocol) { self.token = token }
+  deinit { NotificationCenter.default.removeObserver(token) }
 }

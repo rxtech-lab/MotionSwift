@@ -1,10 +1,13 @@
+import MotionCore
 import MotionPortable
+import MotionSwiftUI
 import SwiftUI
 
 /// A separate timeline surface using the same controller as `EditorCanvas`.
 public struct EditorTimeline: View {
   @Bindable private var model: EditorModel
-  @State private var pixelsPerFrame = 6.0
+  @State private var zoomScale = 6.0
+  @GestureState private var magnification = 1.0
   @State private var editingTiming: ObjectTrack?
   @State private var editingKeyframe: KeyframeTarget?
   @State private var movingKeyframe: String?
@@ -14,7 +17,16 @@ public struct EditorTimeline: View {
   public init(model: EditorModel) { self.model = model }
 
   private var duration: Int { model.player.composition?.durationInFrames ?? 1 }
+  private var pixelsPerFrame: Double { clampedZoom(zoomScale * magnification) }
   private var trackWidth: Double { Double(duration) * pixelsPerFrame }
+
+  private func clampedZoom(_ scale: Double) -> Double { min(max(scale, 2), 16) }
+
+  private var magnify: some Gesture {
+    MagnifyGesture()
+      .updating($magnification) { value, scale, _ in scale = value.magnification }
+      .onEnded { value in zoomScale = clampedZoom(zoomScale * value.magnification) }
+  }
 
   public var body: some View {
     VStack(spacing: 0) {
@@ -44,11 +56,11 @@ public struct EditorTimeline: View {
             }
           }
           .overlay(alignment: .topLeading) {
-            Rectangle().fill(.red).frame(width: 1)
-              .offset(x: labelWidth + Double(model.player.currentFrame) * pixelsPerFrame)
-              .allowsHitTesting(false)
+            TimelinePlayhead(player: model.player, labelWidth: labelWidth, scale: pixelsPerFrame)
           }
         }
+        .simultaneousGesture(magnify)
+        .sensoryFeedback(.selection, trigger: magnification != 1) { _, active in active }
       }
     }
     .background(.background)
@@ -82,10 +94,10 @@ public struct EditorTimeline: View {
       .accessibilityIdentifier("add-keyframe")
       Menu {
         ForEach([2.0, 4, 6, 10, 16], id: \.self) { scale in
-          Button("\(Int(scale)) px/frame") { pixelsPerFrame = scale }
+          Button("\(Int(scale)) px/frame") { zoomScale = scale }
         }
       } label: { Image(systemName: "plus.magnifyingglass") }
-      .help("Timeline zoom")
+      .help("Timeline zoom · Pinch the timeline to zoom in or out")
       .accessibilityLabel("Timeline zoom")
     }
     .buttonStyle(.borderless)
@@ -93,15 +105,24 @@ public struct EditorTimeline: View {
   }
 
   private var ruler: some View {
-    HStack(spacing: 0) {
+    let step = max(1, Int(60 / pixelsPerFrame))
+    let total = duration
+    let scale = pixelsPerFrame
+    return HStack(spacing: 0) {
       Text("Objects · frames").font(.caption).foregroundStyle(.secondary)
         .frame(width: labelWidth, height: 30, alignment: .leading)
-      ZStack(alignment: .topLeading) {
-        Color.secondary.opacity(0.08)
-        let step = max(1, Int(60 / pixelsPerFrame))
-        ForEach(Array(stride(from: 0, to: duration, by: step)), id: \.self) { frame in
-          Text("\(frame)").font(.caption2.monospacedDigit())
-            .offset(x: Double(frame) * pixelsPerFrame + 3, y: 5)
+      Canvas { context, size in
+        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.secondary.opacity(0.08)))
+        var frame = 0
+        while frame < total {
+          let x = Double(frame) * scale + 3
+          if x <= size.width {
+            context.draw(
+              Text("\(frame)").font(.caption2.monospacedDigit()).foregroundStyle(.primary),
+              at: CGPoint(x: x, y: 5),
+              anchor: .topLeading)
+          }
+          frame += step
         }
       }
       .frame(width: trackWidth, height: 30)
@@ -109,7 +130,7 @@ public struct EditorTimeline: View {
       .gesture(DragGesture(minimumDistance: 0).onChanged { value in
         model.scrub(to: Int((value.location.x / pixelsPerFrame).rounded()))
       })
-      .accessibilityLabel("Timeline ruler. Frame \(model.player.currentFrame)")
+      .accessibilityLabel("Timeline ruler")
       .accessibilityAdjustableAction { direction in model.player.step(by: direction == .increment ? 1 : -1) }
     }
   }
@@ -191,6 +212,22 @@ public struct EditorTimeline: View {
       }
   }
 
+}
+
+/// Playhead indicator isolated into its own view so `EditorTimeline` does not re-evaluate on playback ticks.
+private struct TimelinePlayhead: View {
+  let player: MotionPlayer
+  let labelWidth: Double
+  let scale: Double
+
+  var body: some View {
+    Rectangle()
+      .fill(.red)
+      .frame(width: 1)
+      .offset(x: labelWidth + Double(player.currentFrame) * scale)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+  }
 }
 
 private struct TimelineClip: View {
@@ -329,15 +366,24 @@ private struct KeyframeSheet: View {
   init(model: EditorModel, target: KeyframeTarget) {
     self.model = model
     self.target = target
-    let property = model.styles?.properties.first { $0.kind == .static && $0.value?.number != nil }
-    _key = State(initialValue: target.key ?? property?.key ?? "")
+    let available: [String] = if model.styles?.isMap == true {
+      MapCatalog.keyframeKeys(model.styles?.type ?? "").sorted()
+    } else {
+      model.styles?.properties.filter { $0.kind == .static && $0.value?.number != nil }.map(\.key) ?? []
+    }
+    let initialKey = target.key ?? available.first ?? ""
+    let fallback = model.currentStyleValue(initialKey)?.number ?? model.styles?.property(initialKey)?.value?.number ?? 0
+    _key = State(initialValue: initialKey)
     _frame = State(initialValue: target.point.map { target.track.start + $0.frame } ?? model.player.currentFrame)
-    _value = State(initialValue: target.point?.value ?? property?.value?.number ?? 0)
+    _value = State(initialValue: target.point?.value ?? fallback)
     _easing = State(initialValue: target.point?.easing ?? "linear")
   }
 
   private var properties: [String] {
-    model.styles?.properties.filter { $0.kind == .static && $0.value?.number != nil }.map(\.key) ?? []
+    if model.styles?.isMap == true {
+      return MapCatalog.keyframeKeys(model.styles?.type ?? "").sorted()
+    }
+    return model.styles?.properties.filter { $0.kind == .static && $0.value?.number != nil }.map(\.key) ?? []
   }
   private var valid: Bool {
     !key.isEmpty && value.isFinite && frame >= target.track.start
@@ -389,7 +435,9 @@ private struct KeyframeSheet: View {
         }
       }
       .onChange(of: key) { _, newKey in
-        if target.point == nil { value = model.styles?.property(newKey)?.value?.number ?? 0 }
+        if target.point == nil {
+          value = model.currentStyleValue(newKey)?.number ?? model.styles?.property(newKey)?.value?.number ?? 0
+        }
       }
     }
     .modifier(EditorSheetSize())

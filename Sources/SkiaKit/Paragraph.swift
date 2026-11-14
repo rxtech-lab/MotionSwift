@@ -5,8 +5,14 @@ import MotionCore
 /// Own one collection per rendering session. Register fonts before measuring any frame.
 /// Failed registrations never enter the cache; changing bytes under an alias is rejected.
 public final class FontCollection {
+  private struct ParagraphKey: Hashable {
+    let runs: [TextRun]
+    let alignment: String
+  }
+
   let handle: UnsafeMutableRawPointer
   private var registered: [String: Data] = [:]
+  private var paragraphs: [ParagraphKey: Paragraph] = [:]
 
   public init() { handle = msk_fonts_create()! }
   deinit { msk_fonts_destroy(handle) }
@@ -21,10 +27,21 @@ public final class FontCollection {
     }
     guard success else { throw MotionError("Cannot decode font: \(family)") }
     registered[family] = data
+    paragraphs.removeAll()
+  }
+
+  /// Returns a cached shaped paragraph for identical runs and alignment on this worker's collection.
+  public func paragraph(runs: [TextRun], alignment: String = "left") -> Paragraph {
+    let key = ParagraphKey(runs: runs, alignment: alignment)
+    if let cached = paragraphs[key] { return cached }
+    if paragraphs.count >= 512 { paragraphs.removeAll(keepingCapacity: true) }
+    let created = Paragraph(runs: runs, fonts: self, alignment: alignment)
+    paragraphs[key] = created
+    return created
   }
 }
 
-public struct TextRun {
+public struct TextRun: Hashable {
   public var text: String
   public var family: String
   public var size: Double
@@ -52,7 +69,9 @@ public struct TextRun {
 /// Retains precisely the shaped runs used for Yoga measurement and paint.
 public final class Paragraph {
   let handle: UnsafeMutableRawPointer
-  private let fonts: FontCollection
+  private unowned let fonts: FontCollection
+  private var laidOutWidth: Float = .nan
+
   public init(runs: [TextRun], fonts: FontCollection, alignment: String = "left") {
     self.fonts = fonts
     let alignment = ["center": 1, "right": 2, "end": 2, "justify": 3][alignment] ?? 0
@@ -64,7 +83,12 @@ public final class Paragraph {
     handle = msk_paragraph_build(builder)!
   }
   deinit { msk_paragraph_destroy(handle) }
-  public func layout(width: Double) { msk_paragraph_layout(handle, Float(max(0, width))) }
+  public func layout(width: Double) {
+    let clamped = Float(max(0, width))
+    guard clamped != laidOutWidth else { return }
+    laidOutWidth = clamped
+    msk_paragraph_layout(handle, clamped)
+  }
   public var height: Double { Double(msk_paragraph_height(handle)) }
   public var intrinsicWidth: Double { Double(msk_paragraph_width(handle)) }
   public var baseline: Double { Double(msk_paragraph_baseline(handle)) }

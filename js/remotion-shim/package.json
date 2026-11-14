@@ -29,6 +29,10 @@
       "types": "./usd-loader.d.ts",
       "default": "./usd-loader.js"
     },
+    "./map": {
+      "types": "./map.d.ts",
+      "default": "./map.js"
+    },
     "./transitions": {
       "types": "./transitions.d.ts",
       "default": "./transitions.js"

@@ -72,7 +72,17 @@ public final class Runtime {
     identity = nil
   }
 
-  public func frame(composition: Composition, number: Int, props: String = "{}") throws -> RenderNode {
+  /// Evaluates a frame. `propOverrides` (source stamp → editor key → value) replace props of
+  /// stamped prop-domain components such as `<MapView>` for this evaluation only; the editor
+  /// uses them for live previews that the native renderer cannot patch after layout.
+  public func frame(
+    composition: Composition, number: Int, props: String = "{}",
+    propOverrides: [String: [String: JSONValue]] = [:]
+  ) throws -> RenderNode {
+    let overrides = propOverrides.isEmpty ? nil
+      : String(bytes: try JSONEncoder().encode(propOverrides), encoding: .utf8)
+    context.setObject(overrides.map { $0 as NSString } ?? NSNull(), forKeyedSubscript: "__ms_propOverridesJSON" as NSString)
+    defer { context.setObject(NSNull(), forKeyedSubscript: "__ms_propOverridesJSON" as NSString) }
     guard number >= 0, number < composition.durationInFrames else {
       throw MotionError("Frame out of range: \(number)")
     }
@@ -87,13 +97,16 @@ public final class Runtime {
     if key != identity { try invalidate(); identity = key }
     do {
       let deadline = ProcessInfo.processInfo.systemUptime + timeout
+      // Time spent waiting on map services (route lookups) does not count against the deadline.
+      let hostStart = MapServices.threadHostSeconds
       _ = try call("__ms_begin", [composition.id, number, props])
       var settled = false
       for iteration in 0..<10_000 {
         let done = try call("__ms_step").toBool()
         if done && settled { break }
         settled = done
-        if iteration == 9_999 || ProcessInfo.processInfo.systemUptime >= deadline {
+        let elapsed = ProcessInfo.processInfo.systemUptime - (MapServices.threadHostSeconds - hostStart)
+        if iteration == 9_999 || elapsed >= deadline {
           let pending = try call("__ms_pending").toString() ?? ""
           throw MotionError("Composition \(composition.id), frame \(number): async lifecycle did not settle within \(timeout)s. \(pending)")
         }
@@ -133,7 +146,7 @@ public final class Runtime {
       if let scene = payload.forProperty("scene"), !scene.isUndefined {
         node.scene = scene.isNull ? nil : try Scene3D.decode(scene.toString())
       }
-      for key in ["text", "src", "source"] {
+      for key in ["text", "src", "source", "editor"] {
         let value = payload.forProperty(key)!
         if !value.isUndefined { node.properties[key] = value.isNull ? nil : value.toString() }
       }
@@ -154,6 +167,10 @@ public final class Runtime {
     if let cached = node.cached { return cached }
     let result = RenderNode(type: node.type, style: node.style, text: node.properties["text"],
       src: node.properties["src"], source: node.properties["source"], media: node.media, scene: node.scene,
+      editor: try node.properties["editor"].flatMap { json -> Scene3D.EditorElement? in
+        guard let source = node.properties["source"] else { return nil }
+        return try Scene3D.EditorElement.decode(json, source: source)
+      },
       children: try node.children.map(snapshot))
     node.cached = result
     return result

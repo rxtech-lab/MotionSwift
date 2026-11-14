@@ -81,7 +81,7 @@ public struct MediaSample: Codable, Sendable, Equatable {
   }
 }
 
-public struct RenderNode: Codable, Sendable {
+public struct RenderNode: Codable, Equatable, Sendable {
   public let type: String
   public let style: [String: JSONValue]
   public let text: String?
@@ -92,11 +92,14 @@ public struct RenderNode: Codable, Sendable {
   public let source: String?
   /// The committed scene of a `ms-three` (`<ThreeCanvas>`) node.
   public let scene: Scene3D?
+  /// Evaluated editor properties of a prop-domain component (for example `<MapView>`), whose
+  /// editor keys are component props rather than CSS styles.
+  public let editor: Scene3D.EditorElement?
   public let children: [RenderNode]
 
   public init(
     type: String, style: [String: JSONValue], text: String? = nil, src: String? = nil, source: String? = nil,
-    media: MediaSample? = nil, scene: Scene3D? = nil, children: [RenderNode] = []
+    media: MediaSample? = nil, scene: Scene3D? = nil, editor: Scene3D.EditorElement? = nil, children: [RenderNode] = []
   ) {
     self.type = type
     self.style = style
@@ -105,6 +108,7 @@ public struct RenderNode: Codable, Sendable {
     self.media = media
     self.source = source
     self.scene = scene
+    self.editor = editor
     self.children = children
   }
 
@@ -113,7 +117,9 @@ public struct RenderNode: Codable, Sendable {
   public func applying(_ overrides: [String: [String: JSONValue]]) -> RenderNode {
     if overrides.isEmpty { return self }
     var style = self.style
-    if let source, let patch = overrides[source] {
+    // Prop-domain components re-evaluate with their overrides (see `propOverrides`); their
+    // editor keys are never CSS.
+    if let source, let patch = overrides[source], editor == nil {
       // A canvas's camera keys patch its 3D scene, never its CSS style.
       for (key, value) in patch where scene == nil || !key.hasPrefix("camera") {
         style[key] = value == .null ? nil : value
@@ -121,8 +127,21 @@ public struct RenderNode: Codable, Sendable {
     }
     return RenderNode(
       type: type, style: style, text: text, src: src, source: source, media: media,
-      scene: scene?.applying(overrides, canvas: source),
+      scene: scene?.applying(overrides, canvas: source), editor: editor,
       children: children.map { $0.applying(overrides) })
+  }
+
+  /// Evaluated prop-domain components (maps) in paint order.
+  public var editorElements: [Scene3D.EditorElement] {
+    (editor.map { [$0] } ?? []) + children.flatMap(\.editorElements)
+  }
+
+  /// The subset of `overrides` addressed to prop-domain components in this tree. These need the
+  /// frame to be evaluated again with overridden props, not a native style patch.
+  public func propOverrides(_ overrides: [String: [String: JSONValue]]) -> [String: [String: JSONValue]] {
+    if overrides.isEmpty { return [:] }
+    let sources = Set(editorElements.map(\.source))
+    return overrides.filter { sources.contains($0.key) }
   }
 
   /// The node at a layout-box path such as `0.1.2` (the root is `0`).

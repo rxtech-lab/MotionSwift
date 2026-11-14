@@ -41,10 +41,12 @@ Each row below has a status that the implementation must keep up to date:
 
 ### Maps
 
-OpenStreetMap-style raster tile layouts and prepared MapKit snapshot images can use
-`Img` with frame-driven overlays. Interactive Leaflet / React Leaflet and MapKit JS
-are **not integrated** with the native JavaScriptCore renderer; neither is native
-MapKit snapshot generation. [Map regression coverage](../tests/maps/README.md) compares
+`@motionswift/map` (MotionSwift-specific, see [maps](maps.md)) renders deterministic slippy maps:
+OpenStreetMap, Apple Maps (native MapKit snapshots) and Mapbox raster tiles, plus straight, arc,
+road and rail routes and markers, all editable in the visual editor. OpenStreetMap-style raster
+tile layouts and prepared snapshot images can also use `Img` with frame-driven overlays.
+Interactive Leaflet / React Leaflet and MapKit JS are **not integrated** with the native
+JavaScriptCore renderer. [Map regression coverage](../tests/maps/README.md) compares
 offline synthetic tile/snapshot compositions against Remotion on CPU and GPU in push CI.
 This verifies image compatibility, not live map services or authorization.
 

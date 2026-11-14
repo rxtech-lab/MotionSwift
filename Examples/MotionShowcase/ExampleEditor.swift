@@ -4,7 +4,7 @@ import MotionEditor
 import MotionPortable
 import SwiftUI
 
-/// Each example keeps its own durable working copy, independent of regression fixtures.
+/// Each example keeps its own session working copy, independent of regression fixtures.
 enum ShowcaseExample: Hashable, Sendable {
   case project(URL, entry: String)
   case media
@@ -15,7 +15,10 @@ enum ShowcaseExample: Hashable, Sendable {
     case .project(let source, let entry):
       let digest = SHA256.hash(data: Data(source.standardizedFileURL.path.utf8))
         .prefix(8).map { String(format: "%02x", $0) }.joined()
-      return try stage(name: "\(source.lastPathComponent)-\(digest)", entry: entry, root: root) { destination in
+      // Distinguish source revisions within this session.
+      let revision = source.lastPathComponent == "Railway" ? "-Yamanote-v3"
+        : ["MapStudio", "Designs"].contains(source.lastPathComponent) ? "-SFO-v1" : ""
+      return try stage(name: "\(source.lastPathComponent)-\(digest)\(revision)", entry: entry, root: root) { destination in
         for (file, code) in try PortableCompiler.sources(in: source) {
           let target = destination.appendingPathComponent(file)
           try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -33,7 +36,7 @@ enum ShowcaseExample: Hashable, Sendable {
         }
       }
     case .film:
-      // Keep prior working copies intact while installing the source-backed appearance timings.
+      // Install the source-backed appearance timings in this session's copy.
       return try stage(name: "TestFilm-Layers-v2", entry: "src/index.ts", root: root) { destination in
         let source = try TestFilmFixture.prepare(repository: ShowcaseDefaults.repository)
         defer { try? FileManager.default.removeItem(at: source) }
@@ -80,7 +83,7 @@ struct ExampleEditorSheet: View {
   let compositionID: String?
   var isSheet = true
   var title: String?
-  var subtitle = "Working copy · Select an element for properties · Drag clips to move or trim"
+  var subtitle = "Session copy · Changes reset on restart · Drag clips to move or trim"
   @Environment(\.dismiss) private var dismiss
   @State private var model: EditorModel?
   @State private var failure: String?
@@ -164,7 +167,7 @@ struct ExampleEditing: ViewModifier {
           pause()
           editing = true
         }
-        .help("Edit a saved working copy with timeline, keyframes and element properties")
+        .help("Edit a session copy with timeline, keyframes and element properties. Changes reset on restart.")
         .accessibilityIdentifier("edit-example")
       }
       .sheet(isPresented: $editing) { ExampleEditorSheet(example: example, compositionID: compositionID) }

@@ -147,6 +147,23 @@ func threeCanvasCommitsResolvedSceneOnPortableCompiler() async throws {
   #expect(colors.count > 20)
 }
 
+@Test func threeCanvasMetalPixelsStayIdenticalAcrossRenderTargetsAndInstances() throws {
+  let bundle = try Compiler().compile(project: threeProject, entry: "src/index.ts")
+  let runtime = try Runtime(bundle: bundle)
+  let composition = try #require(try runtime.compositions().first { $0.id == "GeometryLab" })
+  let node = try runtime.frame(composition: composition, number: 10)
+  let scene = try #require(node.children.first?.children.first?.scene)
+  let renderer = try SceneRenderer3D()
+  let first = try renderer.render(scene, devicePixelRatio: 1).pixels
+  // Reallocate the MSAA/depth targets, then return to the original size. Compare
+  // Metal readback directly so failures cannot be attributed to Skia compositing.
+  _ = try renderer.render(scene, devicePixelRatio: 2)
+  for _ in 0..<3 {
+    #expect(try renderer.render(scene, devicePixelRatio: 1).pixels == first)
+  }
+  #expect(try SceneRenderer3D().render(scene, devicePixelRatio: 1).pixels == first)
+}
+
 @Test func threeCanvasHonorsRenderScaleAndDevicePixelRatioRange() throws {
   let scene = try Scene3D.decode("""
     {"width":100,"height":50,"dpr":[1,2],"flat":false,"background":null,"fog":null,

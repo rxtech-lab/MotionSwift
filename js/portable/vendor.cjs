@@ -32,4 +32,6 @@ globalThis.__ms_vendor = {
   'three/examples/jsm/loaders/USDZLoader.js': usd,
   '@react-three/fiber': fiber,
   '@remotion/three': remotionThree,
+  // Maps: provider tiles, routes and markers, editable in the visual editor.
+  '@motionswift/map': require('@motionswift/remotion/map'),
 };

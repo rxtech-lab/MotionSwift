@@ -26,6 +26,35 @@ Literal enclosing `Sequence` offsets/durations are respected. Computed Sequence 
 
 Run `make compiler` after changing the JSX runtime or portable edit service so both native compiler and device vendor resources include the changes.
 
+### Maps
+
+`<MapView>`, `<MapRoute>` and `<MapMarker>` from `@motionswift/map` (see [maps](maps.md)) are
+edited as a **map property domain**, like 3D: editor keys are component props, never CSS.
+
+- **Camera.** Select the map (canvas or timeline) and drag the canvas to pan; the floating map
+  panel zooms (±0.5), rotates (±15°), resets north and frames the selected route or marker.
+  Panning previews live by re-evaluating the map with preview props, then saves one undo step.
+- **Map Settings…** (inspector or map panel) is a dedicated sheet for the provider
+  (OpenStreetMap, Apple Maps, Mapbox), its style, the camera (place search, latitude,
+  longitude, zoom, bearing), saturation, brightness and the attribution corner. A Mapbox token
+  can be saved here (UserDefaults) or supplied with `MAPBOX_ACCESS_TOKEN`. Unavailable providers
+  fall back to OpenStreetMap and the inspector shows why.
+- **Routes.** Drag the A/B handles of a selected route to move its start and end. **Edit Route…**
+  sets endpoints (with place search), what the route follows (straight, flight arc, drive,
+  cycle, walk, railway, subway, tram), colors, width, head marker and progress.
+  **Animate Journey** keyframes `progress` from 0 at the playhead to 1 after the chosen duration.
+  Road and rail routes resolve in the background; until then (or offline) the route is drawn as a
+  straight placeholder and the inspector shows its status.
+- **Markers.** Drag a selected marker to move it; **Edit Marker…** sets its place, label, color and size.
+- **Add Route… / Add Marker…** insert a child into the selected map; **Delete…** removes one after
+  confirmation. Both are byte-exact undo steps (`setMapChildren`).
+- **Keyframes.** Camera (`centerLongitude`, `centerLatitude`, `zoom`, `bearing`), route `progress`
+  and marker position keyframe on the timeline. When a key is keyframed, canvas drags and sheet
+  edits write a keyframe at the playhead; **Add Keyframe** captures only these animatable keys.
+
+Coordinates are written with six decimals. Literals controlled by code (variables, spreads,
+`interpolate`) are protected and refused with an explanation, as for other properties.
+
 
 The editor is a **pure SwiftUI** app for macOS and iOS/iPadOS. It uses no web views and no AppKit/UIKit views except the Metal-backed preview surface, which is wrapped in a SwiftUI representable. Users can:
 
@@ -63,7 +92,7 @@ Following the app UI guidelines:
 
 - `MetalPreviewView` draws frames from a dedicated preview render worker (Skia Graphite → `CAMetalLayer`) at preview scale.
 - Selection handles, snapping guides, and the rotation knob are **SwiftUI shapes drawn in an overlay**, positioned from the node's layout box and transform. They stay sharp at any zoom, and the engine stays free of editor UI.
-- Gestures: `SpatialTapGesture` to select (⌘-click on macOS for multiple selection), `DragGesture` to move or resize, `RotateGesture` on iPad or the rotation knob on macOS, and `MagnifyGesture` to zoom the canvas.
+- Gestures: `SpatialTapGesture` selects and `DragGesture` moves or resizes elements. Two-finger pan, rotation and pinch adjust the preview canvas without changing the composition; macOS trackpad scrolling pans the preview. **Fit** restores its zoom, position and angle. On macOS, the outside corner rotation controls edit the selected element.
 
 ## 1. Source stamping (compile time)
 
@@ -274,9 +303,9 @@ remain visible with a `code` badge and must be edited in source.
 
 ### Showcase motion studies and example workspaces
 
-Motion Studies has its own sidebar section above Showcase. Its eight entries are Ribbon,
-Orbit, Signal, Atlas, the Hong Kong Island Line railway, both synthetic map fixtures,
-and the 90-second Test Film. Selecting a study, map, Test Film or rendering essential
+Motion Studies has its own sidebar section above Showcase. Its nine entries are Ribbon,
+Orbit, Signal, Atlas, the editable Map Studio (`@motionswift/map`), the Hong Kong Island Line
+railway, both synthetic map fixtures, and the 90-second Test Film. Selecting a study, map, Test Film or rendering essential
 opens its visual editor directly. All Studies opens the gallery. Opening a 3D scene opens
 its editor directly too. **Export Edit** renders the current edited bundle.
 
@@ -293,8 +322,8 @@ changing the benchmark fixture.
 Examples are copied once to Application Support/MotionSwiftShowcase/Editor/Examples.
 Edits survive closing and reopening; source fixtures and packaged examples stay intact.
 Project copies include public assets, and the editor keeps that asset root across
-saving and undo. Map examples use the recent offline tile/snapshot regression fixtures:
-they contain synthetic imagery and do not contact OpenStreetMap or MapKit services.
+saving and undo. The tile/snapshot map fixtures contain synthetic imagery and do not contact
+OpenStreetMap or MapKit. Map Studio uses live provider tiles and routing services, cached on disk.
 The standalone app bundles these map projects as well as the motion studies.
 
 Select a canvas object or timeline row to use the property inspector. Static CSS values

@@ -29,8 +29,12 @@ jobs:
         with:
           skip_npm_plugin: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
   showcase-dmg:
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     needs: create-release
     if: needs.create-release.outputs.published == 'true'
     uses: ./.github/workflows/showcase-release.yml

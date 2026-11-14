@@ -54,7 +54,7 @@ struct DirectionalLight { float3 direction; float3 color; };
 struct HemisphereLight { float3 direction; float3 skyColor; float3 groundColor; };
 
 struct VertexOut {
-  float4 position [[position]];
+  float4 position [[position, invariant]];
   float3 viewPosition;
   float3 normal;
   float fogDepth;

@@ -17,18 +17,23 @@ struct MotionStudy: Identifiable {
                 category: "02 / FORM"),
     MotionStudy(id: "Signal", title: "Find your frequency", subtitle: "Four voices moving together in a pastel rhythm.",
                 category: "03 / RHYTHM"),
-    MotionStudy(id: "Atlas", title: "The long way home", subtitle: "An offline map journey with a moving marker.", category: "04 / MAPS"),
+    MotionStudy(id: "Atlas", title: "The long way home", subtitle: "Explore SFO Airport with an animated map camera.",
+                category: "04 / MAPS"),
   ]
 
   static let maps = [
-    MotionStudy(id: "IslandRailway", title: "Hong Kong railway", subtitle: "Follow the Island Line across real OpenStreetMap geography.",
+    MotionStudy(id: "HarbourJourney", title: "Map studio", subtitle: "Edit the SFO camera, provider, routes and airport markers.",
+                category: "MAPS / EDITABLE", example: .project(mapStudioProject, entry: "index.tsx")),
+    MotionStudy(id: "IslandRailway", title: "Yamanote Line", subtitle: "Zoom into Tokyo and follow the train through all 30 stations.",
                 category: "MAPS / RAILWAY", example: .project(railwayProject, entry: "index.tsx")),
-    MotionStudy(id: "OpenStreetMapTiles", title: "Map tiles", subtitle: "Offline tiles with an animated route and marker.",
-                category: "MAPS / TILES", example: .project(mapProject, entry: "src/index.tsx")),
-    MotionStudy(id: "MapKitSnapshot", title: "Map snapshot", subtitle: "A snapshot composition with editable map overlays.",
-                category: "MAPS / SNAPSHOT", example: .project(mapProject, entry: "src/index.tsx")),
+    MotionStudy(id: "OpenStreetMapTiles", title: "SFO map tiles",
+                subtitle: "OpenStreetMap tiles around San Francisco International Airport.",
+                category: "MAPS / TILES", example: .project(mapStudioProject, entry: "index.tsx")),
+    MotionStudy(id: "MapKitSnapshot", title: "SFO map snapshot", subtitle: "Apple Maps imagery with an editable airport marker.",
+                category: "MAPS / SNAPSHOT", example: .project(mapStudioProject, entry: "index.tsx")),
   ]
   static var railwayProject: URL { Bundle.module.url(forResource: "Railway", withExtension: nil)! }
+  static var mapStudioProject: URL { Bundle.module.url(forResource: "MapStudio", withExtension: nil)! }
   static var mapProject: URL { ShowcaseDefaults.repository.appendingPathComponent("tests/maps") }
   static let film = MotionStudy(id: "TestFilm", title: "Test Film", subtitle: "The 90-second benchmark film, ready for your own edit.",
                                 category: "FILM / BENCHMARK", example: .film)
@@ -50,13 +55,13 @@ struct MotionStudiesView: View {
       Text("Pick a study. Make it yours.")
         .font(.system(size: 38, weight: .semibold, design: .rounded))
       Text("Open any study in the visual editor to adjust its layers, timing and supported properties. "
-           + "Your work is saved in a separate copy.")
+           + "Changes apply to this session and reset when you restart the app.")
         .font(.body).foregroundStyle(.secondary).frame(maxWidth: 650, alignment: .leading)
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 24)], spacing: 28) {
         ForEach(MotionStudy.all) { study in
           Button { open(study.id) } label: {
             VStack(alignment: .leading, spacing: 10) {
-              StudyPreview(study: study)
+              StableTile { StudyPreview(study: study) }
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .allowsHitTesting(false)
               Text(study.category).font(.caption.monospaced()).foregroundStyle(.secondary)
@@ -80,7 +85,7 @@ struct MotionStudiesView: View {
   }
 }
 
-/// A still from the saved working copy keeps a large gallery from playing every film at once.
+/// A still from the session working copy keeps a large gallery from playing every film at once.
 private struct StudyPreview: View {
   let study: MotionStudy
   @State private var player = MotionPlayer(configuration: .init(scale: 0.5, backend: .gpu))
@@ -112,24 +117,21 @@ struct MapsShowcaseView: View {
   @State private var selectedExample = "IslandRailway"
   @State private var showsMapDetails = false
   static var railwayProject: URL { MotionStudy.railwayProject }
-  private var project: URL {
-    selectedExample == "IslandRailway" ? Self.railwayProject
-      : ShowcaseDefaults.repository.appendingPathComponent("tests/maps")
-  }
-  private var entry: String { selectedExample == "IslandRailway" ? "index.tsx" : "src/index.tsx" }
+  private var project: URL { selectedExample == "IslandRailway" ? Self.railwayProject : MotionStudy.mapStudioProject }
+  private var entry: String { "index.tsx" }
 
   var body: some View {
     MotionPlayerView(player: player)
       .padding(20)
-      .navigationTitle("Maps · Hong Kong railway")
+      .navigationTitle(selectedExample == "IslandRailway" ? "Maps · Yamanote Line" : "Maps · SFO Airport")
       .navigationSubtitle(selectedExample == "IslandRailway"
-        ? "OpenStreetMap geography · Island Line · Sheung Wan → Fortress Hill"
-        : "Synthetic image regression examples")
+        ? "Tokyo, Japan · 30 stations · Clockwise full loop"
+        : "San Francisco International Airport · Editable maps")
       .toolbar {
         Picker("Map example", selection: $selectedExample) {
-          Text("OpenStreetMap · Island Line").tag("IslandRailway")
-          Text("Synthetic tiles").tag("OpenStreetMapTiles")
-          Text("Synthetic snapshot").tag("MapKitSnapshot")
+          Text("Yamanote · All 30 stations").tag("IslandRailway")
+          Text("SFO tiles").tag("OpenStreetMapTiles")
+          Text("SFO snapshot").tag("MapKitSnapshot")
         }
         Button("Map details", systemImage: "info.circle") { showsMapDetails = true }
       }
@@ -137,27 +139,39 @@ struct MapsShowcaseView: View {
       .task(id: selectedExample) {
         await player.load(.portable(project: project, entry: entry), compositionID: selectedExample)
       }
-      .sheet(isPresented: $showsMapDetails) { RailwayMapDetails() }
+      .sheet(isPresented: $showsMapDetails) { RailwayMapDetails(isRailway: selectedExample == "IslandRailway") }
       .onDisappear { player.pause() }
   }
 }
 
 private struct RailwayMapDetails: View {
+  let isRailway: Bool
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
     NavigationStack {
       Form {
-        Section("OpenStreetMap · Hong Kong") {
-          Text("The streets, coastline, railway geometry and station names come from a real OpenStreetMap data extract.")
-          Text("The blue route follows the Island Line's eastbound track through seven stations, "
-               + "from Sheung Wan to Fortress Hill. The train follows the track at a constant map speed.")
-          Text("The bundled geographic extract keeps preview, editing and export reproducible without a network connection. "
-               + "This is not a live navigation or timetable service.")
+        if isRailway {
+          Section("Yamanote Line · Tokyo, Japan") {
+            Text("The railway study follows the full clockwise Yamanote Line through all 30 stations, starting and finishing at Tokyo.")
+            Text("The green route follows real OpenStreetMap railway geometry. "
+                 + "Japanese and English labels appear beside stations on the map.")
+            Text("The camera zooms from the whole loop to the train, follows every station, then zooms out at Tokyo. "
+                 + "Map tiles load on first use and are cached. Journey timing is illustrative.")
+          }
+        } else {
+          Section("San Francisco International Airport") {
+            Text("The tile and snapshot studies show the SFO Airport area using OpenStreetMap and Apple Maps imagery.")
+            Text("Map tiles are fetched on first use and cached on this device.")
+          }
         }
         Section("Data & attribution") {
           Link("© OpenStreetMap contributors · ODbL", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
-          Link("View the original railway relation", destination: URL(string: "https://www.openstreetmap.org/relation/4432666")!)
+          if isRailway {
+            Link("View the Yamanote route", destination: URL(string: "https://www.openstreetmap.org/relation/1972920")!)
+          } else {
+            Link("View SFO on OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/#map=14/37.6213/-122.3790")!)
+          }
         }
       }
       .formStyle(.grouped)

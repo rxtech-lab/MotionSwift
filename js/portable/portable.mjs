@@ -10,10 +10,16 @@ import {transform} from 'sucrase';
 import {decode, encode} from '@jridgewell/sourcemap-codec';
 import {inspect} from '../compiler/inspect.mjs';
 import threeEdit from '../remotion-shim/three-edit.js';
+import mapEdit from '../remotion-shim/map-edit.js';
+
+// Prop domains edit component props (never CSS) through a shared field table.
+const DOMAINS = {three: threeEdit, map: mapEdit};
+const domainOf = type => threeEdit.isThree(type) ? 'three' : mapEdit.isMap(type) ? 'map' : null;
 
 const SOURCE = /\.(tsx|ts|jsx|js|mts|mjs|cts|cjs)$/;
 const DECLARATION = /\.d\.(ts|mts|cts)$/;
-const STAMPED_COMPONENTS = new Set(['AbsoluteFill', 'Img', 'Video', 'OffthreadVideo', 'ThreeCanvas']);
+const STAMPED_COMPONENTS = new Set(['AbsoluteFill', 'Img', 'Video', 'OffthreadVideo', 'ThreeCanvas',
+  'MapView', 'MapRoute', 'MapMarker']);
 
 function parseSource(source, file) {
   try {
@@ -469,6 +475,12 @@ function editTimeline(source, request) {
     const three = threeSummary(source, element);
     for (const key of Object.keys(data.keyframes)) {
       if (three) {
+        if (three.domain === 'map') {
+          const field = DOMAINS.map.fields(three.type).find(f => f.key === key);
+          if (typeof field?.fallback !== 'number')
+            throw Error(`refused: ${key} must be a numeric map property to animate`);
+          continue;
+        }
         const property = three.properties.find(p => p.key === key);
         if (property?.kind !== 'static' || typeof property.value !== 'number')
           throw Error(`refused: ${key} must be an explicit static numeric 3D property to animate`);
@@ -494,9 +506,9 @@ function editTimeline(source, request) {
 
 // Resolve one field without evaluating project expressions. A spread or an args constructor
 // can supply defaults, so those fields stay protected until explicitly authored after it.
-function threeField(source, element, field) {
+function threeField(source, element, field, domain = 'three') {
   const [name, ...path] = field.path;
-  const pierced = path.length === 1 && typeof path[0] === 'number' ? name + '-' + 'xyz'[path[0]] : null;
+  const pierced = domain === 'three' && path.length === 1 && typeof path[0] === 'number' ? name + '-' + 'xyz'[path[0]] : null;
   const attrs = element.attributes;
   if (name === 'rotation' && attrs.some(a => a.name?.name === 'quaternion')) return {kind: 'computed'};
   const candidates = attrs.filter(a => [name, pierced].includes(a.name?.name));
@@ -514,7 +526,8 @@ function threeField(source, element, field) {
     if (!node) break;
     if (typeof part === 'number') {
       if (node?.type === 'NumericLiteral' || node?.type === 'UnaryExpression' && classify(node, source).kind === 'static') continue;
-      if (node?.type !== 'ArrayExpression' || node.elements.some(n => n?.type === 'SpreadElement')) return classify(node, source);
+      if (node?.type !== 'ArrayExpression' || node.elements.length <= part ||
+          node.elements.some(n => !n || n.type === 'SpreadElement')) return classify(node, source);
       node = node.elements[part];
     } else {
       if (node?.type !== 'ObjectExpression' || node.properties.some(p => keyOf(p) === null)) return {kind: 'computed'};
@@ -528,10 +541,10 @@ function threeField(source, element, field) {
 }
 
 function threeSummary(source, element) {
-  const type = elementName(element);
-  if (!threeEdit.isThree(type)) return null;
-  return {editable: true, domain: 'three', properties: threeEdit.fields(type).map(field => {
-    const {node, attr, ...property} = threeField(source, element, field);
+  const type = elementName(element), domain = domainOf(type);
+  if (!domain) return null;
+  return {editable: true, domain, type, properties: DOMAINS[domain].fields(type).map(field => {
+    const {node, attr, ...property} = threeField(source, element, field, domain);
     // Numeric Three colors need conversion before a color picker can edit them safely.
     if (field.key === 'color' && typeof property.value !== 'string') property.kind = 'computed';
     return {key: field.key, ...property};
@@ -540,48 +553,76 @@ function threeSummary(source, element) {
 
 function editThree(source, request) {
   const element = findElement(source, request.src);
-  const field = threeEdit.fields(elementName(element)).find(f => f.key === request.key);
-  if (!field) throw Error('refused: unsupported 3D property');
-  const current = threeField(source, element, field);
-  if (request.raw === undefined && current.kind !== 'static') throw Error('refused: this 3D property is controlled by code');
+  const type = elementName(element), domain = domainOf(type);
+  const field = domain && DOMAINS[domain].fields(type).find(f => f.key === request.key);
+  if (!field) throw Error(`refused: unsupported ${domain === 'map' ? 'map' : '3D'} property`);
+  const current = threeField(source, element, field, domain);
+  // Maps remain controllable even when props are computed in code; 3D keeps code protection.
+  if (request.raw === undefined && domain !== 'map' && current.kind !== 'static')
+    throw Error('refused: this 3D property is controlled by code');
+  if (domain === 'map' && request.raw === undefined) {
+    const problem = mapEdit.invalid(type, request.key, request.value);
+    if (problem) throw Error(`refused: ${problem}`);
+  }
   const root = field.path[0];
   // Existing vectors and camera objects are edited in place to preserve other components.
   const attribute = element.attributes.findLast(a => a.name?.name === (current.attr?.name.name ?? root));
+  const spread = element.attributes.findLastIndex(a => a.type === 'JSXSpreadAttribute');
+  if (request.raw === undefined && domain === 'map' && attribute && spread > element.attributes.indexOf(attribute))
+    throw Error(`refused: move {...spread} before ${root} so map controls can override it`);
   const old = attribute ? source.slice(attribute.start, attribute.end) : '';
   let replacement = request.raw;
   if (replacement === undefined) {
     if (typeof field.fallback === 'number' && (typeof request.value !== 'number' || !Number.isFinite(request.value)))
-      throw Error('refused: a finite numeric 3D value is required');
+      throw Error(`refused: a finite numeric ${domain === 'map' ? 'map' : '3D'} value is required`);
+    if (typeof field.fallback === 'string' && typeof request.value !== 'string')
+      throw Error('refused: a string value is required');
     if (['opacity', 'roughness', 'metalness', 'penumbra'].includes(field.key) && (request.value < 0 || request.value > 1) ||
         ['intensity', 'distance', 'decay', 'shininess'].includes(field.key) && request.value < 0 ||
         field.key === 'cameraFov' && (request.value <= 0 || request.value >= 180) ||
         ['cameraZoom', 'ior'].includes(field.key) && request.value <= 0)
       throw Error('refused: 3D property is outside its supported range');
-    const text = literal(request.value, source, current.raw);
+    // Map coordinates need about 10 cm precision (6 decimals); other values keep 3.
+    const precision = domain === 'map' ? 6 : 3;
+    let text = literal(request.value, source, current.kind === 'static' ? current.raw : undefined, precision);
+    // A JSX attribute string (`label="…"`) has no escapes: use an expression when needed.
+    const jsxString = typeof request.value === 'string' && (!current.node || current.node === attribute?.value);
+    if (jsxString) text = /["\\{}<>\n]/.test(request.value) ? `{${JSON.stringify(request.value)}}` : `"${request.value}"`;
     if (current.node && attribute) {
       // A scalar scale supplies all axes. Expand it before changing a single component.
       const expression = attribute.value?.expression;
-      if (field.path.length === 2 && expression === current.node && attribute.name.name === root) {
+      if (domain === 'three' && field.path.length === 2 && expression === current.node && attribute.name.name === root) {
         const values = [current.value, current.value, current.value];
         values[field.path[1]] = request.value;
         replacement = `${root}={${JSON.stringify(values)}}`;
+      } else if (current.node === attribute.value && typeof request.value === 'number') {
+        replacement = `${root}={${text}}`;
       } else {
         replacement = splice(old, current.node.start - attribute.start, current.node.end - attribute.start, text);
-        // JSX string attributes need braces when the replacement is numeric.
       }
+    } else if (domain === 'map' && attribute && field.path.length === 1) {
+      // Boolean shorthand (`<MapView zoom />`) or spread-shadowed single attribute.
+      replacement = jsxString ? `${root}=${text}` : `${root}={${text}}`;
     } else if (field.path.length === 2) {
-      const values = [0, 1, 2].map(i => root === 'scale' ? 1 :
-        threeEdit.fields(elementName(element)).find(f => f.path[0] === root && f.path[1] === i)?.fallback ?? 0);
-      values[field.path[1]] = request.value;
+      const siblings = DOMAINS[domain].fields(type).filter(f => f.path[0] === root);
+      const values = siblings.map((_, i) => {
+        const def = siblings.find(f => f.path[1] === i);
+        const existing = def && threeField(source, element, def, domain);
+        if (existing?.kind === 'static' && typeof existing.value === 'number') return existing.value;
+        return root === 'scale' ? 1 : def?.fallback ?? 0;
+      });
+      values[field.path[1]] = Number(request.value.toFixed(precision));
       replacement = `${root}={${JSON.stringify(values)}}`;
     } else if (field.path.length > 1) throw Error('refused: add the camera property explicitly in code first');
-    else replacement = `${root}={${text}}`;
+    else replacement = jsxString ? `${root}=${text}` : `${root}={${text}}`;
   }
-  let start = attribute?.start ?? element.name.end, end = attribute?.end ?? start;
+  // New map attributes are placed after any leading `{...spread}` so explicit edits win.
+  const insertAt = domain === 'map' ? (element.attributes.at(-1)?.end ?? element.name.end) : element.name.end;
+  let start = attribute?.start ?? insertAt, end = attribute?.end ?? start;
   if (!attribute && replacement) replacement = ' ' + replacement;
   if (attribute && !replacement && source[start - 1] === ' ') start--;
   return JSON.stringify({source: splice(source, start, end, replacement),
-    inverse: {op: 'setThreeProperty', src: request.src, key: request.key, raw: old}});
+    inverse: {op: domain === 'map' ? 'setMapProperty' : 'setThreeProperty', src: request.src, key: request.key, raw: old}});
 }
 
 // MARK: Camera rigs
@@ -708,6 +749,94 @@ function editCameraRig(source, request) {
   return JSON.stringify({source: result, inverse});
 }
 
+// MARK: Map children
+// Adds or removes <MapRoute>/<MapMarker> children of a <MapView>. The inverse restores the
+// map element's exact text, so undo is byte-exact.
+function jsxElements(source, file) {
+  const elements = [];
+  walk(parseSource(source, file), node => { if (node.type === 'JSXElement') elements.push(node); });
+  return elements;
+}
+const mapNumber = value => {
+  if (!Number.isFinite(value)) throw Error('refused: map coordinates must be finite numbers');
+  return String(Number(value.toFixed(6)));
+};
+function mapChildText(type, props) {
+  const field = key => mapEdit.fields(type).find(f => f.path[0] === key);
+  const parts = [];
+  for (const [key, value] of Object.entries(props ?? {})) {
+    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(key)) throw Error('refused: invalid map property name');
+    if (Array.isArray(value)) {
+      if (value.length !== 2 || !field(key)) throw Error(`refused: ${key} must be [longitude, latitude]`);
+      parts.push(`${key}={[${value.map(mapNumber).join(', ')}]}`);
+    } else if (typeof value === 'number') {
+      const problem = mapEdit.invalid(type, key, value);
+      if (problem && field(key)) throw Error(`refused: ${problem}`);
+      parts.push(`${key}={${mapNumber(value)}}`);
+    } else if (typeof value === 'string') {
+      const problem = mapEdit.fields(type).some(f => f.key === key) ? mapEdit.invalid(type, key, value) : null;
+      if (problem) throw Error(`refused: ${problem}`);
+      // JSX attribute strings have no escapes; quotes, braces and newlines need an expression.
+      parts.push(/["\\{}<>\n]/.test(value) ? `${key}={${JSON.stringify(value)}}` : `${key}="${value}"`);
+    } else throw Error(`refused: unsupported value for ${key}`);
+  }
+  return `<${type}${parts.length ? ' ' + parts.join(' ') : ''} />`;
+}
+function editMapChildren(source, request) {
+  const match = /^(.*):(\d+):(\d+)$/.exec(request.src);
+  if (!match) throw Error(`Invalid source stamp: ${request.src}`);
+  const file = match[1];
+  const elements = jsxElements(source, file);
+  const named = src => elements.find(e => stampOf(file, e.openingElement) === src);
+  let map, child;
+  if (request.key === 'remove') {
+    child = named(request.src);
+    if (!child) throw Error(`stale-source: ${request.src} no longer names an element; reselect it`);
+    if (!['MapRoute', 'MapMarker'].includes(elementName(child.openingElement)))
+      throw Error('refused: only map routes and markers can be removed here');
+    map = elements.filter(e => elementName(e.openingElement) === 'MapView' && e.start < child.start && e.end > child.end).at(-1);
+    if (!map || !map.children.includes(child)) throw Error('refused: this element is not a direct child of a <MapView>');
+  } else {
+    map = named(request.src);
+    if (!map) throw Error(`stale-source: ${request.src} no longer names an element; reselect it`);
+    if (elementName(map.openingElement) !== 'MapView') throw Error('refused: select a <MapView> to add routes or markers');
+  }
+  const old = source.slice(map.start, map.end);
+  const inverse = {op: 'setMapChildren', src: stampOf(file, map.openingElement), key: 'restore', raw: old};
+  if (request.key === 'restore') {
+    if (typeof request.raw !== 'string') throw Error('Invalid map restore');
+    return JSON.stringify({source: splice(source, map.start, map.end, request.raw), inverse});
+  }
+  if (request.key === 'remove') {
+    let start = child.start, end = child.end;
+    // Remove the child's whole line when it stands alone on it.
+    const lineStart = source.lastIndexOf('\n', start - 1) + 1, lineEnd = source.indexOf('\n', end);
+    if (/^[ \t]*$/.test(source.slice(lineStart, start)) && /^[ \t]*$/.test(source.slice(end, lineEnd < 0 ? source.length : lineEnd))) {
+      start = lineStart; end = lineEnd < 0 ? source.length : lineEnd + 1;
+    }
+    return JSON.stringify({source: splice(source, start, end, ''), inverse});
+  }
+  if (request.key !== 'insert') throw Error('Invalid map children request');
+  const type = request.value?.type;
+  if (!['MapRoute', 'MapMarker'].includes(type)) throw Error('refused: add a MapRoute or MapMarker');
+  const text = mapChildText(type, request.value.props);
+  const opening = map.openingElement;
+  const lineStart = source.lastIndexOf('\n', map.start - 1) + 1;
+  const indent = /^[ \t]*/.exec(source.slice(lineStart))[0];
+  if (opening.selfClosing) {
+    // <MapView … /> becomes <MapView …>child</MapView>.
+    const head = source.slice(opening.start, opening.end).replace(/\s*\/>$/, '>');
+    return JSON.stringify({source: splice(source, map.start, map.end,
+      `${head}\n${indent}  ${text}\n${indent}</MapView>`), inverse});
+  }
+  const closing = map.closingElement;
+  const last = map.children.filter(c => c.type !== 'JSXText' || c.value.trim()).at(-1);
+  const childIndent = last ? /^[ \t]*/.exec(source.slice(source.lastIndexOf('\n', last.start - 1) + 1))[0] : indent + '  ';
+  const before = source.slice(0, closing.start).replace(/[ \t]*$/, '');
+  const prefix = before.endsWith('\n') ? '' : '\n';
+  return JSON.stringify({source: before + `${prefix}${childIndent}${text}\n${indent}` + source.slice(closing.start), inverse});
+}
+
 /** Inline style properties of the element at `src`, classified for editing. */
 export function styles(source, src) {
   const element = findElement(source, src);
@@ -745,10 +874,10 @@ export function styles(source, src) {
     !properties.slice(i + 1).some(next => next.key === p.key)), declarations});
 }
 
-function literal(value, source, previous) {
+function literal(value, source, previous, digits = 3) {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw Error('Style numbers must be finite');
-    return String(Number(value.toFixed(3)));
+    return String(Number(value.toFixed(digits)));
   }
   if (typeof value !== 'string') throw Error('Style values must be numbers or strings');
   const quote = previous?.[0] === '"' || previous?.[0] === '\''
@@ -790,7 +919,9 @@ export function edit(source, requestJSON) {
   if (op === 'setTimeline') return editTimeline(source, request);
   if (op === 'setText') return editText(source, request);
   if (op === 'setCameraRigKey') return editCameraRig(source, request);
-  if (op === 'setThreeProperty' || (op === 'setStyle' && threeEdit.isThree(elementName(findElement(source, src)))))
+  if (op === 'setMapChildren') return editMapChildren(source, request);
+  if (op === 'setThreeProperty' || op === 'setMapProperty' ||
+      (op === 'setStyle' && domainOf(elementName(findElement(source, src)))))
     return editThree(source, request);
   if (!src || typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9]*$/.test(key)) throw Error('Invalid edit request');
   const object = styleObject(findElement(source, src));

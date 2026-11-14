@@ -12,15 +12,20 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: showcase-release-${{ inputs.release_tag || github.event.release.tag_name }}
+  group: showcase-release
   cancel-in-progress: false
 
 jobs:
   dmg:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 120
+    environment:
+      name: github-pages
+      url: https://update.motion.rxfilm.app
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
       BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
@@ -29,6 +34,9 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_ID_PWD: ${{ secrets.APPLE_ID_PWD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY || secrets.SPARKLE_PUBLIC_KEY }}
+      # Shared across direct and reusable workflow invocations; unlike run_number it cannot collide.
+      BUILD_NUMBER: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,25 +47,42 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}
         run: |
           set -euo pipefail
-          for name in BUILD_CERTIFICATE_BASE64 P12_PASSWORD SIGNING_CERTIFICATE_NAME APPLE_ID APPLE_ID_PWD APPLE_TEAM_ID; do
+          for name in BUILD_CERTIFICATE_BASE64 P12_PASSWORD SIGNING_CERTIFICATE_NAME APPLE_ID APPLE_ID_PWD APPLE_TEAM_ID SPARKLE_KEY; do
             [[ -n "${!name}" ]] || { echo "::error::Missing Actions secret: $name"; exit 1; }
           done
           [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
           [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == false ]]
           echo "VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
           echo "RELEASE_OUTPUT=$RUNNER_TEMP/showcase-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          prerelease=$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)
+          if [[ "$prerelease" == false && "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'PUBLISH_APPCAST=true' >> "$GITHUB_ENV"
+          fi
       - uses: ./.github/actions/setup
+      - name: Prepare Sparkle signing tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/showcase-sparkle-python"
+          "$RUNNER_TEMP/showcase-sparkle-python/bin/pip" install 'cryptography>=46,<47'
+          echo "$RUNNER_TEMP/showcase-sparkle-python/bin" >> "$GITHUB_PATH"
+      - name: Resolve shared Sparkle public key
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}
+        run: |
+          python3 scripts/sparkle/test_resolve_key.py
+          python3 scripts/sparkle/test_appcast.py
+          python3 scripts/sparkle/resolve-key.py
       - name: Build compiler and native renderer
         run: make compiler native
       - name: Package standalone Apple Silicon app
-        run: bash scripts/package-showcase.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+        run: bash scripts/package-showcase.sh "$VERSION" "$BUILD_NUMBER"
       - name: Verify release version, build number, payload and audio helper
         run: |
           python3 scripts/verify-showcase-package.py \
-            ".build/showcase/MotionSwift-Showcase-$VERSION-$GITHUB_RUN_NUMBER.app" \
-            --version "$VERSION" --build "$GITHUB_RUN_NUMBER"
+            ".build/showcase/MotionSwift-Showcase-$VERSION-$BUILD_NUMBER.app" \
+            --version "$VERSION" --build "$BUILD_NUMBER" --require-updates
       - name: Import signing identity into temporary keychain
         shell: bash
         run: |
@@ -83,8 +108,17 @@ jobs:
       - name: Sign, notarize, staple and assess app and DMG
         run: |
           bash scripts/notarize-showcase.sh \
-            ".build/showcase/MotionSwift-Showcase-$VERSION-$GITHUB_RUN_NUMBER.app" \
+            ".build/showcase/MotionSwift-Showcase-$VERSION-$BUILD_NUMBER.app" \
             "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg"
+      - name: Generate and verify signed stable update feed
+        if: env.PUBLISH_APPCAST == 'true'
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}
+        run: |
+          bash scripts/sparkle/generate-appcast.sh \
+            ".build/showcase/MotionSwift-Showcase-$VERSION-$BUILD_NUMBER.app" \
+            "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg" \
+            "$RELEASE_OUTPUT/appcast.xml"
       - name: Upload verified release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -92,6 +126,25 @@ jobs:
           gh release upload "$RELEASE_TAG" \
             "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg" \
             "$RELEASE_OUTPUT/MotionSwift-Showcase-$RELEASE_TAG-macOS-arm64.dmg.sha256" --clobber
+          if [[ "${PUBLISH_APPCAST:-}" == true ]]; then
+            gh release upload "$RELEASE_TAG" "$RELEASE_OUTPUT/appcast.xml" --clobber
+          fi
+      - name: Prepare update site
+        if: env.PUBLISH_APPCAST == 'true'
+        run: |
+          mkdir -p "$RELEASE_OUTPUT/pages"
+          cp "$RELEASE_OUTPUT/appcast.xml" "$RELEASE_OUTPUT/pages/appcast.xml"
+          printf '%s\n' 'update.motion.rxfilm.app' > "$RELEASE_OUTPUT/pages/CNAME"
+          touch "$RELEASE_OUTPUT/pages/.nojekyll"
+      - uses: actions/configure-pages@v5
+        if: env.PUBLISH_APPCAST == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: env.PUBLISH_APPCAST == 'true'
+        with:
+          path: ${{ env.RELEASE_OUTPUT }}/pages
+      - name: Deploy update feed to GitHub Pages
+        if: env.PUBLISH_APPCAST == 'true'
+        uses: actions/deploy-pages@v4
       - name: Preserve notarization diagnostics
         if: always()
         uses: actions/upload-artifact@v7

@@ -191,30 +191,26 @@ Full logs and `results.json`: workflow run → artifact `bench-results`.
 
 Markers: ✅/❌ for SSIM parity, 🔺 on a GPU regression against `main`, and — for an engine that does not run in that tier. The numbers above are illustrative.
 
-## CI workflow: `benchmark.yml`
+## CI workflows
 
-**Triggers:** `push` only, on all branches. Pull-request and manual events do not start benchmark or test runs.
-**Permissions:** `contents: read`, `pull-requests: write`, `actions: read`.
-**Concurrency:** one run per branch. A new push cancels the previous run.
-**Runner:** `[self-hosted, macOS, ARM64]`. The table always shows the machine, so results from different machines aren't compared by mistake.
+The Benchmark workflow (`.github/workflows/benchmark.yml`) runs on pull-request `opened`, `synchronize`, and `reopened` events. A newer run cancels older benchmark runs for the same PR.
 
-Steps:
+| Parallel measurement | Coverage |
+|---|---|
+| Render and encoder combinations | Short synthetic clips across renderers and encoders. |
+| Sustained native throughput (300 frames) | Long synthetic clips. |
+| Test Film (full clip) | Full actual Test Film project. |
+| 3D scenes (parity and speed) | Complex scenes compared with Remotion three.js. |
 
-| # | Step | Notes |
-|---|---|---|
-| 1 | Checkout, set up Node LTS and stable Rust | Shared `.github/actions/setup` action. |
-| 2 | Install missing native tools | Homebrew supplies SwiftLint, pkg-config, and ffmpeg/ffprobe when missing; verify all prerequisites. |
-| 3 | Install fixtures and pinned browser | `make bootstrap` installs `tests/` dependencies, generates compiler resources, and prepares the pinned Chrome and native archive. |
-| 4 | Build native | `make build`. |
-| 5 | Download baseline (branches other than main) | `gh run list --workflow benchmark.yml --branch main --event push --status success --limit 1`, then `gh run download <id> --name bench-results` into a run-specific directory in `$RUNNER_TEMP`. `continue-on-error`. |
-| 6 | Run benchmark | `node tests/perf/bench.mjs --work-dir $RUNNER_TEMP/bench [--baseline …]` |
-| 7 | Job summary | `if: always()`: append `summary.md` to `$GITHUB_STEP_SUMMARY`. |
-| 8 | Upload artifact | `if: always()`: upload `tests/reports/bench/` as `bench-results` (30-day retention). `main` runs become the next baseline. |
-| 9 | Post or update the PR comment | On non-cancelled branch runs, find an open same-repository PR associated with the pushed SHA and branch. Update the bot's marked comment or create it. Skip commenting if there is no matching current PR. |
+All four matrix jobs run independently with `fail-fast: false`. The final `benchmark` job waits for every measurement, merges reports into `bench-results`, and updates one sticky PR comment. It runs even after measurement failures and fails if any measurement failed, was cancelled, or was skipped. Reporting or comment failures also fail this job. Select **benchmark** (workflow: **Benchmark**) as the single required benchmark status check in GitHub branch protection; the individual measurement checks do not need to be required.
 
-**Fork PR events** do not start these workflows. Golden regeneration remains a separate manual workflow.
+Measurement jobs use `[self-hosted, macOS, ARM64]`, run the shared setup action, and build with `make bootstrap build`. Parallel execution requires enough matching idle runners; with one runner, jobs queue. Use separate machines for simultaneous benchmark measurements to avoid competing for CPU/GPU resources.
 
-**Gating:** the benchmark is informational. It fails only if a render fails, until Phase 5. After Phase 5, `--fail-on-regression` is enabled and the job becomes a required check.
+Synthetic jobs retain the optional baseline download from the last successful `main` push run of `benchmark.yml`, with separate download directories per matrix job. The current pull-request trigger does not generate new main-push baselines.
+
+Reports and artifacts are retained even when a measurement fails, including setup failures. The combined PR comment uses `<!-- motionswift-bench -->`. Artifact retention is 30 days. The separate `project-benchmark.yml` workflow has been removed.
+
+**Gating:** the final job propagates measurement and reporting failures without changing the benchmark scripts' thresholds. Synthetic performance deltas remain informational unless `--fail-on-regression` is enabled; render/parity failures and the 3D speed gate still fail their measurements.
 
 ## Running locally
 

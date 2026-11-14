@@ -1,6 +1,15 @@
 {
-  "originHash" : "a13cf4d430da4575069c8c03ad4c43cca3f6d6aa546a73f9dbc2994e3abc3ae2",
+  "originHash" : "9ce267cbfcf58ff256298e266a937e9e1d6e4105a16cdc67cd0838363b8f84e7",
   "pins" : [
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
+        "version" : "2.10.1"
+      }
+    },
     {
       "identity" : "yoga",
       "kind" : "remoteSourceControl",
