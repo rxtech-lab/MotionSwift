@@ -294,6 +294,9 @@ private final class LibraryCache: @unchecked Sendable {
     try lock.withLock {
       if let library = libraries[device.registryID] { return library }
       let options = MTLCompileOptions()
+      // Keep projected vertices identical across pipeline variants and render passes.
+      // Safe arithmetic alone does not request Metal's vertex-position invariance.
+      options.preserveInvariance = true
       // Preserve floating-point edge cases across repeated exports and GPU driver implementations.
       if #available(macOS 15, iOS 18, *) {
         options.mathMode = .safe
