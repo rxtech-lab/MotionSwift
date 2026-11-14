@@ -76,7 +76,6 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .keyboardShortcut("o")
           .disabled(disablesProjectToolbar)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
@@ -84,7 +83,6 @@ struct ContentView: View {
           .disabled(disablesProjectToolbar)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .keyboardShortcut(",")
           .disabled(disablesProjectToolbar)
       }
     }

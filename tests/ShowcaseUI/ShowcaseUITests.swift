@@ -74,23 +74,6 @@ import XCTest
     }
   }
 
-  func testSettingsAndOpenProjectSheets() {
-    let settings = app.buttons["Render Settings"].firstMatch
-    XCTAssertTrue(settings.waitForExistence(timeout: 30))
-    app.activate()
-    app.typeKey(",", modifierFlags: .command)
-    let apply = app.buttons["Apply"].firstMatch
-    XCTAssertTrue(apply.waitForExistence(timeout: 10))
-    app.typeKey(.return, modifierFlags: [])
-    XCTAssertTrue(apply.waitForNonExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["Open Project"].firstMatch.exists)
-    app.typeKey("o", modifierFlags: .command)
-    let entry = app.textFields["Entry file"].firstMatch
-    XCTAssertTrue(entry.waitForExistence(timeout: 10))
-    app.typeKey(.escape, modifierFlags: [])
-    XCTAssertTrue(entry.waitForNonExistence(timeout: 10))
-  }
-
   func testMediaPlaybackAndNestedNavigation() {
     sidebar("Media Composition")
     rendered("MasterComposition")

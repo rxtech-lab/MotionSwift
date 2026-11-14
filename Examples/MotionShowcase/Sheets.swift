@@ -36,16 +36,12 @@ struct RenderSettingsSheet: View {
       .formStyle(.grouped)
       .navigationTitle("Render Settings")
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-            .keyboardShortcut(.cancelAction)
-        }
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
         ToolbarItem(placement: .confirmationAction) {
           Button("Apply") {
             apply(draft)
             dismiss()
           }
-          .keyboardShortcut(.defaultAction)
         }
       }
     }
@@ -101,10 +97,7 @@ struct OpenProjectSheet: View {
         if case .success(let url) = result { draft.project = url }
       }
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-            .keyboardShortcut(.cancelAction)
-        }
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
         ToolbarItem(placement: .confirmationAction) {
           Button("Open") {
             open(draft)
