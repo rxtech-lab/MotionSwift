@@ -77,15 +77,17 @@ import XCTest
   func testSettingsAndOpenProjectSheets() {
     let settings = app.buttons["Render Settings"].firstMatch
     XCTAssertTrue(settings.waitForExistence(timeout: 30))
-    settings.click()
+    app.activate()
+    app.typeKey(",", modifierFlags: .command)
     let apply = app.buttons["Apply"].firstMatch
     XCTAssertTrue(apply.waitForExistence(timeout: 10))
-    apply.click()
+    app.typeKey(.return, modifierFlags: [])
     XCTAssertTrue(apply.waitForNonExistence(timeout: 10))
-    app.buttons["Open Project"].firstMatch.click()
+    XCTAssertTrue(app.buttons["Open Project"].firstMatch.exists)
+    app.typeKey("o", modifierFlags: .command)
     let entry = app.textFields["Entry file"].firstMatch
     XCTAssertTrue(entry.waitForExistence(timeout: 10))
-    app.buttons["Cancel"].firstMatch.click()
+    app.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(entry.waitForNonExistence(timeout: 10))
   }
 
