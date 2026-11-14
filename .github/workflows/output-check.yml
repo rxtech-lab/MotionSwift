@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, ui-tests]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7

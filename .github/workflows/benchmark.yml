@@ -30,7 +30,7 @@ jobs:
           - id: three
             name: 3D scenes (parity and speed)
             out: tests/reports/bench/three
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, ui-tests]
     timeout-minutes: 90
     permissions:
       contents: read
