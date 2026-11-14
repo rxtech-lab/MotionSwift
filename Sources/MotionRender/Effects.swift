@@ -25,6 +25,25 @@ enum Effects {
     return parts
   }
 
+  static func spaceTokens(_ text: String) throws -> [String] {
+    var depth = 0
+    var tokens = [String]()
+    var token = ""
+    for character in text {
+      if character == "(" { depth += 1 }
+      if character == ")" { depth -= 1 }
+      guard depth >= 0 else { throw MotionError("ms/unsupported-css-value: \(text)") }
+      if character.isWhitespace && depth == 0 {
+        if !token.isEmpty { tokens.append(token); token = "" }
+      } else {
+        token.append(character)
+      }
+    }
+    guard depth == 0 else { throw MotionError("ms/unsupported-css-value: \(text)") }
+    if !token.isEmpty { tokens.append(token) }
+    return tokens
+  }
+
   static func number(_ text: String, unit: String = "", relative: Double? = nil) throws -> Double {
     var value = text.trimmingCharacters(in: .whitespaces)
     var factor = 1.0
@@ -32,7 +51,7 @@ enum Effects {
       value.removeLast(); factor = relative / 100
     } else if !unit.isEmpty && value.hasSuffix(unit) {
       value.removeLast(unit.count)
-    } else if !unit.isEmpty && value != "0" {
+    } else if !unit.isEmpty && value != "0" && value != "-0" {
       throw MotionError("Expected \(unit): \(text)")
     }
     guard let result = Double(value), result.isFinite, Float(result * factor).isFinite else {
@@ -53,57 +72,6 @@ enum Effects {
     }
   }
 
-  static func gradient(_ text: String, width: Double, height: Double) throws -> Gradient {
-    let radial = text.hasPrefix("radial-gradient(")
-    let prefix = radial ? "radial-gradient(" : "linear-gradient("
-    guard text.hasPrefix(prefix), text.hasSuffix(")") else { throw MotionError("Unsupported gradient: \(text)") }
-    var parts = try split(String(text.dropFirst(prefix.count).dropLast()))
-    var geometry: [Double]
-    if radial {
-      // An explicit ellipse is required; no browser-dependent extent keywords.
-      let args = parts.removeFirst().split(separator: " ").map(String.init)
-      guard args.count == 6, args[0] == "ellipse", args[3] == "at" else {
-        throw MotionError("Use radial-gradient(ellipse <rx>px <ry>px at <x> <y>, ...)")
-      }
-      let radii = try [number(args[1], unit: "px"), number(args[2], unit: "px")]
-      guard radii.allSatisfy({ $0 > 0 }) else { throw MotionError("Gradient radii must be positive") }
-      geometry = try [number(args[4], unit: "px", relative: width), number(args[5], unit: "px", relative: height)] + radii
-    } else {
-      var angle = 180.0
-      if parts[0].hasSuffix("deg") { angle = try number(parts.removeFirst(), unit: "deg") } else if parts[0].hasPrefix("to ") {
-        let directions = ["to top": 0.0, "to right": 90, "to bottom": 180, "to left": 270]
-        guard let direction = directions[parts.removeFirst()] else { throw MotionError("Unsupported gradient direction") }
-        angle = direction
-      }
-      let radians = angle * .pi / 180
-      let x = sin(radians), y = -cos(radians)
-      let extent = abs(width * x) + abs(height * y)
-      geometry = [width / 2 - x * extent / 2, height / 2 - y * extent / 2,
-                  width / 2 + x * extent / 2, height / 2 + y * extent / 2]
-    }
-    guard (2...256).contains(parts.count) else { throw MotionError("Gradients need 2...256 stops") }
-    var colors = [UInt32](), stops = [Double?]()
-    for part in parts {
-      let tokens = part.split(separator: " ").map(String.init)
-      guard (1...2).contains(tokens.count) else { throw MotionError("Unsupported gradient stop: \(part)") }
-      colors.append(try Style.color(tokens[0]))
-      stops.append(tokens.count == 2 ? try number(tokens[1], unit: "%", relative: 1) : nil)
-    }
-    if stops[0] == nil { stops[0] = 0 }
-    if stops[stops.count - 1] == nil { stops[stops.count - 1] = 1 }
-    var previous = 0
-    for index in 1..<stops.count where stops[index] != nil {
-      guard stops[index]! >= stops[previous]!, stops[index]! <= 1, stops[previous]! >= 0 else {
-        throw MotionError("Gradient stops must ascend within 0...100%")
-      }
-      for missing in (previous + 1)..<index {
-        stops[missing] = stops[previous]! + (stops[index]! - stops[previous]!) * Double(missing - previous) / Double(index - previous)
-      }
-      previous = index
-    }
-    return Gradient(radial: radial, geometry: geometry, colors: colors, stops: stops.map { $0! })
-  }
-
   struct Shadow {
     var x: Double, y: Double, blur: Double, spread: Double
     var color: UInt32
@@ -113,7 +81,7 @@ enum Effects {
   static func shadows(_ text: String) throws -> [Shadow] {
     if text.isEmpty || text == "none" { return [] }
     return try split(text).map { value in
-      var tokens = value.split(separator: " ").map(String.init)
+      var tokens = try spaceTokens(value)
       let inset = tokens.first == "inset" || tokens.last == "inset"
       if tokens.first == "inset" { tokens.removeFirst() } else if tokens.last == "inset" { tokens.removeLast() }
       guard (3...5).contains(tokens.count) else { throw MotionError("Unsupported box-shadow: \(text)") }
@@ -127,16 +95,36 @@ enum Effects {
   }
 
   static func functions(_ text: String) throws -> [(String, String)] {
-    if text.isEmpty || text == "none" { return [] }
-    let regex = try NSRegularExpression(pattern: #"([a-zA-Z0-9-]+)\(([^()]*)\)"#)
-    let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-    var consumed = ""
-    let result = matches.map { match -> (String, String) in
-      consumed += text[Range(match.range, in: text)!]
-      return (String(text[Range(match.range(at: 1), in: text)!]), String(text[Range(match.range(at: 2), in: text)!]))
-    }
-    guard consumed.filter({ !$0.isWhitespace }) == text.filter({ !$0.isWhitespace }) else {
-      throw MotionError("ms/unsupported-css-value: \(text)")
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty || trimmed == "none" { return [] }
+    var result: [(String, String)] = []
+    var index = trimmed.startIndex
+    while index < trimmed.endIndex {
+      while index < trimmed.endIndex && trimmed[index].isWhitespace {
+        index = trimmed.index(after: index)
+      }
+      if index == trimmed.endIndex { break }
+      let nameStart = index
+      while index < trimmed.endIndex && (trimmed[index].isLetter || trimmed[index].isNumber || trimmed[index] == "-") {
+        index = trimmed.index(after: index)
+      }
+      let name = String(trimmed[nameStart..<index])
+      guard !name.isEmpty, index < trimmed.endIndex, trimmed[index] == "(" else {
+        throw MotionError("ms/unsupported-css-value: \(text)")
+      }
+      index = trimmed.index(after: index)
+      let argStart = index
+      var depth = 1
+      while index < trimmed.endIndex && depth > 0 {
+        if trimmed[index] == "(" { depth += 1 }
+        if trimmed[index] == ")" { depth -= 1 }
+        if depth > 0 { index = trimmed.index(after: index) }
+      }
+      guard depth == 0, index < trimmed.endIndex, trimmed[index] == ")" else {
+        throw MotionError("ms/unsupported-css-value: \(text)")
+      }
+      result.append((name, String(trimmed[argStart..<index])))
+      index = trimmed.index(after: index)
     }
     return result
   }
@@ -150,7 +138,8 @@ enum Effects {
       }
       if name == "drop-shadow" {
         let parsed = try shadows(argument)
-        guard parsed.count == 1, argument.split(whereSeparator: \.isWhitespace).count <= 4,
+        let tokens = try spaceTokens(argument)
+        guard parsed.count == 1, tokens.count <= 4,
               let shadow = parsed.first, shadow.spread == 0, !shadow.inset else {
           throw MotionError("drop-shadow requires one shadow without spread/inset")
         }
@@ -234,5 +223,130 @@ enum Effects {
       return "M\(x - rx) \(y)A\(rx) \(ry) 0 1 0 \(x + rx) \(y)A\(rx) \(ry) 0 1 0 \(x - rx) \(y)Z"
     default: throw MotionError("ms/unsupported-css-value: clip-path \(text)")
     }
+  }
+}
+
+extension Effects {
+  static func gradient(_ text: String, width: Double, height: Double) throws -> Gradient {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let radial = trimmed.hasPrefix("radial-gradient(")
+    let prefix = radial ? "radial-gradient(" : "linear-gradient("
+    guard trimmed.hasPrefix(prefix), trimmed.hasSuffix(")") else {
+      throw MotionError("Unsupported gradient: \(text)")
+    }
+    var parts = try split(String(trimmed.dropFirst(prefix.count).dropLast()))
+    let geometry = radial
+      ? try radialGeometry(&parts, width: width, height: height)
+      : try linearGeometry(&parts, width: width, height: height)
+    guard (2...256).contains(parts.count) else { throw MotionError("Gradients need 2...256 stops") }
+    var colors = [UInt32](), stops = [Double?]()
+    for part in parts {
+      let tokens = try spaceTokens(part)
+      guard (1...2).contains(tokens.count) else { throw MotionError("Unsupported gradient stop: \(part)") }
+      colors.append(try Style.color(tokens[0]))
+      stops.append(tokens.count == 2 ? try number(tokens[1], unit: "%", relative: 1) : nil)
+    }
+    if stops[0] == nil { stops[0] = 0 }
+    if stops[stops.count - 1] == nil { stops[stops.count - 1] = 1 }
+    var previous = 0
+    for index in 1..<stops.count where stops[index] != nil {
+      guard stops[index]! >= stops[previous]!, stops[index]! <= 1, stops[previous]! >= 0 else {
+        throw MotionError("Gradient stops must ascend within 0...100%")
+      }
+      for missing in (previous + 1)..<index {
+        let ratio = Double(missing - previous) / Double(index - previous)
+        stops[missing] = stops[previous]! + (stops[index]! - stops[previous]!) * ratio
+      }
+      previous = index
+    }
+    return Gradient(radial: radial, geometry: geometry, colors: colors, stops: stops.map { $0! })
+  }
+
+  private static func linearGeometry(_ parts: inout [String], width: Double, height: Double) throws -> [Double] {
+    var angle = 180.0
+    if let first = parts.first {
+      if first.hasSuffix("deg") {
+        angle = try number(parts.removeFirst(), unit: "deg")
+      } else if first.hasPrefix("to ") {
+        let directions: [String: Double] = [
+          "to top": 0, "to top right": 45, "to right top": 45, "to right": 90,
+          "to bottom right": 135, "to right bottom": 135, "to bottom": 180,
+          "to bottom left": 225, "to left bottom": 225, "to left": 270,
+          "to top left": 315, "to left top": 315,
+        ]
+        guard let direction = directions[parts.removeFirst()] else {
+          throw MotionError("Unsupported gradient direction")
+        }
+        angle = direction
+      }
+    }
+    let radians = angle * .pi / 180
+    let x = sin(radians), y = -cos(radians)
+    let extent = abs(width * x) + abs(height * y)
+    return [width / 2 - x * extent / 2, height / 2 - y * extent / 2,
+            width / 2 + x * extent / 2, height / 2 + y * extent / 2]
+  }
+
+  private static func radialGeometry(_ parts: inout [String], width: Double, height: Double) throws -> [Double] {
+    guard let first = parts.first else { throw MotionError("Empty radial-gradient") }
+    let headerTokens = try spaceTokens(first)
+    let hasHeader = headerTokens.contains("circle") || headerTokens.contains("ellipse") || headerTokens.contains("at")
+    if !hasHeader {
+      let cx = width / 2, cy = height / 2
+      let rx = max(0.001, max(cx, width - cx) * 2.0.squareRoot())
+      let ry = max(0.001, max(cy, height - cy) * 2.0.squareRoot())
+      return [cx, cy, rx, ry]
+    }
+    _ = parts.removeFirst()
+    let atIndex = headerTokens.firstIndex(of: "at")
+    let shapePart = Array(headerTokens[..<(atIndex ?? headerTokens.count)])
+    let posPart = atIndex.map { Array(headerTokens[($0 + 1)...]) } ?? ["50%", "50%"]
+    let (cx, cy) = try resolvePosition(posPart, width: width, height: height)
+    let isCircle = shapePart.contains("circle")
+    let closestSide = shapePart.contains("closest-side")
+    let sizeTokens = shapePart.filter {
+      !["circle", "ellipse", "farthest-corner", "closest-side"].contains($0)
+    }
+    var rx = 0.0, ry = 0.0
+    if sizeTokens.isEmpty {
+      if closestSide {
+        let sx = abs(min(cx, width - cx)), sy = abs(min(cy, height - cy))
+        rx = isCircle ? min(sx, sy) : sx
+        ry = isCircle ? rx : sy
+      } else {
+        let dx = max(abs(cx), abs(width - cx)), dy = max(abs(cy), abs(height - cy))
+        rx = isCircle ? hypot(dx, dy) : dx * 2.0.squareRoot()
+        ry = isCircle ? rx : dy * 2.0.squareRoot()
+      }
+      rx = max(0.001, rx); ry = max(0.001, ry)
+    } else if sizeTokens.count == 1 {
+      let radius = try number(sizeTokens[0], unit: "px", relative: hypot(width, height) / 2.0.squareRoot())
+      guard radius > 0 else { throw MotionError("Gradient radii must be positive") }
+      rx = radius; ry = radius
+    } else if sizeTokens.count == 2 && !isCircle {
+      rx = try number(sizeTokens[0], unit: "px", relative: width)
+      ry = try number(sizeTokens[1], unit: "px", relative: height)
+      guard rx > 0, ry > 0 else { throw MotionError("Gradient radii must be positive") }
+    } else {
+      throw MotionError("Unsupported radial-gradient header: \(first)")
+    }
+    return [cx, cy, rx, ry]
+  }
+
+  private static func resolvePosition(_ tokens: [String], width: Double, height: Double) throws -> (Double, Double) {
+    guard (1...2).contains(tokens.count) else { throw MotionError("Unsupported gradient position") }
+    var horizontal = tokens[0]
+    var vertical = tokens.count == 2 ? tokens[1] : "center"
+    if ["top", "bottom"].contains(horizontal) || ["left", "right"].contains(vertical) {
+      swap(&horizontal, &vertical)
+    }
+    func axis(_ token: String, span: Double, low: String, high: String) throws -> Double {
+      if token == "center" { return span / 2 }
+      if token == low { return 0 }
+      if token == high { return span }
+      return try number(token, unit: "px", relative: span)
+    }
+    return (try axis(horizontal, span: width, low: "left", high: "right"),
+            try axis(vertical, span: height, low: "top", high: "bottom"))
   }
 }

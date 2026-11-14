@@ -149,3 +149,21 @@ center on a transparent square with generous padding; no text or extra objects.
 
 References: [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow),
 [GitHub token event behavior](https://docs.github.com/en/actions/concepts/security/github_token).
+
+## Showcase UI regression tests
+
+After `make bootstrap`, run `make showcase-ui` (requires Xcode and XcodeGen). The existing
+push-only Output check runs this through `make ci`, before the iOS builds can clean native outputs.
+The suite packages the release app, verifies its resources and signature, copies it to a temporary
+folder outside the checkout, and launches that exact URL with
+[XCUIApplication](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication).
+It checks rendered gallery frames (including ExternalSVG and USDZ), settings/project sheets,
+media transport and nested navigation, study/map/film editors, and the sample editor. Each test
+uses a fresh temporary editing workspace, so saved user examples do not affect the results.
+
+The self-hosted runner must run in a logged-in, unlocked macOS desktop session with Xcode UI
+automation enabled (`sudo DevToolsSecurity -enable` during runner provisioning). Grant macOS
+automation/accessibility permissions to the runner when prompted. A headless LaunchDaemon is
+not suitable. UI failures fail CI; there is no headless skip or retry that hides a failing test.
+Screenshots, packaging logs and `.xcresult` bundles are uploaded with the existing visual-results
+artifact under `tests/reports/showcase-ui/`.

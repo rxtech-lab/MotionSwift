@@ -8,8 +8,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 45
+    runs-on: [self-hosted, macOS, ARM64, ui-tests]
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -19,7 +19,22 @@ jobs:
       - run: make bootstrap
       - name: Probe hardware encoder access
         run: node tests/tools/hardware-capabilities.mjs
-      - run: make ci
+      - name: Run make ci
+        shell: bash
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/motionswift-ci.log"
+          if make ci 2>&1 | tee "$log"; then
+            exit 0
+          else
+            status=$?
+          fi
+          matches=$(grep -Ei '✘|error:|fatal:|^FAIL|^not ok|^3D |Test Case .+ failed|failed after|make: \*\*\*|Assertion Failure' "$log" | tail -n 30 || true)
+          if [ -z "$matches" ]; then matches=$(tail -n 16 "$log"); fi
+          while IFS= read -r line; do
+            printf '::error title=make ci failure::%s\n' "${line//%/%25}"
+          done <<< "$matches"
+          exit "$status"
         env:
           MTL_DEBUG_LAYER: '1'
       - name: Publish map compatibility summary
@@ -48,7 +63,7 @@ jobs:
       # Finish the macOS visual checks before building those slices.
       - name: Build MotionStudio for iOS and iPadOS (simulator + device, Debug + Release)
         run: make ios
-      - name: Upload visual comparisons
+      - name: Upload visual comparisons and showcase UI test results
         if: always()
         uses: actions/upload-artifact@v7
         with:

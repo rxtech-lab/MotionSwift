@@ -95,6 +95,7 @@ struct Scenes3DView: View {
         }
         .padding(20)
       }
+      .accessibilityIdentifier("scenes3d-scroll")
       .navigationTitle("3D Scenes")
       .navigationSubtitle("ThreeCanvas · React Three Fiber · USDZ")
       .navigationDestination(for: String.self) { id in

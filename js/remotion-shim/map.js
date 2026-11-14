@@ -74,6 +74,8 @@ function resolveProvider(provider = 'openstreetmap', style) {
 function tileSource(resolved, z, x, y) {
   const style = resolved.definition.tiles ?? resolved.style;
   if (resolved.native) return `motionmap://tile/${resolved.provider}/${style}/${z}/${x}/${y}`;
+  if (typeof globalThis.__ms_mapTileURL === 'function')
+    return globalThis.__ms_mapTileURL(resolved.provider, style, z, x, y);
   return resolved.definition.url ? resolved.definition.url.replace('{z}', z).replace('{x}', x).replace('{y}', y) : null;
 }
 

@@ -7,7 +7,8 @@ const [project,entry,id,output,range,propsFile,concurrency,scale='1'] = process.
 const browser = await browserOptions();
 // Chrome's OpenGL backend. Unset keeps Remotion's default (no --use-gl flag, Chrome decides).
 if(process.env.REMOTION_GL)browser.chromiumOptions={gl:process.env.REMOTION_GL};
-const serveUrl=await bundle({entryPoint:path.join(project,entry),publicDir:path.join(project,'public')});
+const publicDir=path.join(project,'public');
+const serveUrl=await bundle({entryPoint:path.join(project,entry),publicDir:fs.existsSync(publicDir)?publicDir:null});
 const inputProps=JSON.parse(fs.readFileSync(propsFile,'utf8'));
 const composition=await selectComposition({serveUrl,id,inputProps,...browser});
 const frameRange=range.split('-').map(Number);

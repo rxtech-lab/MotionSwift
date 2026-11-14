@@ -218,22 +218,77 @@ pub unsafe extern "C" fn msk_effect_layer(
 
 #[no_mangle]
 pub unsafe extern "C" fn msk_backdrop(s: *mut Target, w: f32, h: f32, radius: f32, sigma: f32) {
-    let canvas = (*s).surface.canvas();
+    if sigma >= 1.0e-6 && sigma.is_finite() {
+        (*s).backdrop_group = Some((w, h, radius, sigma));
+    }
+}
+
+pub(super) fn apply_backdrop(s: &mut Target, w: f32, h: f32, radius: f32, sigma: f32, alpha: f32) {
     let backdrop = image_filters::crop(Rect::from_wh(w, h), TileMode::Clamp, None);
-    let filter = gaussian_bounds(sigma, backdrop, TileMode::Clamp, Some(Rect::from_wh(w, h)));
-    if let Some(filter) = filter {
+    let Some(filter) = gaussian_bounds(sigma, backdrop, TileMode::Clamp, Some(Rect::from_wh(w, h)))
+    else {
+        return;
+    };
+    let rrect = RRect::new_rect_xy(Rect::from_wh(w, h), radius, radius);
+    if alpha >= 1. {
+        let canvas = s.surface.canvas();
         canvas.save();
-        canvas.clip_rrect(
-            RRect::new_rect_xy(Rect::from_wh(w, h), radius, radius),
-            None,
-            true,
-        );
+        canvas.clip_rrect(rrect, None, true);
         canvas.save_layer(&SaveLayerRec::default().backdrop(&filter));
         canvas.restore();
         canvas.restore();
-        (*s).backdrop_group = true;
+        let background = s.surface.image_snapshot();
+        let mut paint = Paint::default();
+        paint.set_blend_mode(BlendMode::Src);
+        s.effect_surface(paint, ColorType::RGBA8888, 1., false);
+        let child = s.surface.canvas();
+        child.save();
+        child.reset_matrix();
+        child.draw_image(background, (0, 0), None);
+        child.restore();
         return;
     }
+    if alpha <= 0. {
+        let mut paint = Paint::default();
+        paint.set_alpha_f(0.);
+        s.effect_surface(paint, ColorType::RGBA8888, 0., false);
+        return;
+    }
+    let unblurred = s.surface.image_snapshot();
+    let matrix = s.surface.canvas().local_to_device();
+    let mut paint = Paint::default();
+    if s.context.is_some() {
+        paint.set_color_filter(alpha_filter(alpha));
+    } else {
+        paint.set_alpha_f(alpha);
+    }
+    s.effect_surface(paint, ColorType::RGBA8888, alpha, false);
+    let info = ImageInfo::new(
+        (s.surface.width(), s.surface.height()),
+        ColorType::RGBA8888,
+        AlphaType::Premul,
+        None,
+    );
+    let Some(mut temp) = s.surface.new_surface(&info) else {
+        s.failed = true;
+        return;
+    };
+    temp.canvas().clear(Color::TRANSPARENT);
+    temp.canvas().draw_image(&unblurred, (0, 0), None);
+    temp.canvas().set_matrix(&matrix);
+    temp.canvas().save();
+    temp.canvas().clip_rrect(rrect, None, true);
+    temp.canvas()
+        .save_layer(&SaveLayerRec::default().backdrop(&filter));
+    temp.canvas().restore();
+    temp.canvas().restore();
+    let blurred = temp.image_snapshot();
+    let child = s.surface.canvas();
+    child.save();
+    child.clip_rrect(rrect, None, true);
+    child.reset_matrix();
+    child.draw_image(&blurred, (0, 0), None);
+    child.restore();
 }
 
 #[no_mangle]

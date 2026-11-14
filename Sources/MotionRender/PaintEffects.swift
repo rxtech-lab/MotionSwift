@@ -7,6 +7,7 @@ struct PaintEffects {
   let width: Double
   let height: Double
   let radius: Double
+  let cornerClip: String?
   let opacity: Double
   let blend: Int
   let filters: [[Double]]
@@ -20,14 +21,17 @@ struct PaintEffects {
   init(_ style: Style, width: Double, height: Double) throws {
     self.width = width
     self.height = height
-    opacity = try style.length("opacity", relativeTo: 1, fallback: 1)
-    guard (0...1).contains(opacity) else { throw MotionError("Opacity must be in 0...1") }
+    let rawOpacity = try style.length("opacity", relativeTo: 1, fallback: 1)
+    guard rawOpacity.isFinite else { throw MotionError("Opacity must be finite") }
+    opacity = min(max(rawOpacity, 0), 1)
     filters = try Effects.filters(style.string("filter"))
     guard let blend = Effects.blendModes.firstIndex(of: style.string("mixBlendMode", "normal")) else {
       throw MotionError("ms/unsupported-css-value: mixBlendMode")
     }
     self.blend = blend
-    radius = try style.length("borderRadius", relativeTo: min(width, height))
+    let corners = try style.cornerRadii(width: width, height: height)
+    radius = corners.uniform
+    cornerClip = corners.clipPath
     let backgroundText = style.string("background", "transparent")
     let gradientText = style.string("backgroundImage", backgroundText.contains("gradient(") ? backgroundText : "none")
     gradient = gradientText == "none" ? nil : try Effects.gradient(gradientText, width: width, height: height)
@@ -35,14 +39,15 @@ struct PaintEffects {
     mask = maskText == "none" ? nil : try Effects.gradient(maskText, width: width, height: height)
     shadows = try Effects.shadows(style.string("boxShadow"))
     clip = try Effects.clip(style.string("clipPath"), width: width, height: height)
-    let backdrop = try Effects.functions(style.string("backdropFilter"))
+    let backdropRaw = style.string("backdropFilter", style.string("WebkitBackdropFilter"))
+    let backdrop = try Effects.functions(backdropRaw)
     guard backdrop.isEmpty || (backdrop.count == 1 && backdrop[0].0 == "blur") else {
       throw MotionError("ms/unsupported-css-value: backdropFilter supports blur(px)")
     }
     backdropBlur = backdrop.isEmpty ? 0 : try Effects.number(backdrop[0].1, unit: "px")
     guard backdropBlur >= 0 else { throw MotionError("Backdrop blur must be nonnegative") }
-    guard backdropBlur == 0 || (opacity == 1 && filters.isEmpty && mask == nil && blend == 0) else {
-      throw MotionError("ms/unsupported-css-value: backdropFilter cannot combine with opacity/filter/mask/blend")
+    guard backdropBlur == 0 || (filters.isEmpty && mask == nil && blend == 0) else {
+      throw MotionError("ms/unsupported-css-value: backdropFilter cannot combine with filter/mask/blend")
     }
     background = try CSSColor.parse(
       style.string("backgroundColor", gradient == nil ? backgroundText : "transparent"), current: style.string("color", "black"))
@@ -50,6 +55,15 @@ struct PaintEffects {
 
   func drawBackground(on canvas: Canvas, fill: Bool = true) throws {
     for shadow in shadows.reversed() where !shadow.inset { draw(shadow, on: canvas) }
+    if let cornerClip {
+      try canvas.clip(path: cornerClip)
+      canvas.save(opacity: 1)
+      defer { canvas.restore() }
+      if fill { canvas.rectangle(width: width, height: height, radius: 0, color: background) }
+      if let gradient { try gradient.draw(on: canvas, width: width, height: height, radius: 0) }
+      for shadow in shadows.reversed() where shadow.inset { draw(shadow, on: canvas) }
+      return
+    }
     if fill { canvas.rectangle(width: width, height: height, radius: radius, color: background) }
     if let gradient { try gradient.draw(on: canvas, width: width, height: height, radius: radius) }
     for shadow in shadows.reversed() where shadow.inset { draw(shadow, on: canvas) }

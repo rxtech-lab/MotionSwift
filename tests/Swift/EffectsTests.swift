@@ -21,10 +21,57 @@ import Testing
   let gradient = try Effects.gradient("linear-gradient(90deg, #ff0000, #00ff00, #0000ff)", width: 40, height: 20)
   #expect(gradient.stops == [0, 0.5, 1])
   #expect(abs(gradient.geometry[0]) < 0.0001)
+  let diagonal = try Effects.gradient("linear-gradient(to bottom right, rgba(255, 0, 0, 0.8) 0%, transparent 100%)",
+                                      width: 100, height: 100)
+  #expect(diagonal.colors.count == 2)
+  for radial in [
+    "radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, transparent 70%)",
+    "radial-gradient(circle at 30% 30%, #ff8844, #223344)",
+    "radial-gradient(ellipse at center, rgba(80, 160, 255, 0.5) 0%, transparent 70%)",
+    "radial-gradient(120% 90% at 22% 88%, #44aaee 0%, transparent 55%)",
+  ] {
+    let parsed = try Effects.gradient(radial, width: 200, height: 100)
+    #expect(parsed.radial)
+    #expect(parsed.geometry.count == 4 && parsed.geometry[2] > 0 && parsed.geometry[3] > 0)
+  }
   let matrix = try CSSTransform.matrix("perspective(100px) rotateY(60deg)", width: 40, height: 20)
   #expect(abs(matrix[0] - 0.5) < 0.0001)
   #expect(matrix[6] > 0)
   #expect(try Effects.shadows("2px 3px 4px 1px #00000080, inset 0px 1px #ffffff").count == 2)
+  #expect(try Effects.shadows("0 12px 32px rgba(0, 0, 0, 0.35)").count == 1)
+  #expect(try Effects.filters("drop-shadow(0px 4px 12px rgba(0, 0, 0, 0.45))").count == 1)
+}
+
+@Test func multiCornerRadiusAndWebkitBackdropRenderOnBothBackends() throws {
+  let composition = Composition(id: "Corners", width: 40, height: 40, fps: 30, durationInFrames: 1)
+  for backend in Backend.allCases {
+    let renderer = try Renderer(width: 40, height: 40, backend: backend)
+    let node = RenderNode(type: "div", style: ["backgroundColor": .string("#ffffff")], children: [
+      RenderNode(type: "div", style: [
+        "position": .string("absolute"), "left": .number(4), "top": .number(4),
+        "width": .number(32), "height": .number(32),
+        "borderRadius": .string("12px 12px 0 0"),
+        "background": .string("linear-gradient(180deg, #ff0000 0%, #ff0000 100%)"),
+      ]),
+      RenderNode(type: "div", style: [
+        "position": .string("absolute"), "left": .number(0), "top": .number(20),
+        "width": .number(40), "height": .number(20),
+        "WebkitBackdropFilter": .string("blur(2px)"),
+        "opacity": .number(0.5),
+      ]),
+      RenderNode(type: "div", style: [
+        "position": .string("absolute"), "left": .number(0), "top": .number(0),
+        "width": .number(40), "height": .number(20),
+        "backdropFilter": .string("blur(8px)"),
+        "opacity": .number(0),
+      ]),
+    ])
+    try renderer.draw(node, composition: composition)
+    let pixels = [UInt8](try renderer.pixels())
+    // Top-left corner (4, 4) is clipped outside the 12px top-left radius; bottom-left (4, 35) is square red.
+    #expect(pixels[(4 * 40 + 4) * 4 + 1] == 255)
+    #expect(pixels[(35 * 40 + 5) * 4] == 255)
+  }
 }
 
 @Test func effectsCompositeSubtreesOnBothBackends() throws {

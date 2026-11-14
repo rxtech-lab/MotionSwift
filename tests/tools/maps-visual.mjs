@@ -1,5 +1,6 @@
-// Compare Remotion with both native backends. Railway uses live/cached OSM tiles; synthetic fixtures are offline.
+// Compare Remotion with both native backends. Railway shares pinned OSM tile bytes; synthetic fixtures are offline.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {bundle} from '@remotion/bundler';
 import {selectComposition, renderStill} from '@remotion/renderer';
@@ -15,12 +16,27 @@ const entry = railway ? 'index.tsx' : 'src/index.tsx';
 const output = path.join(testRoot, 'reports/maps', ...(railway ? ['railway'] : []));
 const results = [];
 let failed = false;
+let tileFixture;
 try {
   const browser = await browserOptions();
   const bin = nativeBin();
-  const serveUrl = await bundle({entryPoint: path.join(project, entry), publicDir: path.join(project, 'public'),
+  let publicDir = path.join(project, 'public');
+  if (railway) {
+    tileFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'motionswift-map-parity-'));
+    process.env.MOTIONSWIFT_MAP_CACHE = path.join(tileFixture, 'cache');
+    publicDir = path.join(tileFixture, 'public');
+    fs.cpSync(path.join(project, 'public'), publicDir, {recursive: true});
+    // The native renderer fetches each tile once. Browser parity then reads those same bytes.
+    for (const frame of [750, 0, 1499]) {
+      const warmup = path.join(tileFixture, `warmup-${frame}.png`);
+      run(bin, ['still', '--project', project, '--entry', entry, 'IslandRailway',
+        warmup, `--frame=${frame}`, '--backend=cpu']);
+    }
+    fs.cpSync(path.join(tileFixture, 'cache'), path.join(publicDir, 'tile-cache'), {recursive: true});
+  }
+  const serveUrl = await bundle({entryPoint: path.join(project, entry), publicDir,
     webpackOverride: config => ({...config, resolve: {...config.resolve, alias: {...config.resolve?.alias,
-      '@motionswift/map': path.join(testRoot, 'tools/map-browser-reference.cjs'),
+      '@motionswift/map': path.join(testRoot, railway ? 'tools/map-browser-pinned.cjs' : 'tools/map-browser-reference.cjs'),
     }}}),
   });
   for (const id of railway ? ['IslandRailway'] : ['OpenStreetMapTiles', 'MapKitSnapshot']) {
@@ -68,9 +84,11 @@ try {
   failed = true;
   results.push({error: String(error)});
   console.error(error);
+} finally {
+  if (tileFixture) fs.rmSync(tileFixture, {recursive: true, force: true});
 }
 writeJSON(path.join(output, 'results.json'), {
-  scope: railway ? 'real OSM tiles and bundled Yamanote track; native tile cache and browser network required' : 'offline image compatibility; no live provider validation',
+  scope: railway ? 'real OSM tiles and bundled Yamanote track; native and browser comparisons share an isolated tile cache' : 'offline image compatibility; no live provider validation',
   pass: !failed, results,
 });
 process.exitCode = failed ? 1 : 0;

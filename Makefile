@@ -77,4 +77,8 @@ maps-visual: build
 	node tests/tools/maps-visual.mjs
 	node tests/tools/maps-visual.mjs --railway
 
-ci: test visual three-visual maps-visual
+.PHONY: showcase-ui
+showcase-ui:
+	bash scripts/test-showcase-ui.sh
+
+ci: test visual three-visual maps-visual showcase-ui

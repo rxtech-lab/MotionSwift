@@ -119,3 +119,39 @@ private func box(_ style: [String: JSONValue], _ children: [RenderNode] = []) ->
   #expect(Array(pixels[topRight..<topRight+4]) == [217, 77, 102, 255])
   #expect(Array(pixels[bottomLeft..<bottomLeft+4]) == [90, 204, 102, 255])
 }
+
+@Test func blockFlowSpacingShorthandsAutoMarginsAndIntrinsicPillsMatchHTML() throws {
+  let block = box(["padding": .string("10px 20px 30px 40px")], [
+    box(["height": .number(24)]),
+    box(["height": .number(16), "margin": .string("6px 0")]),
+  ])
+  let blockLayout = try LayoutEngine.calculate(block, width: 300, height: 200)
+  #expect(blockLayout.children[0].x == 40)
+  #expect(blockLayout.children[0].y == 10)
+  #expect(blockLayout.children[0].width == 240)
+  #expect(blockLayout.children[1].y == 40)
+
+  let row = box(["display": .string("flex"), "padding": .string("0 24px"), "alignItems": .string("center")], [
+    box(["width": .number(40), "height": .number(20)]),
+    box(["width": .number(50), "height": .number(20), "marginLeft": .string("auto")]),
+  ])
+  let rowLayout = try LayoutEngine.calculate(row, width: 300, height: 60)
+  #expect(rowLayout.children[0].x == 24)
+  #expect(rowLayout.children[1].x == 226)
+
+  func pill(_ label: String, padded: Bool) -> RenderNode {
+    var style: [String: JSONValue] = [
+      "fontSize": .number(48), "fontWeight": .number(800), "letterSpacing": .string("0.02em"),
+    ]
+    if padded { style["padding"] = .string("8px 20px") }
+    return RenderNode(type: "div", style: style, children: [RenderNode(type: "#text", style: [:], text: label)])
+  }
+  let pills = box(["display": .string("flex"), "alignItems": .string("flex-start")], [
+    pill("Performance", padded: false),
+    pill("Performance", padded: true),
+    pill("10X", padded: true),
+  ])
+  let pillLayout = try LayoutEngine.calculate(pills, width: 1200, height: 400)
+  #expect(abs(pillLayout.children[1].height - (pillLayout.children[0].height + 16)) < 1)
+  #expect(abs(pillLayout.children[2].height - pillLayout.children[1].height) < 1)
+}

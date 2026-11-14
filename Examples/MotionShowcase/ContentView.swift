@@ -4,6 +4,7 @@ import MotionSwiftUI
 import SwiftUI
 
 enum SidebarItem: Hashable {
+  case openSource
   case media
   case scenes3D
   case gallery
@@ -17,6 +18,7 @@ enum SidebarItem: Hashable {
 extension SidebarItem {
   static var launch: SidebarItem {
     switch ProcessInfo.processInfo.environment["MOTIONSWIFT_SHOWCASE_START"] {
+    case "open-source": .openSource
     case "editor": .editor
     case "media": .media
     case "3d": .scenes3D
@@ -39,7 +41,7 @@ struct ProjectLocation: Equatable {
 
 struct ContentView: View {
   @State private var player = MotionPlayer()
-  /// `MOTIONSWIFT_SHOWCASE_START=editor|media|3d` opens that destination first (demos and screenshots).
+  /// `MOTIONSWIFT_SHOWCASE_START=open-source|editor|media|3d|maps` opens that destination first.
   @State private var selection: SidebarItem? = SidebarItem.launch
   @State private var settings = ShowcaseSettings()
   @State private var location = ProjectLocation(
@@ -59,6 +61,11 @@ struct ContentView: View {
     return false
   }
 
+  private var disablesProjectToolbar: Bool {
+    selection == .openSource || selection == .testFilm || selection == .editor
+      || selection == .media || selection == .scenes3D || selection == .maps || viewingStudy
+  }
+
   var body: some View {
     NavigationSplitView {
       sidebar
@@ -69,17 +76,14 @@ struct ContentView: View {
       ToolbarItemGroup {
         Button("Open Project", systemImage: "folder") { showsOpenProject = true }
           .help("Preview another Remotion-style TSX project")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
-                    || selection == .maps || viewingStudy)
+          .disabled(disablesProjectToolbar)
         Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
           .help("Recompile the project and re-render")
           .keyboardShortcut("r")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
-                    || selection == .maps || viewingStudy)
+          .disabled(disablesProjectToolbar)
         Button("Render Settings", systemImage: "slider.horizontal.3") { showsSettings = true }
           .help("Backend, scale, looping and layout bounds")
-          .disabled(selection == .testFilm || selection == .editor || selection == .media || selection == .scenes3D
-                    || selection == .maps || viewingStudy)
+          .disabled(disablesProjectToolbar)
       }
     }
     .sheet(isPresented: $showsSettings) {
@@ -126,6 +130,11 @@ struct ContentView: View {
         Label("All Studies", systemImage: "square.grid.2x2").tag(SidebarItem.gallery)
       }
       Section("Showcase") {
+        VStack(alignment: .leading, spacing: 2) {
+          Label("Open-Source Examples", systemImage: "sparkles.tv")
+          Text("12 MIT Remotion clips").font(.caption).foregroundStyle(.secondary)
+        }
+        .tag(SidebarItem.openSource)
         Label("Maps", systemImage: "map").tag(SidebarItem.maps)
         Label("Media Composition", systemImage: "rectangle.stack.fill").tag(SidebarItem.media)
         VStack(alignment: .leading, spacing: 2) {
@@ -168,6 +177,8 @@ struct ContentView: View {
 
   @ViewBuilder private var detail: some View {
     switch selection {
+    case .openSource:
+      OpenSourceView()
     case .study(let id):
       if let study = MotionStudy.study(id) {
         ExampleEditorSheet(example: study.example, compositionID: study.compositionID, isSheet: false)
@@ -276,7 +287,7 @@ extension Composition {
   }
 }
 
-private struct ToastOverlay: View {
+struct ToastOverlay: View {
   let message: String?
 
   var body: some View {

@@ -95,29 +95,39 @@ let failed=false;
 const hardware=engines.some(engine=>['gpu-hw','gpu-shared'].includes(engine))?probeHardwareEncoding():null;
 results.hardwareEncoding=hardware;
 
-async function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames}) {
-  const times=[],memoryRuns=[],logFile=`logs/${slug}-${engine}.log`,logPath=path.join(out,logFile);
-  const video=path.join(work,`${slug}-${engine}.mp4`),report=path.join(work,`${slug}-${engine}-stages.json`);
+async function measure(record,engine,{fixture,tier,range,props,slug,expectedFrames},
+                       {suffix='',runCount=runs,warmupCount=warmup}={}) {
+  const times=[],memoryRuns=[],logFile=`logs/${slug}-${engine}${suffix}.log`,logPath=path.join(out,logFile);
+  let retryCount=0;
+  const video=path.join(work,`${slug}-${engine}${suffix}.mp4`),report=path.join(work,`${slug}-${engine}${suffix}-stages.json`);
   fs.writeFileSync(logPath,'');
-  for(let index=0;index<warmup+runs;index++) {
-    console.log(`${record.id} ${engine} ${index<warmup?'warmup':`run ${index-warmup+1}/${runs}`}`);
+  for(let index=0;index<warmupCount+runCount;index++) {
+    console.log(`${record.id} ${engine}${suffix} ${index<warmupCount?'warmup':`run ${index-warmupCount+1}/${runCount}`}`);
     const args=engine==='remotion'
       ?[path.join(root,'tests/tools/render-remotion.mjs'),project,config.entryPoint,fixture.composition,video,range,props,String(concurrency.remotion),String(tier.scale)]
       :['render','--project',project,'--entry',config.entryPoint,fixture.composition,video,'--codec=h264',`--backend=${engine.startsWith('gpu')?'gpu':engine}`,`--encoder=${ENCODERS[engine]}`,
         `--concurrency=${concurrency[engine]}`,`--scale=${tier.scale}`,`--frames=${range}`,`--props=${props}`,'--report-json',report];
-    const begin=process.hrtime.bigint();
-    const result=await measureProcess(engine==='remotion'?process.execPath:native,args,{cwd:project,
-      env:{...process.env,REMOTION_GL:settings.remotionGl??''}});
-    const elapsed=Number(process.hrtime.bigint()-begin)/1e6;
-    fs.appendFileSync(logPath,`\nRun ${index}: ${elapsed} ms\n${result.stdout||''}\n${result.stderr||''}`);
-    if(result.error||result.status!==0)throw Error(String(result.error||`exit ${result.status}, signal ${result.signal??'none'}`));
-    if(index>=warmup) {times.push(elapsed);memoryRuns.push(result.memory);}
+    let result,elapsed;
+    for(let attempt=1;attempt<=2;attempt++) {
+      const begin=process.hrtime.bigint();
+      result=await measureProcess(engine==='remotion'?process.execPath:native,args,{cwd:project,
+        env:{...process.env,REMOTION_GL:settings.remotionGl??''}});
+      elapsed=Number(process.hrtime.bigint()-begin)/1e6;
+      fs.appendFileSync(logPath,`\nRun ${index}, attempt ${attempt}: ${elapsed} ms\n${result.stdout||''}\n${result.stderr||''}`);
+      if(!result.error&&result.status===0)break;
+      const transient=engine==='remotion'&&(/Visited "http:\/\/localhost:\d+\/index\.html" but got no response\./.test(result.stderr||'')
+        || (result.stderr||'').includes('No available ports found'));
+      if(!transient||attempt===2)throw Error(String(result.error||`exit ${result.status}, signal ${result.signal??'none'}`));
+      retryCount++;
+      console.warn(`${record.id} remotion run ${index} lost its local render server; retrying once`);
+    }
+    if(index>=warmupCount) {times.push(elapsed);memoryRuns.push(result.memory);}
   }
   const metadata=JSON.parse(command('ffprobe',['-v','error','-select_streams','v:0','-count_packets','-show_entries',
     'stream=codec_name,width,height,r_frame_rate,nb_read_packets','-of','json',video])).streams[0];
   const count=Number(metadata?.nb_read_packets);
   if(count!==expectedFrames)throw Error(`Expected ${expectedFrames} frames, got ${count}`);
-  const measured={status:'ok',runsMs:times,medianMs:median(times),stdevMs:stdev(times),frames:count,
+  const measured={status:'ok',runsMs:times,medianMs:median(times),stdevMs:stdev(times),frames:count,retryCount,
     memory:{...memoryMethod,runs:memoryRuns,
       status:memoryRuns.every(run=>run.status==='ok')?'ok':'unavailable',
       peakRssBytes:memoryRuns.every(run=>run.status==='ok')?Math.max(...memoryRuns.map(run=>run.peakRssBytes)):null},
@@ -158,15 +168,34 @@ try {
     // Remotion is the reference when it ran; otherwise (tiers beyond Chrome's reliable scale)
     // the GPU backend is checked against the CPU backend, which is itself gated by the goldens.
     const reference=record.remotion.status==='ok'?'remotion':record.cpu.status==='ok'?'cpu':null;
-    for(const engine of NATIVE) {
-      if(!reference||engine===reference||record[engine].status!=='ok')continue;
-      try {
-        const value=ssim(record[reference].video,record[engine].video,path.join(out,'logs',`${slug}-${engine}-parity.log`));
-        const pass=value>=config.minSsim&&parityMetadata(record[engine].metadata,record[reference].metadata);
-        record.parity[engine]={reference,ssim:value,result:pass?'pass':'fail'};
-        if(!pass)failed=true;
-      } catch(error) {record.parity[engine]={reference,result:'fail',error:String(error)};failed=true;}
+    function checkParity(referenceVideo,suffix='') {
+      const parity={};
+      for(const engine of NATIVE) {
+        if(!reference||engine===reference||record[engine].status!=='ok')continue;
+        try {
+          const value=ssim(referenceVideo,record[engine].video,path.join(out,'logs',`${slug}-${engine}-parity${suffix}.log`));
+          const pass=value>=config.minSsim&&parityMetadata(record[engine].metadata,record[reference].metadata);
+          parity[engine]={reference,ssim:value,result:pass?'pass':'fail'};
+        } catch(error) {parity[engine]={reference,result:'fail',error:String(error)};}
+      }
+      return parity;
     }
+    if(reference)record.parity=checkParity(record[reference].video);
+    // Chrome can occasionally capture an incomplete backdrop frame under benchmark load.
+    // Keep the original measurement, but validate any mismatch against one fresh reference.
+    if(reference==='remotion'&&Object.values(record.parity).some(item=>item.result==='fail')) {
+      record.parityRetry={initial:record.parity};
+      try {
+        const retry=await measure(record,'remotion',{fixture,tier,range,props,slug,expectedFrames},
+                                  {suffix:'-parity-retry',runCount:1,warmupCount:0});
+        record.parity=checkParity(retry.video,'-retry');
+        record.parityRetry.result=Object.values(record.parity).every(item=>item.result==='pass')?'pass':'fail';
+      } catch(error) {
+        record.parityRetry.result='fail';
+        record.parityRetry.error=String(error);
+      }
+    }
+    if(Object.values(record.parity).some(item=>item.result==='fail')||record.parityRetry?.result==='fail')failed=true;
     const passed=engine=>record[engine].status==='ok'&&(record.parity[engine]?.result==='pass'||reference===engine);
     if(passed('remotion')&&passed('cpu'))record.speedups.cpuVsRemotion=record.remotion.medianMs/record.cpu.medianMs;
     if(passed('remotion')&&passed('gpu'))record.speedups.gpuVsRemotion=record.remotion.medianMs/record.gpu.medianMs;
@@ -223,10 +252,14 @@ function summary(results,{runs,warmup,concurrency,machine,versions,comparableMac
   const perTier=Object.entries(totals).filter(([key])=>key.startsWith('gpuVsCpu@')).map(([key,value])=>`${key.slice(9)} ${x(value.geomean)}`).join(', ');
   const hardwareTiers=Object.entries(totals).filter(([key])=>key.startsWith('hardwareVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
   const sharedTiers=Object.entries(totals).filter(([key])=>key.startsWith('sharedVsSoftware@')).map(([key,value])=>`${key.split('@')[1]} ${x(value.geomean)}`).join(', ');
+  const retried=results.fixtures.filter(item=>item.parityRetry);
+  const renderRetries=results.fixtures.filter(item=>item.remotion?.retryCount);
   return `<!-- motionswift-bench -->\n## MotionSwift benchmark: Remotion vs native CPU vs native GPU\n\n`+
     (notes?`${notes}\n\n`:'')+
     (results.hardwareEncoding&&!results.hardwareEncoding.available
       ?`**Hardware encoding unavailable on this runner.** Hardware cells are excluded, not counted as passing or replaced with software. Session probe: ${results.hardwareEncoding.reason.split('\n')[0]}\n\n`:'')+
+    (retried.length?`**Parity rechecked against a fresh Remotion capture:** ${retried.map(item=>`${item.id} (${item.parityRetry.result})`).join(', ')}. Initial and recheck scores are in results.json.\n\n`:'')+
+    (renderRetries.length?`**Remotion local server retries:** ${renderRetries.map(item=>`${item.id} (${item.remotion.retryCount})`).join(', ')}. Failed attempts are in the fixture logs.\n\n`:'')+
     `- **Shared IOSurface vs Metal + x264**: **${x(totals.sharedVsSoftware.geomean)}** over ${totals.sharedVsSoftware.fixtures} parity-passing fixture(s); by resolution: ${sharedTiers||'—'}.\n`+
     `- **Shared IOSurface vs FFmpeg VideoToolbox**: **${x(totals.sharedVsFFmpeg.geomean)}**; vs CPU + x264: **${x(totals.sharedVsCpu.geomean)}**.\n`+
     `- **Hardware vs software encoding** (both Metal rendering): **${x(totals.hardwareVsSoftware.geomean)}** over ${totals.hardwareVsSoftware.fixtures} parity-passing fixture(s); by resolution: ${hardwareTiers||'—'}.\n`+

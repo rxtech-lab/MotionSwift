@@ -4,6 +4,7 @@ included:
   - Examples
   - tests/Swift
   - tests/Showcase
+  - tests/ShowcaseUI
 excluded:
   - .build
   - native/target

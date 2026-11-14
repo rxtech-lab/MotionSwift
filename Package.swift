@@ -48,12 +48,21 @@ let package = Package(
     .target(name: "MotionEditor", dependencies: [
       "MotionCore", "MotionPortable", "MotionRender", "MotionSwiftUI",
     ]),
-    .executableTarget(name: "motionswift-showcase", dependencies: [
-      "MotionCore", "MotionRender", "MotionEncode", "MotionSwiftUI", "MotionEditor", "MotionPortable",
-      .product(name: "Sparkle", package: "Sparkle", condition: macOnly),
-    ], path: "Examples/MotionShowcase", resources: [.copy("Media"), .copy("Designs"), .copy("Railway"), .copy("MapStudio"), .copy("Film")],
-      linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
-        .when(platforms: [.macOS]))]),
+    .executableTarget(
+      name: "motionswift-showcase",
+      dependencies: [
+        "MotionCore", "MotionRender", "MotionEncode", "MotionSwiftUI", "MotionEditor", "MotionPortable",
+        .product(name: "Sparkle", package: "Sparkle", condition: macOnly),
+      ],
+      path: "Examples/MotionShowcase",
+      resources: [
+        .copy("Media"), .copy("Designs"), .copy("Railway"), .copy("MapStudio"), .copy("Film"),
+        .copy("OpenSource"),
+      ],
+      linkerSettings: [
+        .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
+                     .when(platforms: [.macOS])),
+      ]),
     .executableTarget(name: "motionswift-cli", dependencies: [
       "MotionCompiler", "MotionPortable", "MotionRuntime", "MotionRender", "MotionEncode",
     ]),
