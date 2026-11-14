@@ -19,7 +19,22 @@ jobs:
       - run: make bootstrap
       - name: Probe hardware encoder access
         run: node tests/tools/hardware-capabilities.mjs
-      - run: make ci
+      - name: Run make ci
+        shell: bash
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/motionswift-ci.log"
+          if make ci 2>&1 | tee "$log"; then
+            exit 0
+          else
+            status=$?
+          fi
+          matches=$(grep -Ei 'error:|fatal:|^FAIL|^not ok|Test Case .+ failed|failed after|make: \*\*\*|Assertion Failure' "$log" | tail -n 16 || true)
+          if [ -z "$matches" ]; then matches=$(tail -n 16 "$log"); fi
+          while IFS= read -r line; do
+            printf '::error title=make ci failure::%s\n' "${line//%/%25}"
+          done <<< "$matches"
+          exit "$status"
         env:
           MTL_DEBUG_LAYER: '1'
       - name: Publish map compatibility summary
