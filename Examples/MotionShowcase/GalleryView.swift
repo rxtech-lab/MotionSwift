@@ -58,6 +58,7 @@ struct GalleryView: View {
       }
       .padding(20)
     }
+    .accessibilityIdentifier("gallery-scroll")
   }
 
   private func destination(_ title: String, subtitle: String, icon: String, color: Color,

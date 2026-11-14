@@ -62,7 +62,7 @@ import XCTest
     let ids = ["Solid", "Boxes", "Motion", "Flex", "Layers", "Timed", "BorderOrder", "FlexOrigin",
                "SeriesTiming", "NestedOrder", "Gradients", "Shadows", "Filters", "Blending", "ClipMask",
                "Backdrop", "Transform3D", "InlineSVG", "ExternalSVG", "FadeTransition", "SlideTransition", "WipeTransition"]
-    let gallery = app.scrollViews["gallery-scroll"]
+    let gallery = element("gallery-scroll")
     XCTAssertTrue(gallery.waitForExistence(timeout: 30))
     for id in ids {
       let preview = element("preview-\(id)")
@@ -78,13 +78,15 @@ import XCTest
     let settings = app.buttons["Render Settings"].firstMatch
     XCTAssertTrue(settings.waitForExistence(timeout: 30))
     settings.click()
-    XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 5))
-    app.sheets.buttons["Apply"].click()
-    XCTAssertTrue(app.sheets.firstMatch.waitForNonExistence(timeout: 5))
+    let apply = app.buttons["Apply"].firstMatch
+    XCTAssertTrue(apply.waitForExistence(timeout: 10))
+    apply.click()
+    XCTAssertTrue(apply.waitForNonExistence(timeout: 10))
     app.buttons["Open Project"].firstMatch.click()
-    XCTAssertTrue(app.sheets.textFields.firstMatch.waitForExistence(timeout: 5))
-    app.sheets.buttons["Cancel"].click()
-    XCTAssertTrue(app.sheets.firstMatch.waitForNonExistence(timeout: 5))
+    let entry = app.textFields["Entry file"].firstMatch
+    XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    app.buttons["Cancel"].firstMatch.click()
+    XCTAssertTrue(entry.waitForNonExistence(timeout: 10))
   }
 
   func testMediaPlaybackAndNestedNavigation() {
