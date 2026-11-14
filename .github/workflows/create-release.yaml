@@ -30,6 +30,15 @@ jobs:
           skip_npm_plugin: true
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+  build-xcframework:
+    permissions:
+      contents: write
+    needs: create-release
+    if: needs.create-release.outputs.published == 'true'
+    uses: ./.github/workflows/build-xcframework.yml
+    with:
+      release_tag: ${{ needs.create-release.outputs.tag }}
+    secrets: inherit
   showcase-dmg:
     permissions:
       contents: write
