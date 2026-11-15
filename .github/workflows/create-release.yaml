@@ -25,12 +25,16 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          # Keep SSH available for semantic-release; checkout removes it in post-job cleanup.
+          persist-credentials: true
       - uses: ./.github/actions/setup
       - name: Disable runner-specific Git signing for automated release commit
         run: |
           git config --local commit.gpgsign false
           git config --local tag.gpgSign false
+      - name: Verify deploy-key push authentication
+        run: git push --dry-run origin HEAD:main
       - name: Validate signing identity configuration
         run: test -n "$SIGNING_CERTIFICATE_NAME"
       - name: Import signing certificate
@@ -43,6 +47,7 @@ jobs:
         id: release
         uses: cycjimmy/semantic-release-action@v8
         with:
+          repository_url: git@github.com:${{ github.repository }}.git
           extra_plugins: |
             @semantic-release/exec
             @semantic-release/git

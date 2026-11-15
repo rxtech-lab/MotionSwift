@@ -20,9 +20,18 @@ its local `native/MotionSwiftNative.xcframework`; a clean checkout downloads the
 versioned binary. Consumers do not run Node, npm, Rust or `make bootstrap`.
 Intel Macs and Intel iOS simulators are not included.
 
-The release uses `RELEASE_TOKEN` for its automated release commit/tag and assets,
-and `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, and `SIGNING_CERTIFICATE_NAME` for
-signing. Its temporary signing keychain is removed on success or failure.
+The release pushes its automated commit and tag over SSH using the repository's
+write-enabled deploy key, stored as the `DEPLOY_KEY` Actions secret. The active
+`main` ruleset grants deploy keys an always-allow bypass, matching Argo Trading's
+release setup. Overlapping classic branch protection must be removed after the
+ruleset is enabled, since a ruleset bypass does not bypass classic protection.
+The bypass applies to write-enabled deploy keys for this repository, rather than
+to a workflow name. Keep this key dedicated to release automation.
+
+`RELEASE_TOKEN` is still used for GitHub release and asset API calls.
+`BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, and `SIGNING_CERTIFICATE_NAME` are used
+for signing. Checkout removes its temporary SSH credentials in post-job cleanup,
+and the temporary signing keychain is removed on success or failure.
 
 Push CI checks a clean Git consumer with the candidate native binary staged in
 the test repository, so native API changes can be tested before publication.
