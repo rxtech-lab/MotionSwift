@@ -77,6 +77,12 @@ public final class Canvas {
     msk_rect(surface, Float(x), Float(y), Float(width), Float(height), Float(radius), color)
   }
 
+  /// Paints a solid box as its own opacity group without allocating a group surface.
+  /// Returns false when the transform or pending effects need the general group path.
+  public func fadedRectangle(width: Double, height: Double, color: UInt32, opacity: Double) -> Bool {
+    msk_faded_rect(surface, Float(width), Float(height), color, Float(opacity))
+  }
+
   /// Starts an isolated CSS group; restore composites the entire subtree once.
   public func effects(opacity: Double, blend: Int, filters: [[Double]], width: Double? = nil, height: Double? = nil) {
     let entries = filters.flatMap { $0.map(Float.init) }

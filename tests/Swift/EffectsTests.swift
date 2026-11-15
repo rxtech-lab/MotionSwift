@@ -4,6 +4,60 @@ import Foundation
 import SkiaKit
 import Testing
 
+@Test func translucentFillLeavesMatchOpacityGroups() throws {
+  let composition = Composition(id: "FadedFill", width: 40, height: 24, fps: 30, durationInFrames: 1)
+  for backend in Backend.allCases {
+    let renderer = try Renderer(width: 40, height: 24, backend: backend)
+    // An empty child keeps each dot on the general opacity-group path.
+    func pixels(grouped: Bool) throws -> Data {
+      let dots = (0..<24).map { index in
+        let value = Double(index)
+        return RenderNode(type: "div", style: [
+          "position": .string("absolute"), "left": .number((value * 7.37).truncatingRemainder(dividingBy: 38)),
+          "top": .number((value * 3.61).truncatingRemainder(dividingBy: 22)), "width": .number(1.5 + value / 16),
+          "height": .number(1.5), "backgroundColor": .string(index % 2 == 0 ? "#ffffff" : "#000000"),
+          "opacity": .number(0.012 + value * 0.04),
+        ], children: grouped ? [RenderNode(type: "div", style: [:])] : [])
+      }
+      let wash = RenderNode(type: "div", style: [
+        "position": .string("absolute"), "width": .number(40), "height": .number(24),
+        "backgroundColor": .string("rgba(40,90,160,0.37)"),
+      ])
+      try renderer.draw(RenderNode(type: "div", style: ["backgroundColor": .string("#203040")], children: [wash] + dots),
+                        composition: composition)
+      return try renderer.pixels()
+    }
+    #expect(try pixels(grouped: false) == pixels(grouped: true))
+  }
+}
+
+@Test func animatedBlurUpdatesWeightsWhenReusingShader() throws {
+  let composition = Composition(id: "AnimatedBlur", width: 48, height: 32, fps: 30, durationInFrames: 1)
+  for backend in Backend.allCases {
+    for property in ["filter", "backdropFilter"] {
+      let renderer = try Renderer(width: 48, height: 32, backend: backend)
+      func pixels(_ sigma: Double) throws -> Data {
+        let stripe = RenderNode(type: "div", style: [
+          "position": .string("absolute"), "left": .number(20), "width": .number(8),
+          "height": .number(32), "backgroundColor": .string("#ffffff"),
+        ])
+        let filtered = RenderNode(type: "div", style: [
+          "position": .string("absolute"), "width": .number(48), "height": .number(32),
+          property: .string("blur(\(sigma)px)"),
+        ], children: property == "filter" ? [stripe] : [])
+        let tree = RenderNode(type: "div", style: ["backgroundColor": .string("#000000")],
+                              children: property == "filter" ? [filtered] : [stripe, filtered])
+        try renderer.draw(tree, composition: composition)
+        return try renderer.pixels()
+      }
+      // Both sigmas have radius ceil(3 * sigma) == 7 and share the same program.
+      let first = try pixels(2.05)
+      #expect(try pixels(2.3) != first)
+      #expect(try pixels(2.05) == first)
+    }
+  }
+}
+
 @Test func cssEffectsRejectUnsupportedValues() throws {
   for value in ["conic-gradient(red, blue)", "linear-gradient(red 80%, blue 10%)", "linear-gradient(red 2px, blue)"] {
     #expect(throws: (any Error).self) { try Effects.gradient(value, width: 40, height: 20) }

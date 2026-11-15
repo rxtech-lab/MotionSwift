@@ -93,35 +93,52 @@ fn gaussian_bounds(
         result = image_filters::matrix_convolution(
             size, &identity, 1., 0., offset, tile, true, result, None,
         );
+        // Accumulate byte-valued samples and normalize once on output instead
+        // of multiplying every tap by 1/255 before applying its weight.
         let taps: String = kernel
             .iter()
             .enumerate()
-            .map(|(index, weight)| {
+            .map(|(index, _)| {
                 let delta = index as i32 - radius;
                 let (x, y) = if horizontal { (delta, 0) } else { (0, delta) };
-                let point = if let Some(b) = bounds {
-                    format!(
-                        "clamp(p+float2({x},{y}),float2({},{}),float2({},{}))",
-                        b.left + 0.5,
-                        b.top + 0.5,
-                        b.right - 0.5,
-                        b.bottom - 0.5
-                    )
+                let point = if bounds.is_some() {
+                    format!("clamp(p+float2({x},{y}),sampleBounds.xy,sampleBounds.zw)")
                 } else {
                     format!("p+float2({x},{y})")
                 };
-                format!(
-                    "sum+=(floor(float4(inputImage.eval({point}))*255.0+0.5)/255.0)*{weight:.12};"
-                )
+                format!("sum+=floor(float4(inputImage.eval({point}))*255.0+0.5)*weight{index};")
             })
             .collect();
 
-        let output = "return half4(floor(clamp(sum,0.0,1.0)*255.0+0.5)/255.0);";
-        let source=format!("uniform shader inputImage; half4 main(float2 p) {{ float4 sum=float4(0); {taps} {output} }}");
+        let output = "return half4(floor(clamp(sum,0.0,255.0)+0.5)/255.0);";
+        // Animated sigma changes the weights every frame. Keep values out of shader
+        // source so Skia/Metal can reuse a program for each radius and direction.
+        let uniforms: String = (0..kernel.len())
+            .map(|index| format!("uniform float weight{index};"))
+            .collect();
+        let bounds_uniform = if bounds.is_some() {
+            "uniform float4 sampleBounds;"
+        } else {
+            ""
+        };
+        let source=format!("uniform shader inputImage; {uniforms} {bounds_uniform} half4 main(float2 p) {{ float4 sum=float4(0); {taps} {output} }}");
         let Ok(effect) = shader_effect(&source) else {
             return image_filters::blur((sigma, sigma), tile, original, None);
         };
-        let builder = skia_safe::runtime_effect::RuntimeShaderBuilder::new(effect);
+        let mut builder = skia_safe::runtime_effect::RuntimeShaderBuilder::new(effect);
+        for (index, weight) in kernel.iter().enumerate() {
+            builder
+                .set_uniform_float(format!("weight{index}"), &[*weight])
+                .unwrap();
+        }
+        if let Some(b) = bounds {
+            builder
+                .set_uniform_float(
+                    "sampleBounds",
+                    &[b.left + 0.5, b.top + 0.5, b.right - 0.5, b.bottom - 0.5],
+                )
+                .unwrap();
+        }
         result = image_filters::runtime_shader(&builder, "inputImage", result);
     }
     return result;
