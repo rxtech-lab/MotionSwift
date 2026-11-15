@@ -3,8 +3,8 @@ import PackageDescription
 import Foundation
 
 // Updated by release preparation after signing and packaging the native binary.
-let nativeReleaseTag = "v1.1.1"
-let nativeReleaseChecksum = "31f3aafaf5fb6fd4de33e16fa8fd5533f579411d03336e20fa84b90246cf7016"
+let nativeReleaseTag = "v1.1.3"
+let nativeReleaseChecksum = "7d9b5a8be97e413798419afe45c0784d08b48d608bdc11644c9ec8b29fafa682"
 let localNative = "native/MotionSwiftNative.xcframework"
 let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let nativeReleaseURL = "https://github.com/rxtech-lab/MotionSwift/releases/download/\(nativeReleaseTag)/"

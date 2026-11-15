@@ -1,0 +1,32 @@
+{
+  "identity": "react@18.3.1 react-reconciler@0.29.2 scheduler@0.23.2 @motionswift/remotion@0.1.0",
+  "sha256": "627dd4a36f3d022bd96732e9ccf83d779190fd8b718ffa28b2348bcb7064f375",
+  "specifiers": [
+    "react",
+    "react/jsx-runtime",
+    "react-reconciler",
+    "scheduler",
+    "@motionswift/remotion",
+    "@motionswift/remotion/jsx-runtime",
+    "remotion",
+    "remotion/jsx-runtime",
+    "three",
+    "three/addons/loaders/USDLoader.js",
+    "three/examples/jsm/loaders/USDLoader.js",
+    "three/addons/loaders/USDZLoader.js",
+    "three/examples/jsm/loaders/USDZLoader.js",
+    "@react-three/fiber",
+    "@remotion/three",
+    "@remotion/paths",
+    "@remotion/shapes",
+    "@remotion/transitions",
+    "@remotion/transitions/fade",
+    "@remotion/transitions/slide",
+    "@remotion/transitions/wipe",
+    "@motionswift/map"
+  ],
+  "compiler": {
+    "sucrase": "3.35.1",
+    "@babel/parser": "7.24.1"
+  }
+}
