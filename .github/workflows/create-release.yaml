@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: main
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
@@ -42,7 +43,6 @@ jobs:
         id: release
         uses: cycjimmy/semantic-release-action@v8
         with:
-          skip_npm_plugin: true
           extra_plugins: |
             @semantic-release/exec
             @semantic-release/git
