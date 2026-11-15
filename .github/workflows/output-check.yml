@@ -17,6 +17,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make bootstrap
+      - name: Verify clean SwiftPM consumer with candidate native binary and release resources
+        run: MOTIONSWIFT_SMOKE_LOCAL_NATIVE=1 bash scripts/verify-swiftpm-release.sh
       - name: Probe hardware encoder access
         run: node tests/tools/hardware-capabilities.mjs
       - name: Run make ci

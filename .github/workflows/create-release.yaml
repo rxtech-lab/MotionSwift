@@ -16,29 +16,54 @@ jobs:
       published: ${{ steps.release.outputs.new_release_published }}
       tag: ${{ steps.release.outputs.new_release_git_tag }}
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 120
+    env:
+      SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Disable runner-specific Git signing for automated release commit
+        run: |
+          git config --local commit.gpgsign false
+          git config --local tag.gpgSign false
+      - name: Validate signing identity configuration
+        run: test -n "$SIGNING_CERTIFICATE_NAME"
+      - name: Import signing certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          keychain: swiftpm-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Create version tag and GitHub Release
         id: release
         uses: cycjimmy/semantic-release-action@v8
         with:
           skip_npm_plugin: true
+          extra_plugins: |
+            @semantic-release/exec
+            @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-  build-xcframework:
-    permissions:
-      contents: write
+      # import-codesign-certs removes its keychain during post-job cleanup.
+  verify-published-package:
     needs: create-release
     if: needs.create-release.outputs.published == 'true'
-    uses: ./.github/workflows/build-xcframework.yml
-    with:
-      release_tag: ${{ needs.create-release.outputs.tag }}
-    secrets: inherit
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Build consumer from published Git tag and binary URL
+        env:
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
+        run: bash scripts/verify-swiftpm-release.sh https://github.com/rxtech-lab/MotionSwift.git "$RELEASE_TAG"
   showcase-dmg:
     permissions:
       contents: write

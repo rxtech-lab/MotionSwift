@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing published release tag to build and upload
+        description: Legacy release tag missing native assets (existing assets are never overwritten)
         required: true
         type: string
 
@@ -58,6 +58,19 @@ jobs:
           codesign --verify --strict --verbose=2 native/MotionSwiftNative.xcframework
       - name: Package and checksum XCFramework
         run: bash scripts/package-xcframework.sh "$RELEASE_TAG" "$RUNNER_TEMP/xcframework-release"
+      - name: Verify checksum agrees with tagged package manifest
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re
+          tag = os.environ['RELEASE_TAG']
+          manifest = pathlib.Path('Package.swift').read_text()
+          version = re.search(r'let nativeReleaseTag = "([^"]+)"', manifest)
+          if version and version[1] == tag:
+              expected = re.search(r'let nativeReleaseChecksum = "([a-f0-9]{64})"', manifest)[1]
+              actual = pathlib.Path(os.environ['RUNNER_TEMP'], 'xcframework-release', f'MotionSwiftNative-{tag}.xcframework.zip.sha256').read_text().split()[0]
+              if expected != actual:
+                  raise SystemExit('Rebuilt archive differs from the tagged checksum; publish a new release instead.')
+          PY
       - uses: actions/upload-artifact@v7
         with:
           name: xcframework-${{ github.run_id }}-${{ github.run_attempt }}
@@ -88,4 +101,4 @@ jobs:
           archive="MotionSwiftNative-$RELEASE_TAG.xcframework.zip"
           sha256sum --check "$archive.sha256"
           [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == false ]]
-          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" --clobber
+          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256"
