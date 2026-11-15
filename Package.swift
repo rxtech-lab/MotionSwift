@@ -1,5 +1,19 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+// Updated by release preparation after signing and packaging the native binary.
+let nativeReleaseTag = "v1.1.1"
+let nativeReleaseChecksum = "31f3aafaf5fb6fd4de33e16fa8fd5533f579411d03336e20fa84b90246cf7016"
+let localNative = "native/MotionSwiftNative.xcframework"
+let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let nativeReleaseURL = "https://github.com/rxtech-lab/MotionSwift/releases/download/\(nativeReleaseTag)/"
+  + "MotionSwiftNative-\(nativeReleaseTag).xcframework.zip"
+let nativeTarget: Target = FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent(localNative).path)
+  ? .binaryTarget(name: "MotionSwiftNative", path: localNative)
+  : .binaryTarget(name: "MotionSwiftNative",
+                  url: nativeReleaseURL,
+                  checksum: nativeReleaseChecksum)
 
 /// Targets that spawn native tools (tsgo, esbuild, ffmpeg) exist only on macOS. iOS and iPadOS
 /// compile with the portable JavaScriptCore compiler and the precompiled vendor graph.
@@ -25,8 +39,8 @@ let package = Package(
   ],
   targets: [
     .systemLibrary(name: "CSkia"),
-    // Built by `make native` (macOS) or `make native-ios` (adds iOS device and simulator slices).
-    .binaryTarget(name: "MotionSwiftNative", path: "native/MotionSwiftNative.xcframework"),
+    // Local development uses `make native`; clean consumers download the signed release artifact.
+    nativeTarget,
     .target(name: "MotionCore"),
     .target(name: "SkiaKit", dependencies: ["CSkia", "MotionCore", "MotionSwiftNative"], linkerSettings: [
       .linkedLibrary("c++"), .linkedFramework("CoreText"), .linkedFramework("CoreGraphics"),
