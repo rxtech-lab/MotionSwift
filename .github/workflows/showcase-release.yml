@@ -200,12 +200,12 @@ jobs:
           cp "$RELEASE_OUTPUT/appcast.xml" "$RELEASE_OUTPUT/pages/appcast.xml"
           printf '%s\n' 'update.motion.rxfilm.app' > "$RELEASE_OUTPUT/pages/CNAME"
           touch "$RELEASE_OUTPUT/pages/.nojekyll"
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         if: env.PUBLISH_APPCAST == 'true'
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: env.PUBLISH_APPCAST == 'true'
         with:
           path: ${{ env.RELEASE_OUTPUT }}/pages
       - name: Deploy update feed to GitHub Pages
         if: env.PUBLISH_APPCAST == 'true'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
