@@ -20,7 +20,7 @@ let package = Package(
     .executable(name: "motionswift-showcase", targets: ["motionswift-showcase"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/facebook/yoga.git", exact: "3.2.1"),
+    .package(url: "https://github.com/facebook/yoga.git", exact: "3.2.2"),
     .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
   ],
   targets: [
