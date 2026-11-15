@@ -373,6 +373,45 @@ pub unsafe extern "C" fn msk_save(s: *mut Target, alpha: f32) {
     (*s).effect_surface(paint, ColorType::RGBAF16, alpha, false);
     return;
 }
+/// Draws a solid box exactly as `msk_save(alpha)` + `msk_rect` + `msk_restore` would on
+/// the GPU, without allocating, clearing and compositing a full-frame group surface.
+/// Returns false when the caller must use the general group path.
+#[no_mangle]
+pub unsafe extern "C" fn msk_faded_rect(
+    s: *mut Target,
+    w: f32,
+    h: f32,
+    color: u32,
+    alpha: f32,
+) -> bool {
+    let target = &mut *s;
+    // The raster group surface rounds to F16 where the CPU pipeline keeps floats.
+    if target.context.is_none()
+        || !target.effects_precision
+        || target.pending_clip.is_some()
+        || target.backdrop_group.is_some()
+        || !(alpha.is_finite() && w.is_finite() && h.is_finite())
+    {
+        return false;
+    }
+    let canvas = target.surface.canvas();
+    let matrix = canvas.local_to_device_as_3x3();
+    if !matrix.is_scale_translate() {
+        return false;
+    }
+    if w <= 0. || h <= 0. || alpha <= 0. {
+        return true; // An empty group composites to the unchanged backdrop.
+    }
+    // Translucent fills reach the group surface without byte_blend's rounding.
+    if color >> 24 != 255 {
+        return false;
+    }
+    let (device, _) = matrix.map_rect(Rect::from_wh(w, h));
+    // Same color filter and src-over the group composite in `Target::restore` uses.
+    let mut paint = Paint::default();
+    paint.set_color_filter(alpha_filter(alpha));
+    draw_bands(canvas, device, color, FADED_BANDS_SKSL, paint)
+}
 #[no_mangle]
 pub unsafe extern "C" fn msk_restore(s: *mut Target) {
     (*s).restore();
@@ -416,6 +455,73 @@ fn axis_bands(start: f32, end: f32) -> Vec<(f32, f32, f32)> {
         bands.push((end.floor(), end.ceil(), end - end.floor()));
     }
     bands
+}
+// Every coverage band of an axis-aligned quad in one draw. Per pixel it selects the
+// same band coverages `axis_bands` yields and evaluates the SOLID_SKSL colour, so a
+// destination-reading blender needs one dst copy per quad instead of one per band
+// (up to nine for sub-pixel boxes such as film grain), each of which splits a Metal pass.
+const BANDS_SKSL: &str = "uniform float4 color;uniform float2 xEnd;uniform float3 xCoverage;uniform float2 yEnd;uniform float3 yCoverage;half4 main(float2 p){float x=p.x<xEnd.x?xCoverage.x:(p.x<xEnd.y?xCoverage.y:xCoverage.z);float y=p.y<yEnd.x?yCoverage.x:(p.y<yEnd.y?yCoverage.y:yCoverage.z);float a=color.a*(floor(min(x,y)*256.0+0.5)/256.0);return half4(color.rgb*a,a);}";
+// What an opacity group surface holds after msk_rect drew an opaque fill into it: the
+// byte_blend output over transparent pixels, stored as half floats (rounded explicitly,
+// ties to even, so the value does not depend on the compiler's half precision).
+const FADED_BANDS_SKSL: &str = "uniform float4 color;uniform float2 xEnd;uniform float3 xCoverage;uniform float2 yEnd;uniform float3 yCoverage;float f16(float v){if(v<=0.0)return 0.0;float s=1.0/1024.0;for(int i=0;i<16;i++){if(v<s*1024.0)s*=0.5;}float q=v/s;float r=floor(q+0.5);if(r-q==0.5&&mod(r,2.0)==1.0)r-=1.0;return r*s;}half4 main(float2 p){float x=p.x<xEnd.x?xCoverage.x:(p.x<xEnd.y?xCoverage.y:xCoverage.z);float y=p.y<yEnd.x?yCoverage.x:(p.y<yEnd.y?yCoverage.y:yCoverage.z);float a=color.a*(floor(min(x,y)*256.0+0.5)/256.0);half4 source=half4(color.rgb*a,a);float4 c=floor(float4(source)*255.0+0.5)/255.0;return half4(f16(c.r),f16(c.g),f16(c.b),f16(c.a));}";
+fn draw_bands(
+    canvas: &skia_safe::Canvas,
+    device: Rect,
+    color: u32,
+    source: &str,
+    mut paint: Paint,
+) -> bool {
+    let axis = |start: f32, end: f32| {
+        let bands = axis_bands(start, end);
+        let (Some(first), Some(last)) = (bands.first(), bands.last()) else {
+            return None;
+        };
+        let mut ends = [f32::MAX; 2];
+        let mut coverage = [0.; 3];
+        for (index, band) in bands.iter().enumerate() {
+            if index < 2 {
+                ends[index] = band.1;
+            }
+            coverage[index] = band.2;
+        }
+        Some(((first.0, last.1), ends, coverage))
+    };
+    let (Some((x, x_ends, x_coverage)), Some((y, y_ends, y_coverage))) =
+        (axis(device.left, device.right), axis(device.top, device.bottom))
+    else {
+        return true;
+    };
+    let Ok(effect) = shader_effect(source) else {
+        return false;
+    };
+    let c = Color::new(color);
+    let uniform = [
+        c.r() as f32 / 255.,
+        c.g() as f32 / 255.,
+        c.b() as f32 / 255.,
+        (color >> 24) as f32 / 255.,
+        x_ends[0],
+        x_ends[1],
+        x_coverage[0],
+        x_coverage[1],
+        x_coverage[2],
+        y_ends[0],
+        y_ends[1],
+        y_coverage[0],
+        y_coverage[1],
+        y_coverage[2],
+    ];
+    let bytes: Vec<u8> = uniform.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let Some(shader) = effect.make_shader(Data::new_copy(&bytes), &[], None) else {
+        return false;
+    };
+    paint.set_shader(shader);
+    canvas.save();
+    canvas.reset_matrix();
+    canvas.draw_rect(Rect::new(x.0, y.0, x.1, y.1), &paint);
+    canvas.restore();
+    true
 }
 #[allow(clippy::too_many_arguments)]
 fn draw_quad(
@@ -489,6 +595,19 @@ fn draw_quad(
         return true;
     }
     let (device, _) = matrix.map_rect(rect);
+    // Opaque fills blend every band through byte_blend (full-coverage bands store the
+    // same F16 value either way), so the bands can share one draw on the GPU.
+    if effects_precision && !precise && solid.is_some() && color >> 24 == 255 {
+        if let Some(effect) = byte_blend {
+            if let Some(blender) = effect.make_blender(Data::new_copy(&0f32.to_ne_bytes()), None) {
+                let mut paint = Paint::default();
+                paint.set_blender(blender);
+                if draw_bands(canvas, device, color, BANDS_SKSL, paint) {
+                    return true;
+                }
+            }
+        }
+    }
     let horizontal = axis_bands(device.left, device.right);
     let vertical = axis_bands(device.top, device.bottom);
     canvas.save();

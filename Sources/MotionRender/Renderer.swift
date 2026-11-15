@@ -177,6 +177,10 @@ public final class Renderer {
     canvas.saveState()
     defer { canvas.restore() }
     try transform(style, width: width, height: height)
+    if isFadedFill(layout, style: style, effects: effects),
+       canvas.fadedRectangle(width: width, height: height, color: effects.background, opacity: effects.opacity) {
+      return
+    }
     let group = try EffectGroup(effects, on: canvas)
     defer { group.restore() }
     let roundedBox = effects.gradient == nil && effects.shadows.isEmpty && effects.cornerClip == nil
@@ -185,6 +189,16 @@ public final class Renderer {
     try BorderPainter.draw(style, canvas: canvas, width: width, height: height, radius: effects.radius, paintBackground: roundedBox)
     try paintContent(layout, id: id, origin: origin, style: style, effects: effects, onlySelf: onlySelf)
     try group.finish()
+  }
+
+  /// A translucent leaf whose only paint is a square solid fill (e.g. film grain dots).
+  /// Its opacity group can be composited directly instead of through a full-frame surface.
+  private func isFadedFill(_ layout: LayoutNode, style: Style, effects: PaintEffects) -> Bool {
+    effects.opacity < 1 && layout.node.type == "div" && layout.children.isEmpty && layout.paragraph == nil
+      && effects.filters.isEmpty && effects.blend == 0 && effects.mask == nil && effects.clip == nil
+      && effects.backdropBlur == 0 && effects.gradient == nil && effects.shadows.isEmpty
+      && effects.cornerClip == nil && effects.radius == 0
+      && ["Top", "Right", "Bottom", "Left"].allSatisfy { (style.values["border\($0)Width"]?.number ?? 0) <= 0 }
   }
 
   private func paintContent(
