@@ -100,8 +100,10 @@ function Loop({durationInFrames, children, times = Infinity}) {
   return frame >= durationInFrames*times ? null : React.createElement(Frame.Provider, {value: frame%durationInFrames}, children);
 }
 // Media time is derived from the nearest Sequence/Freeze/Loop frame context.
+// MotionSwift extensions: `reverse` plays the trimmed range backwards (it needs a finite end), and
+// `process` names a host `MediaProcessing` key that receives the decoded pixels before drawing.
 function media(type, {src, style, trimBefore, startFrom, trimAfter, endAt,
-  durationInFrames, playbackRate = 1, volume = 1, muted = false, ...props}) {
+  durationInFrames, playbackRate = 1, volume = 1, muted = false, reverse = false, process, ...props}) {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const enabled = React.useContext(MediaEnabled);
@@ -110,23 +112,55 @@ function media(type, {src, style, trimBefore, startFrom, trimAfter, endAt,
   const gain = typeof volume === 'function' ? volume(frame) : volume;
   if (typeof src !== 'string' || !src || !Number.isFinite(start) || start < 0 ||
       !Number.isFinite(playbackRate) || playbackRate <= 0 || !Number.isFinite(gain) || gain < 0 || gain > 1 ||
-      !(end > start)) throw Error('Invalid native media source, trim, rate or volume');
-  const sourceFrame = start + frame * playbackRate;
-  if (sourceFrame >= end) return null;
+      !(end > start) || (reverse && !Number.isFinite(end)) ||
+      (process !== undefined && (typeof process !== 'string' || !process))) throw Error('Invalid native media source, trim, rate, volume, reverse or process');
+  const elapsed = frame * playbackRate;
+  // Reverse playback reads the last source frame first; the end stays exclusive.
+  const sourceFrame = reverse ? end - 1 - elapsed : start + elapsed;
+  if (reverse ? sourceFrame < start : sourceFrame >= end) return null;
   return React.createElement(type, {...props, src,
     style: type === 'ms-audio' ? {display: 'none'} : {objectFit: 'contain', ...style},
-    'data-ms-media': {time: sourceFrame / fps, playbackRate, volume: muted || !enabled ? 0 : gain}});
+    'data-ms-media': {time: Math.max(0, sourceFrame) / fps, playbackRate, volume: muted || !enabled ? 0 : gain,
+      ...(process ? {process} : {})}});
 }
 const Audio = props => media('ms-audio', props);
 const OffthreadVideo = props => media('ms-video', props);
+// Absolute folders for staticFile() inside a subtree, so compositions from several projects can be
+// nested in one film without sharing a public/ folder (MotionSwift extension).
+const StaticRoot = React.createContext(null);
+function StaticFileRoot({root, children}) {
+  if (typeof root !== 'string' || !root.startsWith('/')) throw Error('StaticFileRoot requires an absolute folder path');
+  return React.createElement(StaticRoot.Provider, {value: root.replace(/\/+$/, '')}, children);
+}
+function currentStaticRoot() {
+  // staticFile() is a plain function; during render it can still read the nearest root. Module-level
+  // calls have no render in progress and keep the project's public/ folder.
+  try { return React.useContext(StaticRoot); } catch { return null; }
+}
 // Files in the project's public/ folder. Native renderers resolve `static:` against that folder.
 function staticFile(name) {
   if (typeof name !== 'string' || !name || /^[a-z]+:/i.test(name) || name.split('/').includes('..')) {
     throw Error('staticFile() requires a relative path inside public/: ' + String(name));
   }
-  return 'static:' + name.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+  const relative = name.replace(/^\/+/, '');
+  const root = currentStaticRoot();
+  if (root) return root + '/' + relative;
+  return 'static:' + relative.split('/').map(encodeURIComponent).join('/');
 }
-const Img = props => React.createElement('img', {...props, style: {objectFit: 'contain', ...props.style}});
+// `process`/`processTime` (MotionSwift extensions) hand the decoded still to the host processor;
+// processTime defaults to the local frame in seconds.
+function Img({process, processTime, ...props}) {
+  const frame = useCurrentFrame();
+  const config = useVideoConfig();
+  const element = {...props, style: {objectFit: 'contain', ...props.style}};
+  if (process !== undefined) {
+    if (typeof process !== 'string' || !process) throw Error('Img process must be a non-empty string');
+    const time = processTime ?? frame / (config?.fps || 30);
+    if (!Number.isFinite(time) || time < 0) throw Error('Img processTime must be a non-negative number');
+    element['data-ms-media'] = {time, playbackRate: 1, volume: 0, process};
+  }
+  return React.createElement('img', element);
+}
 // Standard cubic Bezier inversion, bounded bisection avoids engine-dependent convergence.
 function bezier(x1, y1, x2, y2) {
   if (![x1,y1,x2,y2].every(Number.isFinite) || x1 < 0 || x1 > 1 || x2 < 0 || x2 > 1) throw Error('Invalid Bezier control points');
@@ -164,9 +198,13 @@ const Easing = {
   in: easing => easing, out: easing => x => 1-easing(1-x),
   inOut: easing => x => x < 0.5 ? easing(x*2)/2 : 1-easing((1-x)*2)/2,
 };
-module.exports = {AbsoluteFill, Composition, Still: props => Composition({...props, durationInFrames: 1, fps: 1}),
-  Folder: ({children}) => children, registerRoot, useCurrentFrame, useVideoConfig, interpolate, spring,
-  Sequence, Series, Freeze, Loop, measureSpring, random, Audio, OffthreadVideo, Video: OffthreadVideo, Img, Easing, staticFile, __Frame: Frame, __Config: Config};
+const Still = props => Composition({...props, durationInFrames: 1, fps: 1});
+const Folder = ({children}) => children;
+for (const builtin of [AbsoluteFill, Composition, Still, Folder, Sequence, Series, SeriesSequence, Freeze, Loop, Audio, OffthreadVideo, Img, StaticFileRoot]) {
+  if (typeof builtin === 'function') builtin.__msBuiltin = true;
+}
+module.exports = {AbsoluteFill, Composition, Still, Folder, registerRoot, useCurrentFrame, useVideoConfig, interpolate, spring,
+  Sequence, Series, Freeze, Loop, measureSpring, random, Audio, OffthreadVideo, Video: OffthreadVideo, Img, Easing, staticFile, StaticFileRoot, __Frame: Frame, __Config: Config, __MediaEnabled: MediaEnabled};
 
 // The lifecycle belongs to the worker, rather than the module cache.
 module.exports.delayRender = (label, options) => globalThis.__ms_delayRender(label, options);

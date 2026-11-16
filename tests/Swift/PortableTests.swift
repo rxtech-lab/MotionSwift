@@ -248,3 +248,26 @@ func portableAndMacGraphsMatchTsgoPixels(composition: String) throws {
     #expect(message.contains("z.ts:3:"), "\(message)")
   }
 }
+
+/// Sucrase alone turns `export const a = 1, b = 2` into `exports.a = a, b = 2`, a ReferenceError in
+/// strict mode. Generated compositions commonly declare their size and timing this way.
+@Test func multiDeclaratorExportsCompileAndEvaluate() throws {
+  let files = [
+    "src/index.tsx": """
+    import {registerRoot, Composition} from 'remotion';
+    import {MyComposition, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES} from './Composition';
+    registerRoot(() => <Composition id="Main" component={MyComposition} width={COMPOSITION_WIDTH} height={COMPOSITION_HEIGHT}
+      fps={COMPOSITION_FPS} durationInFrames={COMPOSITION_DURATION_IN_FRAMES} />);
+    """,
+    "src/Composition.tsx": """
+    import {AbsoluteFill} from 'remotion';
+    export const COMPOSITION_WIDTH=320,COMPOSITION_HEIGHT=180,COMPOSITION_FPS=10,COMPOSITION_DURATION_IN_FRAMES=40;
+    export function MyComposition(){return <AbsoluteFill style={{backgroundColor:'red'}}/>}
+    """,
+  ]
+  for stamp in [false, true] {
+    let bundle = try GraphLinker.link(PortableCompiler().compile(files: files, entry: "src/index.tsx", stamp: stamp))
+    let composition = try #require(try Runtime(bundle: bundle).compositions().first)
+    #expect(composition.width == 320 && composition.height == 180 && composition.durationInFrames == 40)
+  }
+}

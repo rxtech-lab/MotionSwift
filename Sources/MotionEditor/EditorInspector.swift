@@ -4,7 +4,9 @@ import SwiftUI
 
 /// Properties of the selection, classified from source. Static values and map props open the Edit
 /// Property sheet; other animated, bound and computed values are read-only with an explanation.
-struct EditorInspector: View {
+/// Public so hosts can show it in their own inspector panel next to an `EditorCanvas`, or with the
+/// selection driven from `EditorModel.selectTrack(_:)`.
+public struct EditorInspector: View {
   let model: EditorModel
   @State private var editing: StyleSummary.Property?
   @State private var adding = false
@@ -18,7 +20,9 @@ struct EditorInspector: View {
   }
   @State private var removing: StyleSummary.Property?
 
-  var body: some View {
+  public init(model: EditorModel) { self.model = model }
+
+  public var body: some View {
     Form {
       if let selection = model.selection {
         Section("Element") {
@@ -92,8 +96,9 @@ struct EditorInspector: View {
       EditTextSheet(model: model, source: draft.selection, expectedSource: draft.source, text: draft.text)
     }
     .sheet(item: $editing) { property in
-      EditPropertySheet(key: property.key, value: model.currentStyleValue(property.key) ?? property.value ?? .string(""),
-                        isThree: model.styles?.isThree == true, definition: mapDefinition(property.key)) { value in
+      let current = model.currentStyleValue(property.key) ?? property.value
+      EditPropertySheet(key: property.key, value: current ?? .string(""),
+                        isThree: model.styles?.isThree == true, definition: propertyDefinition(property)) { value in
         Task { await model.setStyle(property.key, value) }
       }
     }
@@ -114,8 +119,7 @@ struct EditorInspector: View {
 
   @ViewBuilder private func row(_ property: StyleSummary.Property) -> some View {
     let animated = model.selectedTrack?.keyframes[property.key] != nil
-    let definition = mapDefinition(property.key) ?? (model.styles?.isThree == true
-      ? StylePropertyDefinition.three(property.key) : StylePropertyDefinition.find(property.key))
+    let definition = propertyDefinition(property)
     let editable = (property.kind == .static || model.styles?.isMap == true) && definition != nil
     Button {
       if editable { editing = property }
@@ -150,6 +154,15 @@ struct EditorInspector: View {
         Button("Remove", systemImage: "trash", role: .destructive) { removing = property }
       }
     }
+  }
+
+  private func propertyDefinition(_ property: StyleSummary.Property) -> StylePropertyDefinition? {
+    if let map = mapDefinition(property.key) { return map }
+    if model.styles?.isThree == true { return StylePropertyDefinition.three(property.key) }
+    if model.styles?.group(for: property.key) == "Component Props" {
+      return StylePropertyDefinition.component(property.key, value: model.currentStyleValue(property.key) ?? property.value)
+    }
+    return StylePropertyDefinition.find(property.key)
   }
 
   private func mapDefinition(_ key: String) -> StylePropertyDefinition? {

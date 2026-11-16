@@ -46,6 +46,18 @@ struct StylePropertyDefinition: Identifiable {
 
   static func find(_ key: String) -> Self? { all.first { $0.id == key } }
 
+  static func component(_ key: String, value: JSONValue?) -> Self? {
+    if let text = value?.string {
+      if Self.rgba(text) != nil { return Self(id: key, control: .color) }
+      return Self(id: key, control: .text)
+    }
+    if value?.number != nil {
+      if key == "opacity" { return Self(id: key, control: .opacity) }
+      return Self(id: key, control: .number)
+    }
+    return nil
+  }
+
   static func three(_ key: String) -> Self? {
     if key == "color" { return Self(id: key, control: .color) }
     let numeric = ["intensity", "distance", "decay", "angle", "penumbra", "opacity", "roughness",

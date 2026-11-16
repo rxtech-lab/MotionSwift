@@ -9,9 +9,40 @@ final class MediaDecoder {
   private let images = NSCache<NSString, RasterImage>()
   private var videos: [String: AVAssetImageGenerator] = [:]
 
-  init() { images.totalCostLimit = 64 << 20 }
+  init() {
+    images.totalCostLimit = 64 << 20
+    stills.totalCostLimit = 64 << 20
+  }
+
+  /// Processed host stills by source, so a still with a time-independent key is decoded once.
+  private let stills = NSCache<NSString, CGImageBox>()
 
   func image(_ source: String, time: Double? = nil) throws -> RasterImage? {
+    if time == nil, let image = images.object(forKey: source as NSString) { return image }
+    guard let decoded = try cgImage(source, time: time) else { return nil }
+    let result = try RasterImage(decoded)
+    if time == nil { images.setObject(result, forKey: source as NSString, cost: result.pixels.count) }
+    return result
+  }
+
+  /// Decodes the source, then hands it to the host `MediaProcessing` processor.
+  func processed(_ source: String, time: Double?, request: MediaProcessRequest) throws -> RasterImage? {
+    guard let processor = MediaProcessing.processor else {
+      throw MotionError("Media element requests host processing \"\(request.key)\" but no MediaProcessing processor is registered")
+    }
+    let input: CGImage
+    if time == nil, let cached = stills.object(forKey: source as NSString) {
+      input = cached.image
+    } else {
+      guard let decoded = try cgImage(source, time: time) else { return nil }
+      if time == nil { stills.setObject(CGImageBox(decoded), forKey: source as NSString, cost: decoded.width * decoded.height * 4) }
+      input = decoded
+    }
+    guard let output = try processor(input, request) else { return nil }
+    return try RasterImage(output)
+  }
+
+  private func cgImage(_ source: String, time: Double?) throws -> CGImage? {
     if let time {
       guard time.isFinite, time >= 0 else { throw MotionError("Invalid video time") }
       let generator: AVAssetImageGenerator
@@ -25,8 +56,7 @@ final class MediaDecoder {
         videos[source] = generator
       }
       do {
-        let image = try generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 60000), actualTime: nil)
-        return try RasterImage(image)
+        return try generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 60000), actualTime: nil)
       } catch {
         // Past the source duration the clip is silent/transparent. Decode failures within it fail.
         let duration = generator.asset.duration.seconds
@@ -34,7 +64,6 @@ final class MediaDecoder {
         throw MotionError("Cannot decode video \(source) at \(time)s: \(error)")
       }
     }
-    if let image = images.object(forKey: source as NSString) { return image }
     let data: Data
     if source.hasPrefix("data:") { data = try MediaSource.data(source) } else if source.hasPrefix("motionmap:") {
       // @motionswift/map tiles: disk cached provider rasters or MapKit snapshots.
@@ -48,10 +77,13 @@ final class MediaDecoder {
     guard let decoder = CGImageSourceCreateWithData(data as CFData, nil),
       let image = CGImageSourceCreateImageAtIndex(decoder, 0, nil)
     else { throw MotionError("Cannot decode image: \(source.prefix(160))") }
-    let result = try RasterImage(image)
-    images.setObject(result, forKey: source as NSString, cost: result.pixels.count)
-    return result
+    return image
   }
+}
+
+final class CGImageBox {
+  let image: CGImage
+  init(_ image: CGImage) { self.image = image }
 }
 
 final class RasterImage {

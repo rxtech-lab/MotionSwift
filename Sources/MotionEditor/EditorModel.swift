@@ -152,10 +152,26 @@ public final class EditorModel {
 
   public func hitTest(_ point: CGPoint) -> LayoutBox? {
     guard let frame = player.displayedFrame else { return nil }
-    return frame.layout.reversed().first { box in
+    let candidates = frame.layout.reversed().filter { box in
       box.id != "0" && box.source != nil && !ignoresPointerEvents(at: box.id, in: frame.tree)
         && visualRect(box).contains(point)
     }
+    guard candidates.count > 1, let composition = player.composition else { return candidates.first }
+    let fullW = Double(composition.width) * 0.95
+    let fullH = Double(composition.height) * 0.95
+    if let primary = candidates.first(where: { box in
+      let rect = visualRect(box)
+      guard rect.width > 4 && rect.height > 4 else { return false }
+      if rect.width < fullW || rect.height < fullH { return true }
+      guard let node = frame.tree.node(at: box.id) else { return false }
+      return node.text != nil || node.children.contains { $0.type == "#text" }
+    }) {
+      return primary
+    }
+    return candidates.first { box in
+      let rect = visualRect(box)
+      return rect.width > 4 && rect.height > 4
+    } ?? candidates.first
   }
 
   private func ignoresPointerEvents(at id: String, in tree: RenderNode) -> Bool {

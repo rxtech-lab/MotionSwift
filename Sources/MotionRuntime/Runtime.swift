@@ -141,7 +141,8 @@ public final class Runtime {
         node.media = media.isNull ? nil : MediaSample(
           time: media.forProperty("time").toDouble(),
           playbackRate: media.forProperty("playbackRate").toDouble(),
-          volume: media.forProperty("volume").toDouble())
+          volume: media.forProperty("volume").toDouble(),
+          process: media.forProperty("process").flatMap { $0.isString ? $0.toString() : nil })
       }
       if let scene = payload.forProperty("scene"), !scene.isUndefined {
         node.scene = scene.isNull ? nil : try Scene3D.decode(scene.toString())

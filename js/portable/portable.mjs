@@ -20,10 +20,19 @@ const SOURCE = /\.(tsx|ts|jsx|js|mts|mjs|cts|cjs)$/;
 const DECLARATION = /\.d\.(ts|mts|cts)$/;
 const STAMPED_COMPONENTS = new Set(['AbsoluteFill', 'Img', 'Video', 'OffthreadVideo', 'ThreeCanvas',
   'MapView', 'MapRoute', 'MapMarker']);
+const NON_VISUAL_COMPONENTS = new Set(['Composition', 'Still', 'Folder', 'Sequence', 'Series', 'Freeze', 'Loop',
+  'Audio', 'Html5Audio', 'Html5Video', 'StaticFileRoot', 'Fragment', 'Internals', 'Artifact', 'Prefetch']);
 
+const parseCache = new Map();
 function parseSource(source, file) {
+  const key = `${file}\0${source}`;
+  const cached = parseCache.get(key);
+  if (cached) return cached;
   try {
-    return parse(source, {sourceType: 'unambiguous', plugins: ['typescript', 'jsx'], createImportExpressions: true});
+    const ast = parse(source, {sourceType: 'unambiguous', plugins: ['typescript', 'jsx'], createImportExpressions: true});
+    parseCache.set(key, ast);
+    if (parseCache.size > 128) parseCache.delete(parseCache.keys().next().value);
+    return ast;
   } catch (error) {
     const loc = error.loc ? ` (${error.loc.line}:${error.loc.column + 1})` : '';
     throw Error(`${file}: ${error.message.replace(/ \(\d+:\d+\)$/, '')}${loc}`);
@@ -40,8 +49,12 @@ function walk(node, visit) {
 }
 
 const elementName = node => node.name?.type === 'JSXIdentifier' ? node.name.name : null;
-const isStamped = (name, node) => !!name && (name[0] === name[0].toLowerCase() || STAMPED_COMPONENTS.has(name) ||
-  node?.attributes.some(a => a.name?.name === 'data-ms-editable'));
+const isCustomComponent = (name, node) => !!name && name[0] !== name[0].toLowerCase() &&
+  !STAMPED_COMPONENTS.has(name) && !NON_VISUAL_COMPONENTS.has(name) && !domainOf(name) &&
+  !node?.attributes?.some(a => a.name?.name === 'data-ms-editable');
+const isStamped = (name, node) => !!name && !NON_VISUAL_COMPONENTS.has(name) &&
+  (name[0] === name[0].toLowerCase() || STAMPED_COMPONENTS.has(name) ||
+   node?.attributes.some(a => a.name?.name === 'data-ms-editable') || isCustomComponent(name, node));
 const stampOf = (file, node) => `${file}:${node.loc.start.line}:${node.loc.start.column + 1}`;
 
 /** Adds `data-ms-src="file:line:col"` to host elements; columns refer to the original source. */
@@ -167,8 +180,29 @@ export function importLocations(inputJSON) {
   return JSON.stringify(locations);
 }
 
+/**
+ * Sucrase's imports transform mis-compiles `export const a = 1, b = 2;` into
+ * `const a = 1; exports.a = a, b = 2;`, which throws in strict mode. Rewrites each separating
+ * comma into `; export const ` on the same line, so line numbers (and stamps) are unchanged.
+ */
+function splitExportDeclarators(source, file) {
+  const edits = [];
+  walk(parseSource(source, file), node => {
+    if (node.type !== 'ExportNamedDeclaration' || node.declaration?.type !== 'VariableDeclaration') return;
+    const {kind, declarations} = node.declaration;
+    for (let i = 1; i < declarations.length; i++) {
+      const comma = source.lastIndexOf(',', declarations[i].start);
+      if (comma >= declarations[i - 1].end) edits.push([comma, `; export ${kind} `]);
+    }
+  });
+  if (!edits.length) return source;
+  let output = source;
+  for (const [at, text] of edits.sort((a, b) => b[0] - a[0])) output = output.slice(0, at) + text + output.slice(at + 1);
+  return output;
+}
+
 const transformCache = new Map();
-export function clearCache() { transformCache.clear(); return '{}'; }
+export function clearCache() { transformCache.clear(); parseCache.clear(); return '{}'; }
 
 /** SHA-256 keys are supplied by the Swift host; cached transforms never contain resolved edges. */
 export function compile(inputJSON) {
@@ -192,7 +226,7 @@ export function compile(inputJSON) {
         if (diagnostics.length) throw Error(JSON.stringify(diagnostics));
         const typescript = /\.(tsx?|mts|cts)$/.test(path);
         const transforms = [...(typescript ? ['typescript'] : []), ...(/\.(ts|mts|cts)$/.test(path) ? [] : ['jsx']), 'imports'];
-        const input = stamps ? stamp(source, path) : source;
+        const input = splitExportDeclarators(stamps ? stamp(source, path) : source, path);
         const result = transform(input, {
           transforms, jsxRuntime: 'automatic', jsxImportSource: '@motionswift/remotion', production: true,
           filePath: path, disableESTransforms: true, sourceMapOptions: {compiledFilename: path + '.js'},
@@ -247,12 +281,14 @@ export function compile(inputJSON) {
 function findElement(source, src) {
   const match = /^(.*):(\d+):(\d+)$/.exec(src);
   if (!match) throw Error(`Invalid source stamp: ${src}`);
-  const [, file, line, column] = match;
+  const [, file, lineText, columnText] = match;
+  const line = Number(lineText), column = Number(columnText);
   let found = null;
   walk(parseSource(source, file), node => {
     if (found) return false;
-    if (node.type === 'JSXOpeningElement' && node.loc.start.line === Number(line) &&
-        node.loc.start.column + 1 === Number(column)) found = node;
+    if (node.loc && (line < node.loc.start.line || line > node.loc.end.line)) return false;
+    if (node.type === 'JSXOpeningElement' && node.loc.start.line === line &&
+        node.loc.start.column + 1 === column) { found = node; return false; }
   });
   if (!found) throw Error(`stale-source: ${src} no longer names an element; reselect it`);
   return found;
@@ -300,7 +336,9 @@ function textContent(source, src) {
   let element;
   const file = /^(.*):\d+:\d+$/.exec(src)[1];
   walk(parseSource(source, file), node => {
-    if (node.type === 'JSXElement' && node.openingElement.start === opening.start) element = node;
+    if (element) return false;
+    if (node.start !== undefined && (opening.start < node.start || opening.start > node.end)) return false;
+    if (node.type === 'JSXElement' && node.openingElement.start === opening.start) { element = node; return false; }
   });
   if (!element?.closingElement) return {editable: false, value: null, reason: null};
   let value = '', hasText = false;
@@ -423,14 +461,82 @@ function validateTimeline(value) {
   }
 }
 
-/** Source-backed object tracks. Sequence offsets are resolved only for literal sequences. */
+function evaluateConstantNumber(node, constants, seen = new Set()) {
+  const expr = unwrapExpression(node);
+  if (!expr) return undefined;
+  if (expr.type === 'NumericLiteral') return expr.value;
+  if (expr.type === 'Identifier' && constants.has(expr.name) && !seen.has(expr.name)) {
+    seen.add(expr.name);
+    const v = evaluateConstantNumber(constants.get(expr.name), constants, seen);
+    seen.delete(expr.name);
+    return v;
+  }
+  if (expr.type === 'UnaryExpression' && ['+', '-'].includes(expr.operator)) {
+    const v = evaluateConstantNumber(expr.argument, constants, seen);
+    return v === undefined ? undefined : (expr.operator === '-' ? -v : v);
+  }
+  if (expr.type === 'BinaryExpression' && ['+', '-', '*', '/', '%'].includes(expr.operator)) {
+    const l = evaluateConstantNumber(expr.left, constants, seen);
+    const r = evaluateConstantNumber(expr.right, constants, seen);
+    if (l === undefined || r === undefined) return undefined;
+    switch (expr.operator) {
+    case '+': return l + r;
+    case '-': return l - r;
+    case '*': return l * r;
+    case '/': return r === 0 ? undefined : l / r;
+    case '%': return r === 0 ? undefined : l % r;
+    }
+  }
+  if (expr.type === 'CallExpression' && expr.callee?.type === 'MemberExpression' &&
+      expr.callee.object?.name === 'Math' && expr.callee.property?.type === 'Identifier') {
+    const fn = expr.callee.property.name;
+    if (['round', 'floor', 'ceil', 'trunc', 'abs', 'min', 'max'].includes(fn)) {
+      const args = expr.arguments.map(arg => evaluateConstantNumber(arg, constants, seen));
+      if (args.length && args.every(v => typeof v === 'number' && Number.isFinite(v))) return Math[fn](...args);
+    }
+  }
+  return undefined;
+}
+
+function trackPreview(element, source) {
+  const opening = element.openingElement;
+  const lettering = letteringText(opening, source);
+  if (lettering?.value) return lettering.value.trim().replace(/\s+/g, ' ').slice(0, 40) || null;
+  let text = '';
+  for (const child of element.children ?? []) {
+    if (child.type === 'JSXText') text += child.value;
+    else if (child.type === 'JSXExpressionContainer' && child.expression.type === 'StringLiteral') text += child.expression.value;
+    else return null;
+  }
+  const clean = text.trim().replace(/\s+/g, ' ');
+  if (clean) return clean.slice(0, 40);
+  for (const key of ['label', 'word', 'title']) {
+    const attr = opening.attributes.find(a => a.type === 'JSXAttribute' && a.name?.name === key);
+    const val = attr?.value?.type === 'StringLiteral' ? attr.value.value
+      : attr?.value?.expression?.type === 'StringLiteral' ? attr.value.expression.value : null;
+    if (val?.trim()) return val.trim().replace(/\s+/g, ' ').slice(0, 40);
+  }
+  return null;
+}
+
+/** Source-backed object tracks. Sequence offsets resolve literal and file-constant expressions. */
 export function timeline(source, file) {
+  const ast = parseSource(source, file);
+  const constants = new Map();
+  for (const stmt of ast.program?.body ?? []) {
+    const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
+    if (decl?.type === 'VariableDeclaration' && decl.kind === 'const') {
+      for (const d of decl.declarations) {
+        if (d.id?.type === 'Identifier' && d.init) constants.set(d.id.name, d.init);
+      }
+    }
+  }
   const tracks = [];
   const numberAttribute = (node, key, fallback) => {
     const a = node.attributes.find(a => a.name?.name === key);
     if (!a) return fallback;
-    const e = a.value?.expression;
-    return e?.type === 'NumericLiteral' ? e.value : undefined;
+    const v = evaluateConstantNumber(a.value?.expression, constants);
+    return typeof v === 'number' && Number.isInteger(v) ? v : undefined;
   };
   function visit(node, offset = 0, limit = null, reason = null, parentTimed = false, owner = null) {
     if (!node || typeof node !== 'object') return;
@@ -451,7 +557,9 @@ export function timeline(source, file) {
         let data, error = reason;
         try { data = timelineData(source, opening); } catch (e) { error = e.message; data = {from: 0, duration: null, keyframes: {}}; }
         if (parentTimed) error = 'Timing is controlled by an ancestor object; edit the ancestor first';
-        tracks.push({src: stampOf(file, opening), label: opening.attributes.find(a => a.name?.name === 'data-ms-label')?.value?.value ?? name, owner, offset, limit, reason: error, ...data});
+        const label = opening.attributes.find(a => a.name?.name === 'data-ms-label')?.value?.value ?? name;
+        const preview = trackPreview(node, source);
+        tracks.push({src: stampOf(file, opening), label, preview, owner, offset, limit, reason: error, ...data});
         parentTimed ||= !!timelineAttribute(opening) && (data.from !== 0 || data.duration !== null);
       }
       node.children.forEach(n => visit(n, offset, limit, reason, parentTimed, owner));
@@ -461,8 +569,160 @@ export function timeline(source, file) {
       visit(child, offset, limit, reason, parentTimed, owner);
     }
   }
-  visit(parseSource(source, file));
+  visit(ast);
   return JSON.stringify(tracks);
+}
+
+/** Statically reachable `file#owner` track groups for a `<Composition id={compositionID}>` entry. */
+export function compositionGroups(filesJSON, entry, compositionID = '') {
+  const files = JSON.parse(filesJSON);
+  if (!Object.hasOwn(files, entry)) return '[]';
+  let options = {};
+  try { options = JSON.parse(configuration(filesJSON)); } catch { options = {}; }
+  const modules = new Map();
+  const tryResolve = (from, specifier) => {
+    try {
+      const target = resolve(from, specifier, files, [], options);
+      return target && !target.startsWith('vendor:') && Object.hasOwn(files, target) ? target : null;
+    } catch { return null; }
+  };
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.pop();
+    if (modules.has(file) || !SOURCE.test(file) || DECLARATION.test(file) || file.endsWith('.json')) continue;
+    let ast;
+    try { ast = parseSource(files[file], file); } catch { continue; }
+    const decls = new Map(), imports = new Map(), reexports = [], starExports = [], compositions = [];
+    const addDecl = (name, node) => { if (name) decls.set(name, node); };
+    for (const stmt of ast.program?.body ?? []) {
+      const inner = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration :
+        stmt.type === 'ExportDefaultDeclaration' ? stmt.declaration : stmt;
+      if (inner?.type === 'FunctionDeclaration' && inner.id) addDecl(inner.id.name, inner);
+      else if (inner?.type === 'ClassDeclaration' && inner.id) addDecl(inner.id.name, inner);
+      else if (inner?.type === 'VariableDeclaration') {
+        for (const d of inner.declarations) if (d.id?.type === 'Identifier') addDecl(d.id.name, d);
+      }
+      if (stmt.type === 'ExportDefaultDeclaration' && inner && !inner.id) addDecl('default', inner);
+      if (stmt.type === 'ImportDeclaration' && stmt.source?.value) {
+        const target = tryResolve(file, stmt.source.value);
+        if (target) {
+          queue.push(target);
+          for (const spec of stmt.specifiers ?? []) {
+            if (spec.type === 'ImportSpecifier') {
+              const exported = spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value;
+              imports.set(spec.local.name, {file: target, name: exported});
+            } else if (spec.type === 'ImportDefaultSpecifier') {
+              imports.set(spec.local.name, {file: target, name: 'default'});
+            } else if (spec.type === 'ImportNamespaceSpecifier') {
+              imports.set(spec.local.name, {file: target, name: '*'});
+            }
+          }
+        }
+      } else if (stmt.type === 'ExportNamedDeclaration' && stmt.source?.value) {
+        const target = tryResolve(file, stmt.source.value);
+        if (target) {
+          queue.push(target);
+          for (const spec of stmt.specifiers ?? []) {
+            if (spec.type === 'ExportSpecifier') {
+              const local = spec.local.type === 'Identifier' ? spec.local.name : spec.local.value;
+              const exported = spec.exported.type === 'Identifier' ? spec.exported.name : spec.exported.value;
+              reexports.push({exported, file: target, name: local});
+            }
+          }
+        }
+      } else if (stmt.type === 'ExportAllDeclaration' && stmt.source?.value) {
+        const target = tryResolve(file, stmt.source.value);
+        if (target) { queue.push(target); starExports.push(target); }
+      }
+    }
+    const visitComp = (node, owner = null) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visitComp(n, owner)); return; }
+      if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier') owner = node.id.name;
+      if (node.type === 'FunctionDeclaration' && node.id) owner = node.id.name;
+      if (node.type === 'JSXOpeningElement') {
+        const name = elementName(node);
+        if (name === 'Composition' || name === 'Still') {
+          const idAttr = node.attributes.find(a => a.type === 'JSXAttribute' && a.name?.name === 'id');
+          const id = idAttr?.value?.type === 'StringLiteral' ? idAttr.value.value :
+            idAttr?.value?.expression?.type === 'StringLiteral' ? idAttr.value.expression.value : null;
+          const compAttr = node.attributes.find(a => a.type === 'JSXAttribute' && a.name?.name === 'component');
+          const expr = unwrapExpression(compAttr?.value?.expression);
+          compositions.push({id, expr, owner});
+        }
+      }
+      for (const [key, child] of Object.entries(node)) if (key !== 'loc' && child && typeof child === 'object') {
+        visitComp(child, owner);
+      }
+    };
+    visitComp(ast);
+    modules.set(file, {decls, imports, reexports, starExports, compositions});
+  }
+
+  const resolveSymbol = (file, name, seen = new Set()) => {
+    const key = `${file}#${name}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const mod = modules.get(file);
+    if (!mod) return [];
+    if (name === '*') return [...mod.decls.keys()].map(k => ({file, name: k, node: mod.decls.get(k)}));
+    if (mod.decls.has(name)) return [{file, name, node: mod.decls.get(name)}];
+    if (mod.imports.has(name)) {
+      const imp = mod.imports.get(name);
+      return resolveSymbol(imp.file, imp.name, seen);
+    }
+    for (const re of mod.reexports) if (re.exported === name) return resolveSymbol(re.file, re.name, seen);
+    for (const star of mod.starExports) {
+      const found = resolveSymbol(star, name, seen);
+      if (found.length) return found;
+    }
+    return [];
+  };
+
+  const allComps = [];
+  for (const [file, mod] of modules.entries()) {
+    for (const comp of mod.compositions) allComps.push({file, ...comp});
+  }
+  const matched = compositionID
+    ? allComps.filter(c => c.id === compositionID)
+    : (allComps.length ? [allComps[0]] : []);
+  if (!matched.length) return '[]';
+
+  const groups = new Set();
+  const visited = new Set();
+  const work = [];
+  const enqueueNode = (file, owner, node) => {
+    const key = `${file}#${owner ?? ''}`;
+    groups.add(key);
+    if (!node) return;
+    const visitKey = `${key}@${node.start ?? 0}`;
+    if (visited.has(visitKey)) return;
+    visited.add(visitKey);
+    work.push({file, node});
+  };
+
+  for (const comp of matched) {
+    if (comp.expr?.type === 'Identifier') {
+      for (const target of resolveSymbol(comp.file, comp.expr.name)) enqueueNode(target.file, target.name, target.node);
+    } else if (comp.expr) {
+      enqueueNode(comp.file, comp.owner ?? '', comp.expr);
+    }
+  }
+
+  while (work.length) {
+    const {file, node} = work.pop();
+    const refs = new Set();
+    walk(node, child => {
+      if (child.type === 'JSXIdentifier' && child.name[0] !== child.name[0].toLowerCase()) refs.add(child.name);
+      else if (child.type === 'Identifier') refs.add(child.name);
+    });
+    for (const ref of refs) {
+      for (const target of resolveSymbol(file, ref)) {
+        enqueueNode(target.file, target.name, target.node);
+      }
+    }
+  }
+  return JSON.stringify([...groups]);
 }
 
 function editTimeline(source, request) {
@@ -485,6 +745,10 @@ function editTimeline(source, request) {
         if (property?.kind !== 'static' || typeof property.value !== 'number')
           throw Error(`refused: ${key} must be an explicit static numeric 3D property to animate`);
         continue;
+      }
+      if (isCustomComponent(elementName(element), element)) {
+        const compProp = componentAttributes(source, element).find(p => p.key === key);
+        if (compProp && compProp.kind === 'static' && typeof compProp.value === 'number') continue;
       }
       const property = object?.properties.find(p => keyOf(p) === key);
       if (!object || object.properties.some(p => keyOf(p) === null) || !property ||
@@ -837,7 +1101,35 @@ function editMapChildren(source, request) {
   return JSON.stringify({source: before + `${prefix}${childIndent}${text}\n${indent}` + source.slice(closing.start), inverse});
 }
 
-/** Inline style properties of the element at `src`, classified for editing. */
+function componentAttributes(source, element) {
+  const spread = element.attributes.findLastIndex(a => a.type === 'JSXSpreadAttribute');
+  const out = [];
+  element.attributes.forEach((attr, idx) => {
+    if (attr.type !== 'JSXAttribute' || attr.name?.type !== 'JSXIdentifier') return;
+    const key = attr.name.name;
+    if (key.startsWith('data-ms-') || ['key', 'ref', 'style', 'children'].includes(key)) return;
+    const duplicated = element.attributes.slice(idx + 1).some(a => a.type === 'JSXAttribute' && a.name?.name === key);
+    if (duplicated) return;
+    if (spread > idx) {
+      out.push({key, kind: 'computed', raw: source.slice(attr.start, attr.end), attr});
+      return;
+    }
+    if (attr.value === null) {
+      out.push({key, kind: 'computed', raw: key, attr});
+      return;
+    }
+    if (attr.value.type === 'StringLiteral') {
+      out.push({key, kind: 'static', value: attr.value.value, raw: source.slice(attr.value.start, attr.value.end), attr});
+      return;
+    }
+    if (attr.value.type === 'JSXExpressionContainer') {
+      out.push({key, ...classify(attr.value.expression, source), attr});
+    }
+  });
+  return out;
+}
+
+/** Inline style properties (and custom component props) of the element at `src`, classified for editing. */
 export function styles(source, src) {
   const element = findElement(source, src);
   const three = threeSummary(source, element);
@@ -859,8 +1151,7 @@ export function styles(source, src) {
       declarations.push(descriptor);
     }
   }
-  if (!object) return JSON.stringify({editable: object === null, properties: [], declarations});
-  const properties = object.properties.map((property, index) => {
+  const styleProps = !object ? [] : object.properties.map((property, index) => {
     const key = keyOf(property);
     if (key === null) return {key: source.slice(property.start, property.end), kind: 'computed'};
     if (object.properties.slice(index + 1).some(p => keyOf(p) === null) ||
@@ -868,10 +1159,21 @@ export function styles(source, src) {
       return {key, kind: 'computed', raw: source.slice(property.value.start, property.value.end)};
     if (property.shorthand) return {key, kind: 'bound', raw: key};
     return {key, ...classify(property.value, source)};
-  });
-  // A duplicate key has the value of its final occurrence.
-  return JSON.stringify({editable: true, properties: properties.filter((p, i) =>
-    !properties.slice(i + 1).some(next => next.key === p.key)), declarations});
+  }).filter((p, i, arr) => !arr.slice(i + 1).some(next => next.key === p.key));
+
+  if (isCustomComponent(elementName(element), element)) {
+    const compProps = componentAttributes(source, element);
+    for (const prop of compProps) {
+      if (styleProps.some(p => p.key === prop.key)) continue;
+      const {attr, ...summary} = prop;
+      styleProps.push(summary);
+      if (!declarations.some(d => d.key === prop.key)) {
+        declarations.push({key: prop.key, label: prop.key, group: 'Component Props'});
+      }
+    }
+  }
+
+  return JSON.stringify({editable: object === null || Boolean(object), properties: styleProps, declarations});
 }
 
 function literal(value, source, previous, digits = 3) {
@@ -923,9 +1225,64 @@ export function edit(source, requestJSON) {
   if (op === 'setThreeProperty' || op === 'setMapProperty' ||
       (op === 'setStyle' && domainOf(elementName(findElement(source, src)))))
     return editThree(source, request);
+  if (op === 'removeStyleAttribute') {
+    const element = findElement(source, src);
+    const start = element.start + request.offset;
+    if (source.slice(start, start + request.text.length) !== request.text) throw Error(`stale-source: ${src} changed; reselect it`);
+    return JSON.stringify({source: splice(source, start, start + request.text.length, ''),
+      inverse: {op: 'insertStyleAttribute', src, key: 'style', text: request.text, offset: request.offset}});
+  }
+  if (op === 'insertStyleAttribute') {
+    const element = findElement(source, src);
+    const start = element.start + request.offset;
+    return JSON.stringify({source: splice(source, start, start, request.text),
+      inverse: {op: 'removeStyleAttribute', src, key: 'style', text: request.text, offset: request.offset}});
+  }
   if (!src || typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9]*$/.test(key)) throw Error('Invalid edit request');
-  const object = styleObject(findElement(source, src));
+  const element = findElement(source, src);
+  if (op === 'setComponentProp') {
+    const attr = element.attributes.findLast(a => a.type === 'JSXAttribute' && a.name?.name === key);
+    if (!attr || typeof request.raw !== 'string') throw Error(`stale-source: ${src} changed; reselect it`);
+    const old = source.slice(attr.start, attr.end);
+    return JSON.stringify({source: splice(source, attr.start, attr.end, request.raw),
+      inverse: {op: 'setComponentProp', src, key, raw: old}});
+  }
+  if (op === 'setStyle' && isCustomComponent(elementName(element), element)) {
+    const object0 = styleObject(element);
+    const inStyle = object0?.properties.some(p => keyOf(p) === key);
+    const compProp = !inStyle ? componentAttributes(source, element).find(p => p.key === key) : null;
+    if (compProp) {
+      if (compProp.kind !== 'static') {
+        throw Error(`refused: ${key} is ${compProp.kind}${compProp.kind === 'animated' ? '; edit its keyframes on the timeline' : '; edit it in code'}`);
+      }
+      const attr = compProp.attr;
+      const old = source.slice(attr.start, attr.end);
+      let replacement;
+      if (typeof request.value === 'string') {
+        if (attr.value?.type === 'StringLiteral' && !/["\\{}<>\n]/.test(request.value)) {
+          const quote = old[key.length + 1] === "'" ? "'" : '"';
+          replacement = `${key}=${quote}${request.value}${quote}`;
+        } else {
+          replacement = `${key}={${literal(request.value, source, compProp.raw)}}`;
+        }
+      } else if (typeof request.value === 'number') {
+        replacement = `${key}={${literal(request.value, source, compProp.raw)}}`;
+      } else {
+        throw Error('Component prop values must be numbers or strings');
+      }
+      return JSON.stringify({source: splice(source, attr.start, attr.end, replacement),
+        inverse: {op: 'setComponentProp', src, key, raw: old}});
+    }
+  }
+  const object = styleObject(element);
   if (!object) {
+    if (object === null && op === 'setStyle') {
+      const insertPos = element.attributes.at(-1)?.end ?? element.name.end;
+      const text = ` style={{${key}: ${request.raw ?? literal(request.value, source)}}}`;
+      const offset = insertPos - element.start;
+      return JSON.stringify({source: splice(source, insertPos, insertPos, text),
+        inverse: {op: 'removeStyleAttribute', src, key: 'style', text, offset}});
+    }
     throw Error(object === null ? `refused: ${src} has no style object; add style={{}} in code first`
       : `refused: the style of ${src} is computed; edit it in code`);
   }

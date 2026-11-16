@@ -173,6 +173,10 @@ public struct EditOperation: Codable, Sendable, Equatable {
     case setMapProperty
     /// Adds (`insert`) or removes (`remove`) a map route/marker; `restore` is the inverse.
     case setMapChildren
+    /// Restores a custom component JSX prop modified by `setStyle`.
+    case setComponentProp
+    /// Removes or re-inserts a synthesized `style={{...}}` attribute on an element that had none.
+    case removeStyleAttribute, insertStyleAttribute
   }
 
   public var op: Kind
@@ -328,6 +332,7 @@ public struct ObjectTiming: Codable, Sendable, Equatable {
 public struct ObjectTrack: Decodable, Sendable, Equatable, Identifiable {
   public let src: String
   public let label: String
+  public let preview: String?
   public let owner: String?
   public let offset: Int
   public let limit: Int?
@@ -346,6 +351,15 @@ public struct ObjectTrack: Decodable, Sendable, Equatable, Identifiable {
 extension PortableCompiler {
   public func timeline(source: String, file: String) throws -> [ObjectTrack] {
     try JSONDecoder().decode([ObjectTrack].self, from: Data(try call("timeline", source, file).utf8))
+  }
+
+  /// Statically reachable `file#owner` track groups for a composition entry.
+  public func compositionGroups(files: [String: String], entry: String, compositionID: String?) throws -> Set<String> {
+    let input = try JSONSerialization.data(withJSONObject: files, options: [.sortedKeys])
+    guard let json = String(data: input, encoding: .utf8) else { return [] }
+    let output = try call("compositionGroups", json, entry, compositionID ?? "")
+    let groups = try JSONDecoder().decode([String].self, from: Data(output.utf8))
+    return Set(groups)
   }
 
   /// Camera rigs whose keys are literal `{frame, position, target, fov, roll?}` objects.

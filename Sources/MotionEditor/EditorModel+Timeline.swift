@@ -49,11 +49,17 @@ extension EditorModel {
 
   func refreshTimeline() async {
     let snapshot = files
+    let entry = entry
+    let compositionID = player.composition?.id
     do {
-      objectTracks = try await service.perform { compiler in
-        try snapshot.keys.sorted().filter { ["tsx", "jsx"].contains(URL(fileURLWithPath: $0).pathExtension) }
+      let (tracks, reachable) = try await service.perform { compiler in
+        let tracks = try snapshot.keys.sorted().filter { ["tsx", "jsx"].contains(URL(fileURLWithPath: $0).pathExtension) }
           .flatMap { try compiler.timeline(source: snapshot[$0]!, file: $0) }
+        let groups = (try? compiler.compositionGroups(files: snapshot, entry: entry, compositionID: compositionID)) ?? []
+        return (tracks, groups)
       }
+      objectTracks = tracks
+      if !reachable.isEmpty { timelineSources.formUnion(reachable) }
       observeTimelineFrame()
     } catch { show(.failure, "Cannot read timeline: \(error)") }
     await refreshCameraRigs()

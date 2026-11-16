@@ -65,6 +65,29 @@ containers when placing a smaller clip; use `overflow: 'hidden'` to clip its con
   selection changes and pause stop preview voices. Audio preview follows delivered picture frames
   with drift correction; it is not a sample-accurate audio-master playback engine.
 
+## Host processing, reverse playback and nested asset roots (MotionSwift extensions)
+
+These props are not part of browser Remotion; they let host apps build films out of their own media.
+
+- `reverse` on `Audio`/`OffthreadVideo`/`Video` plays the trimmed range backwards. It requires a
+  finite end (`durationInFrames`, `trimAfter` or `endAt`); the first local frame reads the last
+  source frame (`end - 1`).
+- `process="key"` on `OffthreadVideo`/`Video`/`Img` sends the decoded pixels through
+  `MediaProcessing.processor` before drawing. The processor receives a `MediaProcessRequest`
+  with the key, the media time (source seconds for video; `processTime`, default local frame ÷
+  fps, for `Img`) and the element's output pixel size, and returns the image to draw or nil.
+  Register one with `MediaProcessing.processor = { image, request in … }`; it is called
+  concurrently on render workers for preview and export alike. A `process` key without a
+  registered processor fails the frame.
+- `<StaticFileRoot root="/abs/project/public">` resolves `staticFile()` calls made while rendering
+  its children against that folder, so compositions from different projects can be nested in one
+  film. Calls at module scope keep the project's public folder.
+
+```tsx
+<StaticFileRoot root="/Users/me/Projects/Intro/public"><IntroComposition /></StaticFileRoot>
+<OffthreadVideo src="/media/shot.mov" trimBefore={30} durationInFrames={90} reverse process="grade-1" />
+```
+
 `FramePipeline` delivers evaluated media samples in `RenderedFrame.media`. Library exporters
 should append these to `AudioMix` at the output fps and call `mux(video:)` after their video
 stream finishes. The macOS CLI and showcase export do this automatically, including range/frame

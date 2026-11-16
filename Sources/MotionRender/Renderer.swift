@@ -270,7 +270,19 @@ public final class Renderer {
         try canvas.svg(bytes, width: width, height: height)
       } else {
         if node.type == "ms-video", node.media == nil { throw MotionError("Missing video timing") }
-        if let image = try mediaDecoder.image(src, time: node.media?.time) {
+        // Only video samples carry a decode time; `<Img>` media samples exist for host processing.
+        let decodeTime = node.type == "ms-video" ? node.media?.time : nil
+        let image: RasterImage?
+        if let media = node.media, let key = media.process {
+          let request = MediaProcessRequest(
+            key: key, time: media.time,
+            pixelWidth: max(1, Int((width * pixelScale).rounded())),
+            pixelHeight: max(1, Int((height * pixelScale).rounded())))
+          image = try mediaDecoder.processed(src, time: decodeTime, request: request)
+        } else {
+          image = try mediaDecoder.image(src, time: decodeTime)
+        }
+        if let image {
           try canvas.image(image.pixels, pixelWidth: image.width, pixelHeight: image.height,
                            width: width, height: height, fit: style.string("objectFit", "fill"))
         }
