@@ -32,7 +32,8 @@ for (const children of ['{title}', '{frame > 10 ? "a" : "b"}', '<span>Nested</sp
   test(`refuses destructive text replacement: ${children}`, () => {
     const source = `export const Film = <div>${children}</div>;`;
     assert.equal(inspect(source).editable, false);
-    assert.ok(inspect(source).reason);
+    // Either explained, or offered as separate literal fields; never a whole-children rewrite.
+    assert.ok(inspect(source).reason || inspect(source).fields.length);
     assert.throws(() => edit(source, 'replacement'), /refused:/);
   });
 }

@@ -78,11 +78,18 @@ export declare function cancelRender(error: Error | string): void;
 export interface MediaProps extends BoxProps {
   src: string; trimBefore?: number; trimAfter?: number; startFrom?: number; endAt?: number;
   durationInFrames?: number; playbackRate?: number; volume?: number | ((frame: number) => number); muted?: boolean;
+  /** MotionSwift: play the trimmed range backwards. Requires `durationInFrames`, `trimAfter` or `endAt`. */
+  reverse?: boolean;
+  /** MotionSwift: host `MediaProcessing` key applied to each decoded frame. */
+  process?: string;
 }
 export declare const Audio: ComponentType<MediaProps>;
 export declare const OffthreadVideo: ComponentType<MediaProps>;
 export declare const Video: typeof OffthreadVideo;
-export declare const Img: ComponentType<BoxProps & {src: string}>;
+export declare const Img: ComponentType<BoxProps & {src: string; /** MotionSwift: host processing key. */ process?: string;
+  /** MotionSwift: seconds passed to the processor; defaults to the local frame ÷ fps. */ processTime?: number}>;
+/** MotionSwift: resolves `staticFile()` inside its children against an absolute folder. */
+export declare const StaticFileRoot: ComponentType<{root: string; children?: ReactNode}>;
 
 /** A file in the project's public/ folder, for example a USDZ model or an image. */
 export declare function staticFile(path: string): string;

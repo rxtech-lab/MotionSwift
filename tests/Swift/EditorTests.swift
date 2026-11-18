@@ -490,3 +490,144 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(model.notice?.kind == .conflict)
   #expect(try String(contentsOf: file, encoding: .utf8) == external)
 }
+
+@MainActor
+@Test func editorEditsTextGeneratedByCodeThroughItsLiterals() async throws {
+  let project = try temporarySample()
+  defer { try? FileManager.default.removeItem(at: project) }
+  let file = project.appendingPathComponent("src/Cards.tsx")
+  let original = """
+    import React from 'react';
+    import {AbsoluteFill} from 'remotion';
+    const rows = [{label: 'First row'}, {label: 'Second row'}];
+    export const Cards = () => <AbsoluteFill>
+      {rows.map((row, i) => <div key={i} style={{position: 'absolute', left: 48, top: 48 + i * 80, fontSize: 24}}>
+        {row.label}
+      </div>)}
+    </AbsoluteFill>;
+    """
+  try original.write(to: file, atomically: true, encoding: .utf8)
+  let model = EditorModel(project: project, entry: "src/index.ts", configuration: .init(scale: 1))
+  await model.open(compositionID: "Cards")
+  try await waitUntil { model.player.displayedFrame != nil }
+  // The second rendered row narrows the fields to its own label and edits inline.
+  let target = try #require(await model.textEditTarget(at: CGPoint(x: 55, y: 135)))
+  #expect(model.textContent?.editable == false)
+  #expect(model.textContent?.fields.map(\.value) == ["Second row"])
+  #expect(target.text == "Second row")
+  let field = try #require(target.field)
+  #expect(field.label == "label" && field.shared)
+  #expect(await model.setTextField(field, to: "Edited \"row\"", source: target.source, expectedSource: original))
+  let saved = try String(contentsOf: file, encoding: .utf8)
+  #expect(saved.contains("{label: 'Edited \"row\"'}"))
+  #expect(saved.contains("{label: 'First row'}"))
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  await model.redo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == saved)
+  // Fixed-text replacement detaches the element from the data; Undo restores the code.
+  #expect(await model.replaceText(with: "Fixed", source: target.source, expectedSource: saved))
+  #expect(try String(contentsOf: file, encoding: .utf8).contains(">{\"Fixed\"}</div>"))
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == saved)
+}
+
+@MainActor
+@Test func editorDiscoversHelperComponentsImmediatelyAndEditsPropsTextAndStylelessNodes() async throws {
+  let project = FileManager.default.temporaryDirectory.appendingPathComponent("motionswift-custom-\(UUID().uuidString)")
+  defer { try? FileManager.default.removeItem(at: project) }
+  let srcDir = project.appendingPathComponent("src")
+  try FileManager.default.createDirectory(at: srcDir, withIntermediateDirectories: true)
+  try """
+  import {registerRoot} from 'remotion';
+  import {RemotionRoot} from './Root';
+  registerRoot(RemotionRoot);
+  """.write(to: srcDir.appendingPathComponent("index.ts"), atomically: true, encoding: .utf8)
+  try """
+  import React from 'react';
+  import {Composition} from 'remotion';
+  import {MyComposition, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES} from './Composition';
+  export const RemotionRoot: React.FC = () => (
+    <Composition id="Main" component={MyComposition} width={COMPOSITION_WIDTH} height={COMPOSITION_HEIGHT}
+      fps={COMPOSITION_FPS} durationInFrames={COMPOSITION_DURATION_IN_FRAMES} />
+  );
+  """.write(to: srcDir.appendingPathComponent("Root.tsx"), atomically: true, encoding: .utf8)
+
+  let compFile = srcDir.appendingPathComponent("Composition.tsx")
+  let original = """
+  import React from 'react';
+  import {AbsoluteFill, Sequence, useCurrentFrame} from 'remotion';
+  export const COMPOSITION_WIDTH = 640;
+  export const COMPOSITION_HEIGHT = 360;
+  export const COMPOSITION_FPS = 30;
+  export const COMPOSITION_DURATION_IN_FRAMES = 90;
+
+  const Title: React.FC<{from: number; top: number; size?: number; children: React.ReactNode}> = ({from, top, size = 36, children}) => {
+    const f = useCurrentFrame();
+    if (f < from) return null;
+    return <div style={{position: 'absolute', left: 40, top, width: 420, height: 60, fontSize: size, color: '#f5f5f7'}}>{children}</div>;
+  };
+
+  export const MyComposition: React.FC = () => (
+    <AbsoluteFill style={{backgroundColor: '#09090d'}}>
+      <div>Plain badge</div>
+      <Title from={15} top={200} size={42}>Until you hit render.</Title>
+      <Sequence from={Math.round(1.0 * COMPOSITION_FPS)} durationInFrames={30}>
+        <div style={{position: 'absolute', left: 40, top: 80, width: 160, height: 40}}>Delayed</div>
+      </Sequence>
+      <div style={{position: 'absolute', left: 210, top: 220, width: 2, height: 2, backgroundColor: '#ffffff'}} />
+      <div style={{position: 'absolute', left: 0, top: 0, width: 640, height: 360,
+        background: 'radial-gradient(circle, transparent 60%, #000 100%)'}} />
+    </AbsoluteFill>
+  );
+  """
+  try original.write(to: compFile, atomically: true, encoding: .utf8)
+
+  let model = EditorModel(project: project, entry: "src/index.ts", configuration: .init(scale: 0.5, backend: .gpu))
+  await model.open(compositionID: "Main")
+  #expect(model.status == .idle)
+  // Static reachability populates tracks immediately on open, even before frame 0 renders or frame 15 is reached.
+  let titleTrack = try #require(model.timelineTracks.first { $0.label == "Title" && $0.preview == "Until you hit render." })
+  let delayedTrack = try #require(model.timelineTracks.first { $0.preview == "Delayed" })
+  #expect(delayedTrack.offset == 30)
+  #expect(delayedTrack.reason == nil)
+
+  // Scrub to frame 20 where Title is visible; clicking through full-frame vignette & 2px grain selects Title.
+  model.scrub(to: 20)
+  try await waitUntil { model.player.displayedFrame?.frame == 20 }
+  model.select(at: CGPoint(x: 210, y: 220))
+  #expect(model.selection == titleTrack.src)
+  try await waitUntil { model.styles != nil && model.textContent != nil }
+  #expect(model.canEditText)
+  #expect(model.selectedTextValue == "Until you hit render.")
+  #expect(model.styles?.group(for: "size") == "Component Props")
+
+  // Edit Title text, component prop (`size`), and drag on canvas, then undo byte-for-byte.
+  #expect(await model.setText("Rendered instantly.", source: titleTrack.src, expectedSource: original))
+  await model.setStyle("size", .number(54))
+  #expect(model.beginGesture(.move(dx: 0, dy: 0)))
+  model.updateGesture(.move(dx: 24, dy: -30), snapThreshold: 0)
+  await model.endGesture(named: "Move")
+  let afterTitleEdits = try String(contentsOf: compFile, encoding: .utf8)
+  #expect(afterTitleEdits.contains("Rendered instantly."))
+  #expect(afterTitleEdits.contains("size={54}"))
+  #expect(afterTitleEdits.contains("top={170}"))
+  #expect(afterTitleEdits.contains("style={{left: 64}}"))
+
+  await model.undo()
+  await model.undo()
+  await model.undo()
+  #expect(try String(contentsOf: compFile, encoding: .utf8) == original)
+
+  // Element without `style` attribute synthesizes `style={{...}}` and undoes byte-for-byte.
+  let plainTrack = try #require(model.timelineTracks.first { $0.preview == "Plain badge" })
+  model.selectTrack(plainTrack)
+  try await waitUntil { model.styles != nil }
+  await model.setStyle("fontSize", .number(28))
+  let withStyle = try String(contentsOf: compFile, encoding: .utf8)
+  #expect(withStyle.contains("style={{fontSize: 28}}"))
+  await model.undo()
+  #expect(try String(contentsOf: compFile, encoding: .utf8) == original)
+  await model.redo()
+  #expect(try String(contentsOf: compFile, encoding: .utf8) == withStyle)
+}

@@ -152,10 +152,26 @@ public final class EditorModel {
 
   public func hitTest(_ point: CGPoint) -> LayoutBox? {
     guard let frame = player.displayedFrame else { return nil }
-    return frame.layout.reversed().first { box in
+    let candidates = frame.layout.reversed().filter { box in
       box.id != "0" && box.source != nil && !ignoresPointerEvents(at: box.id, in: frame.tree)
         && visualRect(box).contains(point)
     }
+    guard candidates.count > 1, let composition = player.composition else { return candidates.first }
+    let fullW = Double(composition.width) * 0.95
+    let fullH = Double(composition.height) * 0.95
+    if let primary = candidates.first(where: { box in
+      let rect = visualRect(box)
+      guard rect.width > 4 && rect.height > 4 else { return false }
+      if rect.width < fullW || rect.height < fullH { return true }
+      guard let node = frame.tree.node(at: box.id) else { return false }
+      return node.text != nil || node.children.contains { $0.type == "#text" }
+    }) {
+      return primary
+    }
+    return candidates.first { box in
+      let rect = visualRect(box)
+      return rect.width > 4 && rect.height > 4
+    } ?? candidates.first
   }
 
   private func ignoresPointerEvents(at id: String, in tree: RenderNode) -> Bool {
@@ -199,11 +215,17 @@ public final class EditorModel {
       textContent = nil
       return
     }
-    let content = try? await service.perform { try $0.text(source: source, src: selection) }
+    let rendered = selectedPath.flatMap { player.displayedFrame?.tree.node(at: $0) }.map(Self.renderedText) ?? ""
+    let content = try? await service.perform { try $0.text(source: source, src: selection, rendered: rendered) }
     let summary = try? await service.perform { try $0.styles(source: source, src: selection) }
     guard self.selection == selection, files[stamp.file] == source else { return }
     styles = summary
     textContent = content
+  }
+
+  /// The text a rendered node shows, children included.
+  static func renderedText(_ node: RenderNode) -> String {
+    (node.text ?? "") + node.children.map(renderedText).joined()
   }
 }
 
@@ -316,14 +338,25 @@ extension EditorModel {
     let frame = player.currentFrame
     await refreshStyles()
     guard selection == source, selectedPath == hit.id, player.currentFrame == frame else { return nil }
-    guard canEditText else {
-      refuse(textContent?.reason ?? "This element does not contain editable text.")
+    // Generated text edits in place only when one untransformed literal is behind it.
+    let field = canEditText ? nil : inlineTextField
+    guard canEditText || field != nil else {
+      let fields = textContent?.fields.count ?? 0
+      refuse(fields > 0 ? "This text is built from \(fields) parts. Edit them in the inspector."
+        : textContent?.reason ?? "This element does not contain editable text.")
       return nil
     }
     guard let stamp = SourceStamp(source), let expectedSource = files[stamp.file], let rect = selectedRect else { return nil }
     let node = player.displayedFrame?.tree.node(at: hit.id)
     let fontSize = node?.style["fontSize"]?.number ?? node.flatMap { SelectedFilmText.fontSize(in: $0) } ?? 28
-    return TextEditTarget(source: source, expectedSource: expectedSource, text: selectedTextValue, rect: rect, fontSize: fontSize)
+    return TextEditTarget(source: source, expectedSource: expectedSource, text: field?.value ?? selectedTextValue,
+                          rect: rect, fontSize: fontSize, field: field)
+  }
+
+  /// The single literal behind generated text, when it is shown unchanged.
+  var inlineTextField: TextSummary.Field? {
+    guard let fields = textContent?.fields, fields.count == 1, !fields[0].transformed else { return nil }
+    return fields[0]
   }
 
   public var canEditText: Bool {
@@ -331,6 +364,13 @@ extension EditorModel {
     if content.styleContent != true || content.value != nil { return true }
     guard let path = selectedPath, let node = player.displayedFrame?.tree.node(at: path) else { return false }
     return SelectedFilmText.content(in: node) != nil
+  }
+
+  /// The text the selected instance shows in the displayed frame.
+  public var selectedRenderedText: String {
+    guard let path = selectedPath, let node = player.displayedFrame?.tree.node(at: path) else { return selectedTextValue }
+    let text = Self.renderedText(node)
+    return text.isEmpty ? selectedTextValue : text
   }
 
   /// SVG-backed film layers expose their visible text through the rendered image.
@@ -352,6 +392,28 @@ extension EditorModel {
     if selection == source, text == selectedTextValue { return true }
     return await apply([EditOperation(op: .setText, src: source, key: "children", value: .string(text))],
                        name: "Text", from: .user)
+  }
+
+  /// Writes `text` into a literal behind generated text: a variable, data entry, prop or text part.
+  /// Shared literals change everywhere they are read.
+  @discardableResult
+  public func setTextField(_ field: TextSummary.Field, to text: String, source: String, expectedSource: String) async -> Bool {
+    guard let stamp = SourceStamp(source), files[stamp.file] == expectedSource else {
+      show(.conflict, "The source changed. Close and reopen the text editor.")
+      return false
+    }
+    if text == field.value { return true }
+    return await apply([.setLiteral(source, field, text)], name: "Text", from: .user)
+  }
+
+  /// Replaces generated text with fixed text. The element stops following its code; Undo restores it.
+  @discardableResult
+  public func replaceText(with text: String, source: String, expectedSource: String) async -> Bool {
+    guard let stamp = SourceStamp(source), files[stamp.file] == expectedSource else {
+      show(.conflict, "The source changed. Close and reopen the text editor.")
+      return false
+    }
+    return await apply([.replaceText(source, text)], name: "Replace Text", from: .user)
   }
 
   public func setStyle(_ key: String, _ value: JSONValue) async {

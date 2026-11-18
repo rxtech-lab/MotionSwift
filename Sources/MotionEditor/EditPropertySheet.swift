@@ -125,7 +125,7 @@ private struct PropertyValueForm: View {
       case .number:
         valueField(definition.id == "fontSize" ? "Size (px)" : "Value")
       case .text:
-        valueField(definition.id == "transform" ? "Transform, e.g. rotate(45deg)" : "Font family")
+        valueField(definition.id == "transform" ? "Transform, e.g. rotate(45deg)" : definition.id == "fontFamily" ? "Font family" : "Value")
       }
       if value == nil { Text("Enter a valid value for \(definition.id).").font(.caption).foregroundStyle(.red) }
     }

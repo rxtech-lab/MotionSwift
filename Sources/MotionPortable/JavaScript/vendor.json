@@ -1,6 +1,6 @@
 {
   "identity": "react@18.3.1 react-reconciler@0.29.2 scheduler@0.23.2 @motionswift/remotion@0.1.0",
-  "sha256": "627dd4a36f3d022bd96732e9ccf83d779190fd8b718ffa28b2348bcb7064f375",
+  "sha256": "a30c8b4f18c51efe8d6621567790377c3aceb071555c7c233ea03d8fd7dea705",
   "specifiers": [
     "react",
     "react/jsx-runtime",

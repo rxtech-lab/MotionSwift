@@ -73,11 +73,15 @@ public struct MediaSample: Codable, Sendable, Equatable {
   public let time: Double
   public let playbackRate: Double
   public let volume: Double
+  /// Host processing key from a media element's `process` prop (a MotionSwift extension).
+  /// When set and a `MediaProcessing` processor is registered, decoded pixels pass through it.
+  public let process: String?
 
-  public init(time: Double, playbackRate: Double = 1, volume: Double = 1) {
+  public init(time: Double, playbackRate: Double = 1, volume: Double = 1, process: String? = nil) {
     self.time = time
     self.playbackRate = playbackRate
     self.volume = volume
+    self.process = process
   }
 }
 
