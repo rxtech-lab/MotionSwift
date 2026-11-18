@@ -1,3 +1,4 @@
+import MotionPortable
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -75,7 +76,11 @@ struct InlineTextEditor: View {
     saving = true
     error = nil
     Task {
-      let saved = await model.setText(text, source: target.source, expectedSource: target.expectedSource, requiresSelection: false)
+      let saved = if let field = target.field {
+        await model.setTextField(field, to: text, source: target.source, expectedSource: target.expectedSource)
+      } else {
+        await model.setText(text, source: target.source, expectedSource: target.expectedSource, requiresSelection: false)
+      }
       saving = false
       if saved { finished = true; onClose() } else { error = model.notice?.message ?? "Could not save text. Please try again." }
     }
@@ -256,6 +261,8 @@ extension EditorModel {
     let text: String
     let rect: CGRect
     let fontSize: Double
+    /// The literal behind generated text, written instead of the element's children.
+    var field: TextSummary.Field?
   }
 
 }

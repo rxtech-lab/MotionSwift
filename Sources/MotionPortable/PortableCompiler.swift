@@ -98,9 +98,11 @@ public final class PortableCompiler {
     try JSONDecoder().decode(StyleSummary.self, from: Data(try call("styles", source, src).utf8))
   }
 
-  /// Literal JSX children of a stamped element, or a reason the content must be edited in code.
-  public func text(source: String, src: String) throws -> TextSummary {
-    try JSONDecoder().decode(TextSummary.self, from: Data(try call("text", source, src).utf8))
+  /// Literal JSX children of a stamped element. When code generates the text, `fields` lists the
+  /// string literals it is built from (same file); `rendered` (the text the frame shows for the
+  /// picked instance) narrows mapped lists to that instance's strings.
+  public func text(source: String, src: String, rendered: String = "") throws -> TextSummary {
+    try JSONDecoder().decode(TextSummary.self, from: Data(try call("text", source, src, rendered).utf8))
   }
 
   /// Applies one edit operation; returns the new source and the exact inverse operation.
@@ -177,6 +179,10 @@ public struct EditOperation: Codable, Sendable, Equatable {
     case setComponentProp
     /// Removes or re-inserts a synthesized `style={{...}}` attribute on an element that had none.
     case removeStyleAttribute, insertStyleAttribute
+    /// Rewrites one string literal behind generated text (`offset` and the literal's raw `text`).
+    case setLiteral
+    /// Replaces generated text with fixed text; the inverse (`setText` with `raw`) restores the code.
+    case replaceText
   }
 
   public var op: Kind
@@ -196,6 +202,16 @@ public struct EditOperation: Codable, Sendable, Equatable {
   }
 
   public static func removeStyle(_ src: String, _ key: String) -> Self { Self(op: .removeStyle, src: src, key: key) }
+
+  /// Writes `value` into the literal `field` found under the element `src`.
+  public static func setLiteral(_ src: String, _ field: TextSummary.Field, _ value: String) -> Self {
+    Self(op: .setLiteral, src: src, key: "literal", value: .string(value), text: field.raw, offset: field.offset)
+  }
+
+  /// Replaces the generated text of `src` with `value`.
+  public static func replaceText(_ src: String, _ value: String) -> Self {
+    Self(op: .replaceText, src: src, key: "children", value: .string(value))
+  }
 
   public init(
     op: Kind, src: String, key: String, value: JSONValue? = nil, raw: String? = nil, text: String? = nil,
@@ -403,10 +419,47 @@ extension EditOperation {
   }
 }
 
-/// Source-backed text content. Containers and computed children are never replaced by a text edit.
-public struct TextSummary: Decodable, Sendable {
+/// The syntax of a literal behind generated text, which decides how a new value is escaped.
+public enum TextFieldKind: String, Decodable, Sendable { case string, template, attribute, jsxText }
+
+/// Source-backed text content. Containers and computed children are never replaced by a text edit;
+/// generated text is edited through the literal `fields` it is built from.
+public struct TextSummary: Decodable, Sendable, Equatable {
+  /// A string literal in the element's file that the generated text comes from.
+  public struct Field: Decodable, Sendable, Hashable, Identifiable {
+    /// UTF-16 offset of the literal in its file.
+    public let offset: Int
+    /// The literal's exact source text, checked before writing.
+    public let raw: String
+    public let value: String
+    /// Its variable, property or prop name, or "Text" for text inside the element.
+    public let label: String
+    public let line: Int
+    /// Code changes the string before display (case, templates, splitting into letters).
+    public let transformed: Bool
+    /// The literal lives outside the element, so other elements may read it too.
+    public let shared: Bool
+    public let kind: TextFieldKind
+    public var id: Int { offset }
+  }
+
   public let styleContent: Bool?
   public let editable: Bool
   public let value: String?
   public let reason: String?
+  public let fields: [Field]
+  /// Untraceable generated text can be replaced with fixed text (detaching it from code).
+  public let canReplace: Bool
+
+  enum CodingKeys: String, CodingKey { case styleContent, editable, value, reason, fields, canReplace }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    styleContent = try container.decodeIfPresent(Bool.self, forKey: .styleContent)
+    editable = try container.decode(Bool.self, forKey: .editable)
+    value = try container.decodeIfPresent(String.self, forKey: .value)
+    reason = try container.decodeIfPresent(String.self, forKey: .reason)
+    fields = try container.decodeIfPresent([Field].self, forKey: .fields) ?? []
+    canReplace = try container.decodeIfPresent(Bool.self, forKey: .canReplace) ?? false
+  }
 }

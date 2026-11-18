@@ -491,6 +491,46 @@ private func waitUntil(_ condition: () -> Bool) async throws {
   #expect(try String(contentsOf: file, encoding: .utf8) == external)
 }
 
+@MainActor
+@Test func editorEditsTextGeneratedByCodeThroughItsLiterals() async throws {
+  let project = try temporarySample()
+  defer { try? FileManager.default.removeItem(at: project) }
+  let file = project.appendingPathComponent("src/Cards.tsx")
+  let original = """
+    import React from 'react';
+    import {AbsoluteFill} from 'remotion';
+    const rows = [{label: 'First row'}, {label: 'Second row'}];
+    export const Cards = () => <AbsoluteFill>
+      {rows.map((row, i) => <div key={i} style={{position: 'absolute', left: 48, top: 48 + i * 80, fontSize: 24}}>
+        {row.label}
+      </div>)}
+    </AbsoluteFill>;
+    """
+  try original.write(to: file, atomically: true, encoding: .utf8)
+  let model = EditorModel(project: project, entry: "src/index.ts", configuration: .init(scale: 1))
+  await model.open(compositionID: "Cards")
+  try await waitUntil { model.player.displayedFrame != nil }
+  // The second rendered row narrows the fields to its own label and edits inline.
+  let target = try #require(await model.textEditTarget(at: CGPoint(x: 55, y: 135)))
+  #expect(model.textContent?.editable == false)
+  #expect(model.textContent?.fields.map(\.value) == ["Second row"])
+  #expect(target.text == "Second row")
+  let field = try #require(target.field)
+  #expect(field.label == "label" && field.shared)
+  #expect(await model.setTextField(field, to: "Edited \"row\"", source: target.source, expectedSource: original))
+  let saved = try String(contentsOf: file, encoding: .utf8)
+  #expect(saved.contains("{label: 'Edited \"row\"'}"))
+  #expect(saved.contains("{label: 'First row'}"))
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == original)
+  await model.redo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == saved)
+  // Fixed-text replacement detaches the element from the data; Undo restores the code.
+  #expect(await model.replaceText(with: "Fixed", source: target.source, expectedSource: saved))
+  #expect(try String(contentsOf: file, encoding: .utf8).contains(">{\"Fixed\"}</div>"))
+  await model.undo()
+  #expect(try String(contentsOf: file, encoding: .utf8) == saved)
+}
 
 @MainActor
 @Test func editorDiscoversHelperComponentsImmediatelyAndEditsPropsTextAndStylelessNodes() async throws {
@@ -536,7 +576,8 @@ private func waitUntil(_ condition: () -> Bool) async throws {
         <div style={{position: 'absolute', left: 40, top: 80, width: 160, height: 40}}>Delayed</div>
       </Sequence>
       <div style={{position: 'absolute', left: 210, top: 220, width: 2, height: 2, backgroundColor: '#ffffff'}} />
-      <div style={{position: 'absolute', left: 0, top: 0, width: 640, height: 360, background: 'radial-gradient(circle, transparent 60%, #000 100%)'}} />
+      <div style={{position: 'absolute', left: 0, top: 0, width: 640, height: 360,
+        background: 'radial-gradient(circle, transparent 60%, #000 100%)'}} />
     </AbsoluteFill>
   );
   """

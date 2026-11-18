@@ -2,18 +2,28 @@ import SwiftUI
 
 /// Dedicated text update view. Drafts do not touch the film until Save succeeds.
 struct EditTextSheet: View {
+  let title: LocalizedStringKey
+  let note: String?
+  let save: (String) async -> Bool
   let model: EditorModel
-  let source: String
-  let expectedSource: String
   @Environment(\.dismiss) private var dismiss
   @State private var text: String
   @State private var saving = false
   @State private var error: String?
 
+  /// Edits the element's own literal children.
   init(model: EditorModel, source: String, expectedSource: String, text: String) {
+    self.init(model: model, title: "Edit Text", text: text,
+              note: model.selectionInstances > 1 ? "This source element is reused. Changes apply to every instance." : nil) {
+      await model.setText($0, source: source, expectedSource: expectedSource)
+    }
+  }
+
+  init(model: EditorModel, title: LocalizedStringKey, text: String, note: String?, save: @escaping (String) async -> Bool) {
     self.model = model
-    self.source = source
-    self.expectedSource = expectedSource
+    self.title = title
+    self.note = note
+    self.save = save
     _text = State(initialValue: text)
   }
 
@@ -26,14 +36,13 @@ struct EditTextSheet: View {
           .accessibilityLabel("Text content")
           .accessibilityIdentifier("text-content")
           .border(.quaternary)
-        if model.selectionInstances > 1 {
-          Text("This source element is reused. Changes apply to every instance.")
-            .font(.caption).foregroundStyle(.secondary)
+        if let note {
+          Text(note).font(.caption).foregroundStyle(.secondary)
         }
       }
       .padding()
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-      .navigationTitle("Edit Text")
+      .navigationTitle(title)
       #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
       #endif
@@ -46,7 +55,7 @@ struct EditTextSheet: View {
             saving = true
             error = nil
             Task {
-              let saved = await model.setText(text, source: source, expectedSource: expectedSource)
+              let saved = await save(text)
               saving = false
               if saved { dismiss() } else { error = model.notice?.message ?? "Could not save text. Please try again." }
             }
