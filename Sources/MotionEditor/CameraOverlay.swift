@@ -10,20 +10,34 @@ struct CameraOverlay: View {
   @State private var expanded = true
 
   var body: some View {
+    let card = RoundedRectangle(cornerRadius: 12)
     VStack(alignment: .leading, spacing: 8) {
       header
       if expanded, let camera = model.cameraState {
         values(camera)
+          .allowsHitTesting(false)
         CameraMap(model: model, camera: camera)
           .frame(width: 210, height: 130)
           .accessibilityLabel("Camera path, top view")
+          .allowsHitTesting(false)
         tools
       }
     }
     .padding(10)
     .frame(width: expanded ? 230 : nil, alignment: .leading)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.08)))
+    .background {
+      Button(action: model.selectCamera) {
+        card.fill(.regularMaterial).contentShape(card)
+      }
+      .buttonStyle(.plain)
+      .help("Select the camera to edit it. \(modeHelp)")
+      .accessibilityLabel("Select Camera")
+      .accessibilityAddTraits(model.isCameraSelected ? .isSelected : [])
+    }
+    .overlay {
+      card.stroke(.white.opacity(0.08))
+        .allowsHitTesting(false)
+    }
     .shadow(radius: 8, y: 2)
     .animation(.snappy, value: expanded)
     .accessibilityElement(children: .contain)
@@ -32,18 +46,15 @@ struct CameraOverlay: View {
 
   private var header: some View {
     HStack(spacing: 6) {
-      Button { model.selectCamera() } label: {
-        Label("Camera", systemImage: "video.fill").font(.callout.weight(.semibold))
-          .foregroundStyle(model.isCameraSelected ? Color.accentColor : .primary)
-      }
-      .buttonStyle(.plain)
-      .help("Select the camera to edit it")
+      Label("Camera", systemImage: "video.fill").font(.callout.weight(.semibold))
+        .foregroundStyle(model.isCameraSelected ? Color.accentColor : .primary)
+        .allowsHitTesting(false)
       if expanded {
         Text(modeBadge.title)
           .font(.caption2.weight(.semibold))
           .padding(.horizontal, 6).padding(.vertical, 2)
           .background(modeBadge.tint.opacity(0.25), in: Capsule())
-          .help(modeHelp)
+          .allowsHitTesting(false)
       }
       Spacer(minLength: 4)
       Button(expanded ? "Collapse" : "Expand", systemImage: expanded ? "chevron.up" : "chevron.down") { expanded.toggle() }
@@ -91,7 +102,7 @@ struct CameraOverlay: View {
       .pickerStyle(.segmented).labelsHidden()
       hint("Drag the canvas to \(objectTool.rawValue) the object" + modifiersHint(" · ⇧ move"))
     } else {
-      hint("Click the scene to select the camera, or pick an object on the timeline")
+      hint("Select the camera here or pick an object on the timeline")
     }
     if !model.hasCameraKeyframes {
       Button {
@@ -138,6 +149,7 @@ struct CameraOverlay: View {
 
   private func hint(_ text: String) -> some View {
     Text(text).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+      .allowsHitTesting(false)
   }
 
   private func modifiersHint(_ text: String) -> String {
